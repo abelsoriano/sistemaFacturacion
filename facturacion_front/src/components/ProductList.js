@@ -4,6 +4,7 @@ import api from '../services/api';
 import { Link } from "react-router-dom";
 import { showConfirmationAlert, showSuccessAlert, showErrorAlert } from "../herpert";
 import { useNavigate } from 'react-router-dom';
+import {stylesAlmacens, styles} from "../herpert";
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);
@@ -12,6 +13,12 @@ const ProductList = () => {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState(""); // Estado para búsqueda
   const navigate = useNavigate();
+
+    const getStockStyle = (price) => {
+      if (price <= 3) return { ...stylesAlmacens.badge, ...stylesAlmacens.badgeLow };
+      if (price <= 10) return { ...stylesAlmacens.badge, ...stylesAlmacens.badgeMedium };
+      return { ...stylesAlmacens.badge, ...stylesAlmacens.badgeHigh };
+    };
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -83,11 +90,6 @@ const ProductList = () => {
     },
 
     {
-      name: 'Almacen',
-      // selector: (row) => row.name,
-      sortable: true,
-    },
-    {
       name: 'Descripción',
       selector: (row) => row.description,
       sortable: true,
@@ -121,22 +123,12 @@ const ProductList = () => {
       name: 'Stock',
       sortable: true,
       cell: (row) => (
-        <div
-          style={{
-            backgroundColor: row.stock === 3 ? 'red' : '#e0e0e0',
-            color: row.stock === 3 ? 'white' : 'black',
-            padding: '4px 8px',
-            borderRadius: '12px',
-            display: 'inline-block',
-            minWidth: '24px',
-            textAlign: 'center',
-            fontWeight: 'bold',
-          }}
-        >
+        <span style={getStockStyle(row.stock)}>
           {row.stock}
-        </div>
+        </span>
       ),
     },
+    
     
     {
       name: 'Acciones',

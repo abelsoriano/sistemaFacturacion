@@ -6,6 +6,8 @@ from .views import *
 router = DefaultRouter()
 router.register(r'clients', ClientViewSet, basename='client')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
+router.register(r'almacens', AlmacenViewSet, basename='almacen')
+router.register(r'labours', LabourViewSet, basename='labour')
 
 # Combinar las URLs generadas por el router con las rutas personalizadas
 urlpatterns = router.urls + [
@@ -16,4 +18,8 @@ urlpatterns = router.urls + [
     path('sales/', SaleCreateView.as_view(), name='create-sale'),
     path('sales/list/', SaleListView.as_view(), name='list-sales'),
     path('salesUpdate/<int:pk>/', SalesUpdateDeleteView.as_view(), name='list-sales'),
+    path('labourUpdate/<int:pk>/', LabourUpdateDeleteView.as_view(), name='labour-list'),
+
+
+
 ]

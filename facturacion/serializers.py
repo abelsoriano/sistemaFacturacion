@@ -137,3 +137,23 @@ class InvoiceSerializer(serializers.ModelSerializer):
         
         return invoice
 
+class AlmacenSerializer(serializers.ModelSerializer):
+    category = serializers.SerializerMethodField()  # Solo el nombre
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        source='category',
+        write_only=False
+    )
+    
+    class Meta:
+        model = Almacen
+        fields = ['id', 'name', 'description', 'location', 'stock', 'category', 'category_id']
+    
+    def get_category(self, obj):
+        return obj.category.name if obj.category else None
+
+class LabourSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Labour
+        fields = '__all__'
+    

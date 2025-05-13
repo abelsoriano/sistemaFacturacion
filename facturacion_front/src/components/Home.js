@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FaTags, FaBoxOpen, FaShoppingCart, FaFileInvoice } from 'react-icons/fa';
+import { FaTags, FaBoxOpen, FaShoppingCart, FaWarehouse, FaFileInvoice, FaHandshake } from 'react-icons/fa';
 
 function Home() {
   return (
@@ -50,7 +50,7 @@ function Home() {
             <div className="card-body">
               <FaShoppingCart size={40} className="text-warning mb-3" />
               <h5 className="card-title">Ventas</h5>
-              <p className="card-text">Consulta y administra tus ventas.</p>
+              <p className="card-text">Consulta y administra tus ventas de clientes.</p>
               <Link to="/salesList" className="btn btn-outline-warning w-100">
                 Acceder
               </Link>
@@ -58,14 +58,44 @@ function Home() {
           </div>
         </div>
 
-        {/* Tarjeta: Ventas */}
+        {/* Tarjeta: Ventas Rapida */}
         <div className="col-md-3">
           <div className="card text-center h-100 shadow-sm border-warning">
             <div className="card-body">
             <FaShoppingCart size={40} className="text-info mb-3" />
               <h5 className="card-title">Ventas Rapida</h5>
-              <p className="card-text">Consulta y administra tus ventas.</p>
+              <p className="card-text">Administra tus ventas Rapida.</p>
               <Link to="/Fastsales" className="btn btn-outline-info w-100">
+                Acceder
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Tarjeta: Almacen */}
+        <div className="col-md-3">
+          <div className="card text-center h-100 shadow-sm border-warning">
+            <div className="card-body">
+            <FaWarehouse size={40} className="text-cyan-500 mb-3" />
+              <h5 className="card-title">Almacen</h5>
+              <p className="card-text">Consulta y administrar almacen.</p>
+              <Link to="/list-item" className="btn btn-outline-dark w-100">
+                Acceder  
+              </Link>
+            </div>
+          </div>
+        </div>
+
+
+         {/* Tarjeta: Mano de Obra */}
+         <div className="col-md-3">
+          <div className="card text-center h-100 shadow-sm border-warning">
+            <div className="card-body">
+            <FaHandshake size={40} className= "text-secondary" />
+              <h5 className="card-title">Mano de Obra</h5>
+              <p className="card-text">Consulta y administrar servicio mano de obra.</p>
+              <Link to="/labour-list"  className="btn btn-outline-secondary w-100">
+              
                 Acceder
               </Link>
             </div>

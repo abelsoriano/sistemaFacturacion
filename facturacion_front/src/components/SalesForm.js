@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
-import { showGenericAlert, showSuccessAlert } from "../herpert";
+import { showGenericAlert, showSuccessAlert, showGenerAlertSioNo } from "../herpert";
 import { Modal, Button } from "react-bootstrap";
 import styles from "./Sale.module.css";
 import { generatePDF } from './generatePDF';
@@ -165,9 +165,10 @@ const Sale = () => {
     try {
       // Guardar factura
       const invoiceData = {
-        client_name: activeCustomer,
+        customer: activeCustomer,
         details: currentCart.map(item => ({
           product_id: item.id,
+          products: item.name,
           quantity: item.quantity,
           price: item.price,
           subtotal: item.price * item.quantity,
@@ -177,13 +178,17 @@ const Sale = () => {
         cash_received: parseFloat(cashReceived),
         change: change,
       };
+
+
+
   
       const invoiceResponse = await api.post("/invoices/", invoiceData);
+
   
       // Guardar venta
       const saleData = {
         invoice_id: invoiceResponse.data.id,
-        client_name: activeCustomer,
+        customer: activeCustomer,
         products: currentCart.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
@@ -192,6 +197,8 @@ const Sale = () => {
         })),
         total: currentTotal,
       };
+
+      console.log("ff",saleData)
   
       await api.post("/sales/", saleData);
   
@@ -206,12 +213,15 @@ const Sale = () => {
   
       showSuccessAlert(`Venta para ${activeCustomer} registrada exitosamente`);
       
-      if (window.confirm("¿Deseas imprimir la factura?")) {
-        generatePDF(invoiceData); 
-      }
+      // const handlePrintInvoice = async () => {
+        const shouldPrint = await showGenerAlertSioNo("¿Deseas imprimir la factura?");
+        if (shouldPrint) {
+          generatePDF(invoiceData);
+        }
+      // };
   
       // Preguntar si quiere seguir con el mismo cliente
-      const continueWithSameClient = window.confirm(
+      const continueWithSameClient = await showGenerAlertSioNo(
         `¿Desea hacer otra venta para ${activeCustomer}?`
       );
       
@@ -224,6 +234,7 @@ const Sale = () => {
       showGenericAlert("No se pudo completar la transacción.");
     }
   };
+
 
   // Iniciar nueva venta
   const startNewSale = () => {
@@ -283,6 +294,11 @@ const Sale = () => {
               </button>
             </div>
             <div>
+            {/* <span className="fw-bold me-2">
+                Codigo Factura:    
+              </span> */}
+
+
               <span className="fw-bold me-2">
                 Total: ${(savedCarts[activeCustomer]?.total || 0).toFixed(2)}
               </span>
@@ -291,7 +307,7 @@ const Sale = () => {
                 onClick={() => setShowModal(true)}
                 disabled={!savedCarts[activeCustomer]?.cart?.length}
               >
-                Finalizar Venta
+                Finalizar Venta 
               </button>
             </div>
           </div>
@@ -421,7 +437,7 @@ const Sale = () => {
       {/* Modal de pago */}
       <Modal show={showModal} onHide={() => setShowModal(false)} centered>
         <Modal.Header closeButton>
-          <Modal.Title>Finalizar Venta</Modal.Title>
+          <Modal.Title>Finalizar Venta de {activeCustomer}?</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div className="mb-3">

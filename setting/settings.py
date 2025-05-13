@@ -54,7 +54,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
 ]
 
-ROOT_URLCONF = 'sistema_facturacion.urls'
+ROOT_URLCONF = 'setting.urls'
 
 TEMPLATES = [
     {
@@ -72,7 +72,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'sistema_facturacion.wsgi.application'
+WSGI_APPLICATION = 'setting.wsgi.application'
 
 
 # Database

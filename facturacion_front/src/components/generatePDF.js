@@ -77,7 +77,7 @@ export const generatePDF = (invoiceData) => {
   invoiceData.details.forEach((item) => {
     yPos += 5;
     doc.text(`${item.quantity}`, margin, yPos)
-    doc.text(`${item.product_name}`, margin + 10, yPos);
+    doc.text(`${item.products}`, margin + 10, yPos);
     doc.text(`$${item.price}`, margin + 40, yPos);
     doc.text(`$${item.subtotal}`, margin + 60, yPos);
   });

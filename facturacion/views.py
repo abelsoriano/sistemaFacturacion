@@ -103,3 +103,20 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print("Unexpected Error:", str(e))
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AlmacenViewSet(viewsets.ModelViewSet):
+    queryset = Almacen.objects.all()
+    serializer_class = AlmacenSerializer
+
+# class AlmacenRetrieveUpdateDeleteView(viewsets.ModelViewSet):
+#     queryset = Almacen.objects.all()
+#     serializer_class = AlmacenSerializer
+
+class LabourViewSet(viewsets.ModelViewSet):
+    queryset = Labour.objects.all()
+    serializer_class = LabourSerializer
+
+class LabourUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Labour.objects.all()
+    serializer_class= LabourSerializer

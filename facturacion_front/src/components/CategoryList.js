@@ -16,6 +16,7 @@ const CategoryList = () => {
 
   
     useEffect(() => {
+      
       const fetchCategoria = async () => {
         setIsLoading(true);
         setError(null);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../services/api"; // Importa la instancia de Axios
 import imgPro from "../img/product.jpg";
-import "../ProductForm.css";
+import "../css/ProductForm.css";
 import { showGenericAlert, showSuccessAlert } from "../herpert";
 
 function ProductForm() {

@@ -140,7 +140,7 @@ const Sale = () => {
     try {
       // Guardar factura
       const invoiceData = {
-        client_name: defaultCustomer,
+        customer: defaultCustomer,
         details: cart.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
@@ -158,7 +158,7 @@ const Sale = () => {
       // Guardar venta
       const saleData = {
         invoice_id: invoiceResponse.data.id,
-        client_name: defaultCustomer,
+        customer: defaultCustomer,
         products: cart.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
@@ -235,7 +235,8 @@ const Sale = () => {
                       className="list-group-item d-flex justify-content-between align-items-center"
                     >
                       <div>
-                        <strong>{product.name}</strong>
+                        <strong>{product.name} - </strong>
+                        {product.description}
                         <div className="text-muted small">
                           {/* ${product.price.toFixed(2)} | Stock: {product.stock} */}
                         </div>

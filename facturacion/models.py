@@ -1,6 +1,4 @@
 from django.db import models
-from django.forms import model_to_dict
-from django.contrib.auth.models import User 
 
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -20,7 +18,7 @@ class Product(models.Model):
     
 
 class Sale(models.Model):
-    customer = models.CharField(max_length=100, blank=True, null=True)  # Cliente opcional
+    customer = models.CharField(max_length=100, blank=True, null=True)  
     date = models.DateTimeField(auto_now_add=True)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
@@ -84,3 +82,21 @@ class InvoiceDetail(models.Model):
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity} (Factura #{self.invoice.id})"
+
+class Almacen(models.Model):
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    location = models.CharField(max_length=20, blank=True, null=True)
+    stock = models.PositiveIntegerField()
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='almacenes')
+
+    def __str__(self):
+        return self.name
+    
+class Labour(models.Model):
+    name = models.CharField(max_length=70)
+    description = models.TextField(blank=True, null=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    factura_asociada = models.CharField(max_length = 10, blank=True, null=True)
+    # factura = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='servicios', null=True, blank=True)
+    
