@@ -4,9 +4,6 @@ import { useNavigate, useParams} from "react-router-dom";
 import {styles, showGenericAlert, showSuccessAlert} from "../herpert";
 import api from "../services/api"; // Importa la instancia de Axios
 
-
-
-
 const AlmacenForm = () => {
   const { id } = useParams();
   const [formData, setFormData] = useState({
@@ -34,6 +31,7 @@ const AlmacenForm = () => {
         setCategories(response.data);
       } catch (err) {
         showGenericAlert("Error al obtener las categorías.");
+        console.error("Error al obtener categorías:", err);
       }
     };
 
@@ -49,6 +47,7 @@ const AlmacenForm = () => {
           setFormData(response.data); // Carga los datos en formData
         } catch (err) {
           console.error("Error cargando producto:", err);
+          showGenericAlert("Error al cargar los datos del producto.");
         }
       };
       fetchProduct();
@@ -56,25 +55,13 @@ const AlmacenForm = () => {
   }, [id]);
 
 
-
-  const handleReset = () => {
-    setFormData({
-      name: '',
-      description: '',
-      location: '',
-      stock: 0,
-      category_id: '',
-    });
-    setStatus({ type: '', message: '' });
-  };
-
-    // Manejar cambios en los campos del formulario
+  // Manejar cambios en los campos del formulario
   const handleChange = (e) => {
-      setFormData({
-        ...formData,
-        [e.target.name]: e.target.value,
-      });
-    };
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -82,42 +69,64 @@ const AlmacenForm = () => {
     setStatus({ type: '', message: '' });
 
     // Validación básica
-    if (!formData.name || !formData.stock || !formData.category) {
-      setStatus({ type: 'error', message: 'Nombre, Stock disponible y Categiria son campos requeridos' });
+    if (!formData.name || formData.stock === '' || !formData.category_id) {
+      setStatus({ 
+        type: 'error', 
+        message: 'Nombre, Stock disponible y Categoría son campos requeridos' 
+      });
       setIsSubmitting(false);
       return;
     }
-    // setError(null);
+
     try {
+      // Creamos una copia del formData para enviar al servidor
+      const dataToSend = {
+        ...formData,
+        stock: parseInt(formData.stock, 10) // Asegurarse que stock es un número
+      };
+
+      console.log("Datos a enviar:", dataToSend); // Para depuración
+      
       if (id) {
         // Editar producto existente
-        await api.put(`almacens/${id}/`, formData);
+        await api.put(`almacens/${id}/`, dataToSend);
         showSuccessAlert("Producto actualizado correctamente.");
+        navigate("/list-item"); // Redirige a la lista de productos
       } else {
         // Crear nuevo producto
-        await api.post("/almacens/", formData);
+        await api.post("/almacens/", dataToSend);
         showSuccessAlert("Producto creado correctamente.");
+        navigate("/list-item"); // Redirige a la lista de productos
       }
-      handleReset()
-      // navigate("/productsList"); // Redirige a la lista de productos
     } catch (err) {
       console.error("Error guardando producto:", err);
-      showGenericAlert("No se pudo guardar el producto. Intenta nuevamente.");
+      
+      // Mostrar mensaje de error más específico si está disponible
+      if (err.response && err.response.data) {
+        const errorMsg = typeof err.response.data === 'string' 
+          ? err.response.data 
+          : JSON.stringify(err.response.data);
+        setStatus({
+          type: 'error',
+          message: `Error: ${errorMsg}`
+        });
+      } else {
+        showGenericAlert("No se pudo guardar el producto. Intenta nuevamente.");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-
   const handleCancel = () => {
-    navigate('/');
+    navigate('/list-item');
   };
   
-
   return (
     <div className="container mt-5">
-    {/* <div style={styles.formContainer}> */}
       <h2 style={styles.formHeader}>
         <span style={{ marginRight: '8px' }}><Package /></span>
-        Agregar Artículo al Almacén
+        {id ? 'Editar Artículo' : 'Agregar Artículo al Almacén'}
       </h2>
 
       {status.message && (
@@ -211,11 +220,11 @@ const AlmacenForm = () => {
           </div>
 
           <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="category">
+            <label style={styles.label} htmlFor="category_id">
               Categoría
             </label>
             <select
-              id="category"
+              id="category_id"
               name="category_id"
               value={formData.category_id}
               onChange={handleChange}
@@ -286,20 +295,19 @@ const AlmacenForm = () => {
           >
             {isSubmitting ? (
               <React.Fragment>
-                <span style={{ marginRight: '8px' }}><Loader /></span>
+                <span style={{ marginRight: '8px', display: 'inline-block', animation: 'spin 1s linear infinite' }}><Loader /></span>
                 Guardando...
               </React.Fragment>
             ) : (
               <React.Fragment>
                 <span style={{ marginRight: '8px' }}><Save /></span>
-                Guardar Artículo
+                {id ? 'Actualizar Artículo' : 'Guardar Artículo'}
               </React.Fragment>
             )}
           </button>
         </div>
       </div>
     </div>
-    // </div>
   );
 };
 

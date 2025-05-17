@@ -17,7 +17,7 @@ export const generatePDF = (invoiceData) => {
   // Configuración inicial
   const pageWidth = 80;
   const margin = 5;
-  const contentWidth = pageWidth - (margin * 2);
+  // const contentWidth = pageWidth - (margin * 2);
   let yPos = margin;
 
   // Función helper para centrar texto

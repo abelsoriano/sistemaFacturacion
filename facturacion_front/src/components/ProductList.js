@@ -4,7 +4,7 @@ import api from '../services/api';
 import { Link } from "react-router-dom";
 import { showConfirmationAlert, showSuccessAlert, showErrorAlert } from "../herpert";
 import { useNavigate } from 'react-router-dom';
-import {stylesAlmacens, styles} from "../herpert";
+import {stylesAlmacens} from "../herpert";
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);

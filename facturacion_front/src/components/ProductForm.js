@@ -8,7 +8,7 @@ import { showGenericAlert, showSuccessAlert } from "../herpert";
 function ProductForm() {
   const { id } = useParams(); // Obtén el id de la URL
   const navigate = useNavigate(); // Inicializa navigate
-  const [error, setError] = useState(null); // Corregido aquí
+  // const [error, setError] = useState(null); // Corregido aquí
   const [categories, setCategories] = useState([]); // Lista de categorías
   const [formData, setFormData] = useState({
     name: "",
@@ -58,7 +58,7 @@ function ProductForm() {
   // Manejar envío del formulario
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
+    // setError(null);
     try {
       if (id) {
         // Editar producto existente

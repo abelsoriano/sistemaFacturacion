@@ -1,5 +1,5 @@
 // SaleDetailCard.js
-import React from "react";
+// import React from "react";
 
 const DetalleVenta = ({ details, onClose }) => {
   return (

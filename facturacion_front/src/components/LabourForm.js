@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Package, Check, AlertCircle, Tag, FileText, Loader } from 'lucide-react';
 import { useNavigate, useParams} from "react-router-dom";
-import {styles, showGenericAlert, showSuccessAlert} from "../herpert";
+import {styles,  showSuccessAlert} from "../herpert";
 import api from "../services/api"; // Importa la instancia de Axios
 
 
@@ -37,21 +37,11 @@ const LabourForm = () => {
           console.error("Error cargando producto:");
         }
       };
+      
       fetchProduct();
     }
   }, [id]);
 
-
-
-  const handleReset = () => {
-    setFormData({
-        name: '',
-        description: '',
-        price: 0,
-        factura_asociada: '',
-    });
-    setStatus({ type: '', message: '' });
-  };
 
     // Manejar cambios en los campos del formulario
   const handleChange = (e) => {
@@ -61,40 +51,96 @@ const LabourForm = () => {
       });
     };
 
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      setIsSubmitting(true);
-      setStatus({ type: '', message: '' });
-    
-      // Validación básica
-      if (!formData.name || !formData.price) {
-        setStatus({ type: 'error', message: 'Nombre y precio son campos requeridos' });
-        setIsSubmitting(false);
-        return;
-      }
-    
-      try {
-        let response;
-        if (id) {
-          response = await api.put(`labours/${id}/`, formData);
-          showSuccessAlert("Servicio actualizado correctamente.");
-        } else {
-          response = await api.post("/labours/", formData);
-          showSuccessAlert("El servicio fue creado correctamente.");
-        }
-        
-        // Redirigir después de guardar
-        setTimeout(() => navigate("/labour-list"), 1500);
-      } catch (err) {
-        console.error("Error al guardar:", err.response?.data);
-        const errorMsg = err.response?.data?.detail || 
-                       err.response?.data?.message || 
-                       "Error al guardar el servicio";
-        setStatus({ type: 'error', message: errorMsg });
-      } finally {
-        setIsSubmitting(false);
-      }
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsSubmitting(true);
+  setStatus({ type: '', message: '' });
+
+  // Validación más completa
+  const validationErrors = [];
+  
+  if (!formData.name || formData.name.trim() === '') {
+    validationErrors.push('El nombre es requerido');
+  }
+  
+  if (!formData.price || isNaN(parseFloat(formData.price)) || parseFloat(formData.price) <= 0) {
+    validationErrors.push('El precio debe ser un número mayor que cero');
+  }
+  
+  // Si hay errores de validación, mostrarlos y detener el envío
+  if (validationErrors.length > 0) {
+    setStatus({ 
+      type: 'error', 
+      message: validationErrors.join('. ')
+    });
+    setIsSubmitting(false);
+    return;
+  }
+
+  try {
+    // Asegurarse de que los datos numéricos se envíen como números
+    const dataToSend = {
+      ...formData,
+      price: parseFloat(formData.price)
     };
+    
+    // Añadir logs para depuración
+    console.log("Datos a enviar:", dataToSend);
+    
+    let response;
+    if (id) {
+      response = await api.put(`labours/${id}/`, dataToSend);
+      console.log("Respuesta actualización:", response.data);
+      showSuccessAlert("Servicio actualizado correctamente.");
+    } else {
+      response = await api.post("/labours/", dataToSend);
+      console.log("Respuesta creación:", response.data);
+      showSuccessAlert("El servicio fue creado correctamente.");
+    }
+    
+    // Redirigir después de guardar con un pequeño retraso para que se muestre el mensaje
+    setTimeout(() => navigate("/labour-list"), 1500);
+  } catch (err) {
+    console.error("Error al guardar:", err);
+    
+    // Mejorado el manejo de errores para mostrar mensajes más detallados
+    let errorMsg = "Error al guardar el servicio. Intente nuevamente.";
+    
+    if (err.response) {
+      console.error("Datos del error:", err.response.data);
+      
+      // Si el error viene como un objeto (común en APIs RESTful)
+      if (typeof err.response.data === 'object') {
+        const errorDetails = [];
+        
+        // Recorrer todas las propiedades del objeto de error para mostrarlas
+        Object.entries(err.response.data).forEach(([field, errors]) => {
+          if (Array.isArray(errors)) {
+            errorDetails.push(`${field}: ${errors.join(', ')}`);
+          } else if (typeof errors === 'string') {
+            errorDetails.push(`${field}: ${errors}`);
+          }
+        });
+        
+        if (errorDetails.length > 0) {
+          errorMsg = errorDetails.join('. ');
+        } else if (err.response.data.detail) {
+          errorMsg = err.response.data.detail;
+        } else if (err.response.data.message) {
+          errorMsg = err.response.data.message;
+        }
+      } 
+      // Si el error viene como texto
+      else if (typeof err.response.data === 'string') {
+        errorMsg = err.response.data;
+      }
+    }
+    
+    setStatus({ type: 'error', message: errorMsg });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
 
   const handleCancel = () => {

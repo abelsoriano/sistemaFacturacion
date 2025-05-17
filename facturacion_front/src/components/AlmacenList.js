@@ -11,7 +11,7 @@ import api from "../services/api";
 const AlmacenList = () => {
 
   const [items, setItems] = useState([]);
-  const [filtereditems, setFiltereditems] = useState([]);
+  const [ setFiltereditems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
