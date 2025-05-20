@@ -14,6 +14,7 @@ import AlmacenList from "./components/AlmacenList";
 import LabourForm from "./components/LabourForm";
 import LabourList from "./components/LabourList";
 import SalesPDFReport from './components/SalesPDFReport';
+import Dashboard from './components/Dashboard';
 
 
 function App() {
@@ -46,6 +47,8 @@ function App() {
         <Route path="/register-labour/:id" element={<LabourForm />} /> {/* Para editar */}
 
         <Route path="/sales-reports" element={<SalesPDFReport />} />
+
+        <Route path="/dashboard" element={<Dashboard />} />
 
       </Routes>
     </Router>

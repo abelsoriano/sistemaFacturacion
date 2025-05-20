@@ -10,16 +10,17 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
-    stock_status = serializers.SerializerMethodField()
-
+    image_url = serializers.SerializerMethodField()
+    
+    def get_image_url(self, obj):
+        if obj.image and hasattr(obj.image, 'url'):
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.image.url)
+        return None
+    
     class Meta:
         model = Product
         fields = '__all__'
-
-    def get_stock_status(self, obj):
-        return "Disponible" if obj.stock > 0 else "Agotado"
-    
-
 class SaleDetailSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all()) 
     class Meta:

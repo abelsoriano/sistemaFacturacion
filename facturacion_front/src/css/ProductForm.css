@@ -18,3 +18,28 @@
     height: auto; /* Mantiene la proporción de la imagen */
 }
   
+.product-image {
+  max-height: 300px;
+  width: 100%;
+  object-fit: contain;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 5px;
+  background-color: #f8f9fa;
+}
+
+.image-upload-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  height: 100%;
+  justify-content: center;
+}
+
+.required-field::after {
+  content: " *";
+  color: red;
+}

@@ -1,0 +1,120 @@
+.dashboardContainer {
+  padding: 24px;
+}
+
+.dashboardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.dashboardControls {
+  display: flex;
+  align-items: center;
+}
+
+.summaryCards {
+  margin-bottom: 24px;
+}
+
+.summaryCard {
+  display: flex;
+  align-items: center;
+}
+
+.summaryIcon {
+  font-size: 32px;
+  margin-right: 16px;
+}
+
+.summaryContent h3 {
+  margin: 0;
+  font-size: 16px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.summaryContent p {
+  margin: 8px 0 0;
+  font-size: 24px;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.chartRow {
+  margin-bottom: 24px;
+}
+
+.chartCard {
+  height: 100%;
+}
+
+.recentSalesCard {
+  margin-top: 24px;
+}
+
+.recentSalesTable {
+  overflow-x: auto;
+}
+
+.recentSalesTable table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.recentSalesTable th,
+.recentSalesTable td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.recentSalesTable th {
+  background-color: #fafafa;
+  font-weight: 500;
+}
+
+.loadingSpinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
+}
+
+/* Estilos para las tarjetas de resumen */
+.ant-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s;
+}
+
+.ant-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilos para la tabla de ventas recientes */
+.recentSalesTable tr:hover td {
+  background-color: #fafafa;
+}
+
+/* Estilos responsivos */
+@media (max-width: 768px) {
+  .dashboardHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .dashboardControls {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .summaryCards .ant-col {
+    margin-bottom: 16px;
+  }
+  
+  .chartRow .ant-col {
+    margin-bottom: 16px;
+  }
+}

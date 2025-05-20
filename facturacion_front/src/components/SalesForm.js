@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
 import { showGenericAlert, showSuccessAlert, showGenerAlertSioNo } from "../herpert";
-import { Modal, Button } from "react-bootstrap";
+import { Modal, Button, Image, Badge } from "react-bootstrap";
 import styles from "./Sale.module.css";
 import { generatePDF } from './generatePDF';
+import placeholderImage from '../assets/placeholder-product.png';
+import "../css/SalesForm.css";
 
 const Sale = () => {
   // Estados para clientes y carritos
-  const [customer, setcustomer] = useState('');
-  const [savedCarts, setSavedCarts] = useState({}); // { "Nombre": {cart: [], total: 0} }
+  const [customer, setCustomer] = useState('');
+  const [savedCarts, setSavedCarts] = useState({});
   const [activeCustomer, setActiveCustomer] = useState(null);
 
   // Estados para productos y búsqueda
@@ -20,7 +22,11 @@ const Sale = () => {
   const [receiptType, setReceiptType] = useState("ticket");
   const [cashReceived, setCashReceived] = useState("");
   const [change, setChange] = useState(0);
-  const [showModal, setShowModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  // Estados para imágenes
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState("");
 
   // Cargar carritos guardados al iniciar
   useEffect(() => {
@@ -41,7 +47,7 @@ const Sale = () => {
     setChange(received >= currentTotal ? received - currentTotal : 0);
   }, [cashReceived, activeCustomer, savedCarts]);
 
-  // Buscar productos
+  // Buscar productos con imágenes
   const handleSearch = async (term) => {
     setSearchTerm(term);
     if (term.trim() === "") {
@@ -51,9 +57,13 @@ const Sale = () => {
     setLoading(true);
     try {
       const response = await api.get(`/products/?search=${term}`);
-      setProducts(response.data);
+      setProducts(response.data.map(product => ({
+        ...product,
+        image_url: product.image_url || placeholderImage
+      })));
     } catch (error) {
       console.error("Error buscando productos:", error);
+      showGenericAlert("Error al buscar productos");
     } finally {
       setLoading(false);
     }
@@ -163,7 +173,6 @@ const Sale = () => {
     }
   
     try {
-      // Guardar factura
       const invoiceData = {
         customer: activeCustomer,
         details: currentCart.map(item => ({
@@ -179,13 +188,8 @@ const Sale = () => {
         change: change,
       };
 
-
-
-  
       const invoiceResponse = await api.post("/invoices/", invoiceData);
-
   
-      // Guardar venta
       const saleData = {
         invoice_id: invoiceResponse.data.id,
         customer: activeCustomer,
@@ -197,36 +201,30 @@ const Sale = () => {
         })),
         total: currentTotal,
       };
-
-      console.log("ff",saleData)
   
       await api.post("/sales/", saleData);
   
-      // PARTE CORREGIDA - Solo limpia el carrito actual
-      const updatedCarts = { ...savedCarts }; // Copia todos los carritos
-      updatedCarts[activeCustomer] = { cart: [], total: 0 }; // Solo vacía el carrito actual
+      const updatedCarts = { ...savedCarts };
+      updatedCarts[activeCustomer] = { cart: [], total: 0 };
       
-      setSavedCarts(updatedCarts); // Actualiza el estado
+      setSavedCarts(updatedCarts);
       setCashReceived("");
       setChange(0);
-      setShowModal(false);
+      setShowPaymentModal(false);
   
       showSuccessAlert(`Venta para ${activeCustomer} registrada exitosamente`);
       
-      // const handlePrintInvoice = async () => {
-        const shouldPrint = await showGenerAlertSioNo("¿Deseas imprimir la factura?");
-        if (shouldPrint) {
-          generatePDF(invoiceData);
-        }
-      // };
+      const shouldPrint = await showGenerAlertSioNo("¿Deseas imprimir la factura?");
+      if (shouldPrint) {
+        generatePDF(invoiceData);
+      }
   
-      // Preguntar si quiere seguir con el mismo cliente
       const continueWithSameClient = await showGenerAlertSioNo(
         `¿Desea hacer otra venta para ${activeCustomer}?`
       );
       
       if (!continueWithSameClient) {
-        setActiveCustomer(null); // Volver a selección de cliente
+        setActiveCustomer(null);
       }
   
     } catch (error) {
@@ -235,7 +233,6 @@ const Sale = () => {
     }
   };
 
-
   // Iniciar nueva venta
   const startNewSale = () => {
     if (!customer.trim()) {
@@ -243,15 +240,21 @@ const Sale = () => {
       return;
     }
     setActiveCustomer(customer);
-    setcustomer("");
+    setCustomer("");
     
-    // Inicializar carrito si no existe
     if (!savedCarts[customer]) {
       setSavedCarts({
         ...savedCarts,
         [customer]: { cart: [], total: 0 }
       });
     }
+  };
+
+  // Función para mostrar imagen ampliada
+  const handleImageClick = (imageUrl) => {
+    if (!imageUrl || imageUrl === placeholderImage) return;
+    setSelectedImage(imageUrl);
+    setShowImageModal(true);
   };
 
   return (
@@ -270,7 +273,7 @@ const Sale = () => {
               className="form-control mb-2"
               placeholder="Nombre del cliente"
               value={customer}
-              onChange={(e) => setcustomer(e.target.value)} 
+              onChange={(e) => setCustomer(e.target.value)} 
             />
             <button
               className="btn btn-primary"
@@ -294,17 +297,12 @@ const Sale = () => {
               </button>
             </div>
             <div>
-            {/* <span className="fw-bold me-2">
-                Codigo Factura:    
-              </span> */}
-
-
               <span className="fw-bold me-2">
                 Total: ${(savedCarts[activeCustomer]?.total || 0).toFixed(2)}
               </span>
               <button
                 className="btn btn-sm btn-success"
-                onClick={() => setShowModal(true)}
+                onClick={() => setShowPaymentModal(true)}
                 disabled={!savedCarts[activeCustomer]?.cart?.length}
               >
                 Finalizar Venta 
@@ -344,36 +342,67 @@ const Sale = () => {
                 <input
                   type="text"
                   className="form-control mb-3"
-                  placeholder="Buscar por nombre o código"
+                  placeholder="Buscar por nombre, código o descripción"
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                 />
                 {loading ? (
-                  <div className="text-center">Buscando...</div>
+                  <div className="text-center py-3">
+                    <div className="spinner-border text-primary" role="status">
+                      <span className="visually-hidden">Buscando...</span>
+                    </div>
+                  </div>
                 ) : products.length > 0 ? (
-                  <div className="list-group">
+                  <div className="list-group product-search-list">
                     {products.map(product => (
                       <div
                         key={product.id}
-                        className="list-group-item d-flex justify-content-between align-items-center"
+                        className="list-group-item d-flex align-items-center"
                       >
-                        <div>
-                          <strong>{product.name}</strong>
+                        <div 
+                          className="product-image-thumbnail me-3"
+                          onClick={() => handleImageClick(product.image_url)}
+                        >
+                          <Image
+                            src={product.image_url}
+                            alt={product.name}
+                            thumbnail
+                            className={product.image_url === placeholderImage ? 'placeholder-img' : ''}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = placeholderImage;
+                              e.target.className = 'placeholder-img';
+                            }}
+                          />
+                        </div>
+                        <div className="flex-grow-1">
+                          <div className="d-flex justify-content-between">
+                            <strong>{product.name}</strong>
+                            <Badge bg="secondary" className="ms-2">
+                              {/* ${product.price.toFixed(2)} */}
+                            </Badge>
+                          </div>
                           <div className="text-muted small">
-                            {/* ${product.price.toFixed(2)} | Stock: {product.stock} */}
+                            {product.description || 'Sin descripción'}
+                          </div>
+                          <div className="d-flex justify-content-between align-items-center mt-2">
+                            <small className="text-muted">
+                              Stock: {product.stock}
+                            </small>
+                            <button
+                              className="btn btn-sm btn-success"
+                              onClick={() => addToCart(product)}
+                              disabled={product.stock < 1}
+                            >
+                              {product.stock < 1 ? 'Agotado' : 'Agregar'}
+                            </button>
                           </div>
                         </div>
-                        <button
-                          className="btn btn-sm btn-success"
-                          onClick={() => addToCart(product)}
-                        >
-                          Agregar
-                        </button>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted text-center">
+                  <p className="text-muted text-center py-3">
                     {searchTerm ? "No se encontraron productos" : "Ingrese un término de búsqueda"}
                   </p>
                 )}
@@ -381,7 +410,7 @@ const Sale = () => {
             </div>
           </div>
 
-          {/* Carrito actual */}
+          {/* Carrito actual - con imágenes */}
           <div className="col-md-5">
             <div className="card shadow-sm">
               <div className="card-header bg-success text-white">
@@ -393,40 +422,65 @@ const Sale = () => {
                     {savedCarts[activeCustomer].cart.map(item => (
                       <li
                         key={item.id}
-                        className="list-group-item d-flex justify-content-between align-items-center"
+                        className="list-group-item"
                       >
-                        <div>
-                          <strong>{item.name}</strong>
-                          <div className="d-flex align-items-center mt-2">
-                            <button
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            >
-                              -
-                            </button>
-                            <span className="mx-2">{item.quantity}</span>
-                            <button
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            >
-                              +
-                            </button>
-                            <span className="ms-3">
-                              ${(item.price * item.quantity).toFixed(2)}
-                            </span>
+                        <div className="d-flex align-items-start">
+                          <div 
+                            className="product-image-thumbnail me-3"
+                            onClick={() => handleImageClick(item.image_url || placeholderImage)}
+                          >
+                            <Image
+                              src={item.image_url || placeholderImage}
+                              alt={item.name}
+                              thumbnail
+                              className={!item.image_url ? 'placeholder-img' : ''}
+                            />
+                          </div>
+                          <div className="flex-grow-1">
+                            <div className="d-flex justify-content-between">
+                              <strong>{item.name}</strong>
+                              <span className="text-primary">
+                                {/* ${(item.price * item.quantity).toFixed(2)} */}
+                              </span>
+                            </div>
+                            <div className="d-flex align-items-center mt-2">
+                              <button
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                              >
+                                -
+                              </button>
+                              <span className="mx-2">{item.quantity}</span>
+                              <button
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              >
+                                +
+                              </button>
+                              <span className="ms-3 text-muted small">
+                                {/* ${item.price.toFixed(2)} c/u */}
+                              </span>
+                              <button
+                                className="btn btn-sm btn-danger ms-auto"
+                                onClick={() => removeFromCart(item.id)}
+                              >
+                                ✕
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        <button
-                          className="btn btn-sm btn-danger"
-                          onClick={() => removeFromCart(item.id)}
-                        >
-                          ✕
-                        </button>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-center text-muted">Carrito vacío</p>
+                  <p className="text-center text-muted py-4">Carrito vacío</p>
+                )}
+                {savedCarts[activeCustomer]?.cart?.length > 0 && (
+                  <div className="mt-3 text-end">
+                    <h5>
+                      Total: <span className="text-success">${(savedCarts[activeCustomer]?.total || 0).toFixed(2)}</span>
+                    </h5>
+                  </div>
                 )}
               </div>
             </div>
@@ -434,8 +488,26 @@ const Sale = () => {
         </div>
       )}
 
+      {/* Modal para imagen ampliada */}
+      <Modal show={showImageModal} onHide={() => setShowImageModal(false)} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Vista ampliada</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center">
+          <Image 
+            src={selectedImage} 
+            fluid 
+            style={{ maxHeight: '70vh' }}
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = placeholderImage;
+            }}
+          />
+        </Modal.Body>
+      </Modal>
+
       {/* Modal de pago */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered>
+      <Modal show={showPaymentModal} onHide={() => setShowPaymentModal(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>Finalizar Venta de {activeCustomer}?</Modal.Title>
         </Modal.Header>
@@ -481,7 +553,7 @@ const Sale = () => {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowModal(false)}>
+          <Button variant="secondary" onClick={() => setShowPaymentModal(false)}>
             Cancelar
           </Button>
           <Button variant="primary" onClick={confirmInvoice}>

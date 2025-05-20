@@ -177,7 +177,7 @@ export const styles = {
     borderRadius: '4px',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    display: 'flex',
+    // display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     border: 'none',

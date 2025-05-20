@@ -18,7 +18,7 @@ function Home() {
                 Administra las categorías de tus productos.
               </p>
               <Link
-                to="/categoriaList"
+                to="/dashboard"
                 className="btn btn-outline-primary w-100"
               >
                 Acceder

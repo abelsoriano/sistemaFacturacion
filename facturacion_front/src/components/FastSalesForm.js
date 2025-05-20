@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
-import { showGenericAlert, showSuccessAlert } from "../herpert";
-import { Modal, Button } from "react-bootstrap";
+import { showGenericAlert, showSuccessAlert, showGenerAlertSioNo } from "../herpert";
+import { Modal, Button, Image, Badge } from "react-bootstrap";
 import styles from "./Sale.module.css";
 import { generatePDF } from './generatePDF';
+import placeholderImage from '../assets/placeholder-product.png';
+import "../css/SalesForm.css";
 
 const Sale = () => {
-  // Estados para carrito
-  const [cart, setCart] = useState([]);
-  const [cartTotal, setCartTotal] = useState(0);
-  
+  // Estados para carritos
+  const [savedCarts, setSavedCarts] = useState({});
+  const [activeCustomer, setActiveCustomer] = useState("Cliente General");
+
   // Estados para productos y búsqueda
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState([]);
@@ -19,40 +21,39 @@ const Sale = () => {
   const [receiptType, setReceiptType] = useState("ticket");
   const [cashReceived, setCashReceived] = useState("");
   const [change, setChange] = useState(0);
-  const [showModal, setShowModal] = useState(false);
-  
-  // Cliente por defecto
-  const defaultCustomer = "Cliente General";
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Cargar carrito guardado al iniciar
+  // Estados para imágenes
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState("");
+
+  // Cargar carritos guardados al iniciar e inicializar cliente general
   useEffect(() => {
-    const savedCart = localStorage.getItem("currentCart");
-    if (savedCart) {
-      const parsedCart = JSON.parse(savedCart);
-      setCart(parsedCart);
-      calculateTotal(parsedCart);
+    const saved = localStorage.getItem("savedCarts");
+    const parsedCarts = saved ? JSON.parse(saved) : {};
+    
+    // Asegurarse de que existe el cliente general
+    if (!parsedCarts["Cliente General"]) {
+      parsedCarts["Cliente General"] = { cart: [], total: 0 };
     }
+    
+    setSavedCarts(parsedCarts);
   }, []);
 
-  // Guardar carrito cuando cambia
+  // Guardar carritos cuando cambian
   useEffect(() => {
-    localStorage.setItem("currentCart", JSON.stringify(cart));
-  }, [cart]);
+    localStorage.setItem("savedCarts", JSON.stringify(savedCarts));
+  }, [savedCarts]);
 
   // Calcular cambio
   useEffect(() => {
+    if (!activeCustomer) return;
     const received = parseFloat(cashReceived) || 0;
-    setChange(received >= cartTotal ? received - cartTotal : 0);
-  }, [cashReceived, cartTotal]);
-  
-  // Calcular total del carrito
-  const calculateTotal = (currentCart) => {
-    const total = currentCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    setCartTotal(total);
-    return total;
-  };
+    const currentTotal = savedCarts[activeCustomer]?.total || 0;
+    setChange(received >= currentTotal ? received - currentTotal : 0);
+  }, [cashReceived, activeCustomer, savedCarts]);
 
-  // Buscar productos
+  // Buscar productos con imágenes
   const handleSearch = async (term) => {
     setSearchTerm(term);
     if (term.trim() === "") {
@@ -62,9 +63,13 @@ const Sale = () => {
     setLoading(true);
     try {
       const response = await api.get(`/products/?search=${term}`);
-      setProducts(response.data);
+      setProducts(response.data.map(product => ({
+        ...product,
+        image_url: product.image_url || placeholderImage
+      })));
     } catch (error) {
       console.error("Error buscando productos:", error);
+      showGenericAlert("Error al buscar productos");
     } finally {
       setLoading(false);
     }
@@ -72,7 +77,10 @@ const Sale = () => {
 
   // Manejo del carrito
   const addToCart = (product) => {
-    const existingItem = cart.find(item => item.id === product.id);
+    if (!activeCustomer) return;
+    
+    const currentCart = savedCarts[activeCustomer]?.cart || [];
+    const existingItem = currentCart.find(item => item.id === product.id);
 
     let newCart;
     if (existingItem) {
@@ -80,7 +88,7 @@ const Sale = () => {
         showGenericAlert(`No hay suficiente stock de ${product.name}`);
         return;
       }
-      newCart = cart.map(item => 
+      newCart = currentCart.map(item => 
         item.id === product.id 
           ? { ...item, quantity: item.quantity + 1 } 
           : item
@@ -90,20 +98,31 @@ const Sale = () => {
         showGenericAlert(`El producto ${product.name} está agotado.`);
         return;
       }
-      newCart = [...cart, { ...product, quantity: 1 }];
+      newCart = [...currentCart, { ...product, quantity: 1 }];
     }
 
-    setCart(newCart);
-    calculateTotal(newCart);
+    const newTotal = newCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    setSavedCarts({
+      ...savedCarts,
+      [activeCustomer]: {
+        cart: newCart,
+        total: newTotal
+      }
+    });
   };
 
   const updateQuantity = (productId, newQuantity) => {
+    if (!activeCustomer) return;
+    
+    const currentCart = savedCarts[activeCustomer]?.cart || [];
+    
     if (newQuantity < 1) {
       removeFromCart(productId);
       return;
     }
 
-    const product = cart.find(item => item.id === productId);
+    const product = currentCart.find(item => item.id === productId);
     if (!product) return;
 
     if (newQuantity > product.stock) {
@@ -111,76 +130,100 @@ const Sale = () => {
       return;
     }
 
-    const newCart = cart.map(item =>
+    const newCart = currentCart.map(item =>
       item.id === productId ? { ...item, quantity: newQuantity } : item
     );
 
-    setCart(newCart);
-    calculateTotal(newCart);
+    const newTotal = newCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    setSavedCarts({
+      ...savedCarts,
+      [activeCustomer]: {
+        cart: newCart,
+        total: newTotal
+      }
+    });
   };
 
   const removeFromCart = (productId) => {
-    const newCart = cart.filter(item => item.id !== productId);
-    setCart(newCart);
-    calculateTotal(newCart);
+    if (!activeCustomer) return;
+    
+    const currentCart = savedCarts[activeCustomer]?.cart || [];
+    const newCart = currentCart.filter(item => item.id !== productId);
+    const newTotal = newCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    setSavedCarts({
+      ...savedCarts,
+      [activeCustomer]: {
+        cart: newCart,
+        total: newTotal
+      }
+    });
   };
 
   // Confirmar venta
   const confirmInvoice = async () => {
+    if (!activeCustomer) return;
+    
     if (!receiptType || cashReceived === "") {
       showGenericAlert("Complete todos los campos antes de confirmar.");
       return;
     }
   
-    if (parseFloat(cashReceived) < cartTotal) {
+    const currentCart = savedCarts[activeCustomer]?.cart || [];
+    const currentTotal = savedCarts[activeCustomer]?.total || 0;
+  
+    if (parseFloat(cashReceived) < currentTotal) {
       showGenericAlert("Efectivo recibido insuficiente.");
       return;
     }
   
     try {
-      // Guardar factura
       const invoiceData = {
-        customer: defaultCustomer,
-        details: cart.map(item => ({
+        customer: activeCustomer,
+        details: currentCart.map(item => ({
           product_id: item.id,
+          products: item.name,
           quantity: item.quantity,
           price: item.price,
           subtotal: item.price * item.quantity,
         })),
-        total: cartTotal,
+        total: currentTotal,
         receipt_type: receiptType,
         cash_received: parseFloat(cashReceived),
         change: change,
       };
-  
+
       const invoiceResponse = await api.post("/invoices/", invoiceData);
   
-      // Guardar venta
       const saleData = {
         invoice_id: invoiceResponse.data.id,
-        customer: defaultCustomer,
-        products: cart.map(item => ({
+        customer: activeCustomer,
+        products: currentCart.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
           price: item.price,
           subtotal: item.price * item.quantity,
         })),
-        total: cartTotal,
+        total: currentTotal,
       };
   
       await api.post("/sales/", saleData);
   
-      // Limpiar carrito
-      setCart([]);
-      setCartTotal(0);
+      // Limpiar el carrito del cliente actual pero mantener el cliente activo
+      const updatedCarts = { ...savedCarts };
+      updatedCarts[activeCustomer] = { cart: [], total: 0 };
+      
+      setSavedCarts(updatedCarts);
       setCashReceived("");
       setChange(0);
-      setShowModal(false);
+      setShowPaymentModal(false);
   
-      showSuccessAlert("Venta registrada exitosamente");
+      showSuccessAlert(`Venta para ${activeCustomer} registrada exitosamente`);
       
-      if (window.confirm("¿Deseas imprimir la factura?")) {
-        generatePDF(invoiceData); 
+      const shouldPrint = await showGenerAlertSioNo("¿Deseas imprimir la factura?");
+      if (shouldPrint) {
+        generatePDF(invoiceData);
       }
   
     } catch (error) {
@@ -189,26 +232,53 @@ const Sale = () => {
     }
   };
 
+  // Función para mostrar imagen ampliada
+  const handleImageClick = (imageUrl) => {
+    if (!imageUrl || imageUrl === placeholderImage) return;
+    setSelectedImage(imageUrl);
+    setShowImageModal(true);
+  };
+
   return (
     <div className={`container mt-5 ${styles.container}`}>
       <h1>Ventas de Repuestos</h1>
 
-      {/* Barra superior */}
+      {/* Barra de cliente activo */}
       <div className="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded">
         <div>
-          <span className="badge bg-primary">Cliente: {defaultCustomer}</span>
+          <span className="badge bg-primary">Cliente: {activeCustomer}</span>
         </div>
         <div>
-          <span className="fw-bold me-2">Total: ${cartTotal.toFixed(2)}</span>
+          <span className="fw-bold me-2">
+            Total: ${(savedCarts[activeCustomer]?.total || 0).toFixed(2)}
+          </span>
           <button
             className="btn btn-sm btn-success"
-            onClick={() => setShowModal(true)}
-            disabled={!cart.length}
+            onClick={() => setShowPaymentModal(true)}
+            disabled={!savedCarts[activeCustomer]?.cart?.length}
           >
-            Finalizar Venta
+            Finalizar Venta 
           </button>
         </div>
       </div>
+
+      {/* Lista de clientes activos */}
+      {Object.keys(savedCarts).filter(name => name !== activeCustomer).length > 0 && (
+        <div className="mb-3">
+          <small className="text-muted">Ventas activas:</small>
+          {Object.keys(savedCarts)
+            .filter(name => name !== activeCustomer && savedCarts[name].cart.length > 0)
+            .map(name => (
+              <button
+                key={name}
+                className="btn btn-sm btn-outline-secondary me-1 mb-1"
+                onClick={() => setActiveCustomer(name)}
+              >
+                {name} ({savedCarts[name].cart.length})
+              </button>
+            ))}
+        </div>
+      )}
 
       {/* Buscador y lista de productos */}
       <div className="row">
@@ -221,106 +291,173 @@ const Sale = () => {
               <input
                 type="text"
                 className="form-control mb-3"
-                placeholder="Buscar por nombre o código"
+                placeholder="Buscar por nombre, código o descripción"
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
               />
               {loading ? (
-                <div className="text-center">Buscando...</div>
+                <div className="text-center py-3">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Buscando...</span>
+                  </div>
+                </div>
               ) : products.length > 0 ? (
-                <div className="list-group">
-                  {products.map((product) => (
+                <div className="list-group product-search-list">
+                  {products.map(product => (
                     <div
                       key={product.id}
-                      className="list-group-item d-flex justify-content-between align-items-center"
+                      className="list-group-item d-flex align-items-center"
                     >
-                      <div>
-                        <strong>{product.name} - </strong>
-                        {product.description}
+                      <div 
+                        className="product-image-thumbnail me-3"
+                        onClick={() => handleImageClick(product.image_url)}
+                      >
+                        <Image
+                          src={product.image_url}
+                          alt={product.name}
+                          thumbnail
+                          className={product.image_url === placeholderImage ? 'placeholder-img' : ''}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = placeholderImage;
+                            e.target.className = 'placeholder-img';
+                          }}
+                        />
+                      </div>
+                      <div className="flex-grow-1">
+                        <div className="d-flex justify-content-between">
+                          <strong>{product.name}</strong>
+                          <Badge bg="secondary" className="ms-2">
+                            {/* ${product.price.toFixed(2)} */}
+                          </Badge>
+                        </div>
                         <div className="text-muted small">
-                          {/* ${product.price.toFixed(2)} | Stock: {product.stock} */}
+                          {product.description || 'Sin descripción'}
+                        </div>
+                        <div className="d-flex justify-content-between align-items-center mt-2">
+                          <small className="text-muted">
+                            Stock: {product.stock}
+                          </small>
+                          <button
+                            className="btn btn-sm btn-success"
+                            onClick={() => addToCart(product)}
+                            disabled={product.stock < 1}
+                          >
+                            {product.stock < 1 ? 'Agotado' : 'Agregar'}
+                          </button>
                         </div>
                       </div>
-                      <button
-                        className="btn btn-sm btn-success"
-                        onClick={() => addToCart(product)}
-                      >
-                        Agregar
-                      </button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-muted text-center">
-                  {searchTerm
-                    ? "No se encontraron productos"
-                    : "Ingrese un término de búsqueda"}
+                <p className="text-muted text-center py-3">
+                  {searchTerm ? "No se encontraron productos" : "Ingrese un término de búsqueda"}
                 </p>
               )}
             </div>
           </div>
         </div>
 
-        {/* Carrito actual */}
+        {/* Carrito actual - con imágenes */}
         <div className="col-md-5">
           <div className="card shadow-sm">
             <div className="card-header bg-success text-white">
-              <h4>Carrito</h4>
+              <h4>Carrito de {activeCustomer}</h4>
             </div>
             <div className="card-body">
-              {cart.length > 0 ? (
+              {savedCarts[activeCustomer]?.cart?.length > 0 ? (
                 <ul className="list-group">
-                  {cart.map((item) => (
+                  {savedCarts[activeCustomer].cart.map(item => (
                     <li
                       key={item.id}
-                      className="list-group-item d-flex justify-content-between align-items-center"
+                      className="list-group-item"
                     >
-                      <div>
-                        <strong>{item.name}</strong>
-                        <div className="d-flex align-items-center mt-2">
-                          <button
-                            className="btn btn-sm btn-outline-secondary"
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity - 1)
-                            }
-                          >
-                            -
-                          </button>
-                          <span className="mx-2">{item.quantity}</span>
-                          <button
-                            className="btn btn-sm btn-outline-secondary"
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity + 1)
-                            }
-                          >
-                            +
-                          </button>
-                          <span className="ms-3">
-                            ${(item.price * item.quantity).toFixed(2)}
-                          </span>
+                      <div className="d-flex align-items-start">
+                        <div 
+                          className="product-image-thumbnail me-3"
+                          onClick={() => handleImageClick(item.image_url || placeholderImage)}
+                        >
+                          <Image
+                            src={item.image_url || placeholderImage}
+                            alt={item.name}
+                            thumbnail
+                            className={!item.image_url ? 'placeholder-img' : ''}
+                          />
+                        </div>
+                        <div className="flex-grow-1">
+                          <div className="d-flex justify-content-between">
+                            <strong>{item.name}</strong>
+                            <span className="text-primary">
+                              {/* ${(item.price * item.quantity).toFixed(2)} */}
+                            </span>
+                          </div>
+                          <div className="d-flex align-items-center mt-2">
+                            <button
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            >
+                              -
+                            </button>
+                            <span className="mx-2">{item.quantity}</span>
+                            <button
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            >
+                              +
+                            </button>
+                            <span className="ms-3 text-muted small">
+                              {/* ${item.price.toFixed(2)} c/u */}
+                            </span>
+                            <button
+                              className="btn btn-sm btn-danger ms-auto"
+                              onClick={() => removeFromCart(item.id)}
+                            >
+                              ✕
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <button
-                        className="btn btn-sm btn-danger"
-                        onClick={() => removeFromCart(item.id)}
-                      >
-                        ✕
-                      </button>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-center text-muted">Carrito vacío</p>
+                <p className="text-center text-muted py-4">Carrito vacío</p>
+              )}
+              {savedCarts[activeCustomer]?.cart?.length > 0 && (
+                <div className="mt-3 text-end">
+                  <h5>
+                    Total: <span className="text-success">${(savedCarts[activeCustomer]?.total || 0).toFixed(2)}</span>
+                  </h5>
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modal de pago */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered>
+      {/* Modal para imagen ampliada */}
+      <Modal show={showImageModal} onHide={() => setShowImageModal(false)} centered size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Finalizar Venta</Modal.Title>
+          <Modal.Title>Vista ampliada</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center">
+          <Image 
+            src={selectedImage} 
+            fluid 
+            style={{ maxHeight: '70vh' }}
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = placeholderImage;
+            }}
+          />
+        </Modal.Body>
+      </Modal>
+
+      {/* Modal de pago */}
+      <Modal show={showPaymentModal} onHide={() => setShowPaymentModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Finalizar Venta de {activeCustomer}?</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div className="mb-3">
@@ -339,7 +476,7 @@ const Sale = () => {
             <input
               type="text"
               className="form-control"
-              value={`${cartTotal.toFixed(2)}`}
+              value={`$${(savedCarts[activeCustomer]?.total || 0).toFixed(2)}`}
               readOnly
             />
           </div>
@@ -350,7 +487,7 @@ const Sale = () => {
               className="form-control"
               value={cashReceived}
               onChange={(e) => setCashReceived(e.target.value)}
-              min={0}
+              min={savedCarts[activeCustomer]?.total || 0}
             />
           </div>
           <div className="mb-3">
@@ -364,7 +501,7 @@ const Sale = () => {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowModal(false)}>
+          <Button variant="secondary" onClick={() => setShowPaymentModal(false)}>
             Cancelar
           </Button>
           <Button variant="primary" onClick={confirmInvoice}>

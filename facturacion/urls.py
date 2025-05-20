@@ -1,5 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
+from django.conf.urls.static import static
+from django.conf import settings
 from .views import *
 
 # Definir el router para los ViewSets
@@ -19,7 +21,6 @@ urlpatterns = router.urls + [
     path('sales/list/', SaleListView.as_view(), name='list-sales'),
     path('salesUpdate/<int:pk>/', SalesUpdateDeleteView.as_view(), name='list-sales'),
     path('labourUpdate/<int:pk>/', LabourUpdateDeleteView.as_view(), name='labour-list'),
-
-
+    path('dashboard/', DashboardView.as_view(), name='dashboard'),
 
 ]
