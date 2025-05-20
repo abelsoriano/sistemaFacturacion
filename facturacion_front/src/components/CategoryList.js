@@ -141,7 +141,7 @@ const CategoryList = () => {
       />
     )}
     <Link to="/categoriesForm" className="btn btn-primary m-2"> Crear Productos</Link>
-    <Link to="/" className="btn btn-danger m-2"> Cancelar</Link>
+    <Link to="/home" className="btn btn-danger m-2"> Cancelar</Link>
     
   </div>
   );

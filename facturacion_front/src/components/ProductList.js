@@ -64,7 +64,7 @@ const ProductList = () => {
   };
 
     const handleCancel = () => {
-    navigate('/');
+    navigate('/home');
   };
 
   const handleDelete = async (id) => {
@@ -253,7 +253,7 @@ const ProductList = () => {
                 ...(hoverStates.cancel ? styles.cancelButtonHover : {}),
               }}
             >
-              Cancela
+              Cancelar
             </button>
             <Link to="/productsForm" className="btn btn-primary me-2">
               <i className="bi bi-plus-circle me-2"></i>Nuevo Producto

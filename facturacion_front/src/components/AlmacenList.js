@@ -55,7 +55,7 @@ const AlmacenList = () => {
   };
 
   const handleCancel = () => {
-    navigate('/');
+    navigate('/home');
   };
 
 

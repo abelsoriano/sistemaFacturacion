@@ -45,7 +45,7 @@ const LabourList = () => {
     }
   };
 
-  const handleCancel = () => navigate('/');
+  const handleCancel = () => navigate('/home');
 
   const handleSort = (key) => {
     let direction = 'asc';

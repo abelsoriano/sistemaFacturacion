@@ -22,7 +22,8 @@ function App() {
     <Router>
       <Routes>
         
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/home" element={<Home />} />
 
         <Route path="/categoriesForm" element={<CategoryForm />} />
         <Route path="/categoriaList" element={<CategoryList />} />
@@ -35,6 +36,7 @@ function App() {
         <Route path="/sales" element={<SalesForm />} />
         <Route path="/Fastsales" element={<FastSalesForm />} />
         <Route path="/salesList" element={<SalesList />} />
+        <Route path="/Fastsales/:id" element={<SalesForm />} />
         
         <Route path="/create-invoice" element={<InvoiceForm />} />
 
@@ -48,7 +50,7 @@ function App() {
 
         <Route path="/sales-reports" element={<SalesPDFReport />} />
 
-        <Route path="/dashboard" element={<Dashboard />} />
+       
 
       </Routes>
     </Router>

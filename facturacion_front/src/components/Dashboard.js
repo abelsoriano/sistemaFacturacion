@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Spin, DatePicker, Select, Divider } from 'antd';
+import { Card, Row, Col, Spin, DatePicker, Select, Button } from 'antd';
 import {
-  BarChartOutlined,
   ShoppingCartOutlined,
-  PieChartOutlined,
   DollarOutlined,
   StockOutlined,
   TagOutlined,
-  UserOutlined
+  HomeOutlined
 } from '@ant-design/icons';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import {
   BarChart,
@@ -32,6 +31,7 @@ const { RangePicker } = DatePicker;
 const { Option } = Select;
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState([moment().startOf('month'), moment().endOf('month')]);
   const [timeFrame, setTimeFrame] = useState('month');
@@ -79,10 +79,24 @@ const Dashboard = () => {
     setTimeFrame(value);
   };
 
+  const goToHome = () => {
+    navigate('/home');
+  };
+
   return (
     <div className={styles.dashboardContainer}>
       <div className={styles.dashboardHeader}>
-        <h1>Panel de Control</h1>
+        <div className={styles.headerLeft}>
+          <h1>Panel de Control</h1>
+          <Button 
+            type="primary" 
+            icon={<HomeOutlined />} 
+            onClick={goToHome}
+            className={styles.homeButton}
+          >
+            Ir al Inicio
+          </Button>
+        </div>
         <div className={styles.dashboardControls}>
           <RangePicker
             value={dateRange}
