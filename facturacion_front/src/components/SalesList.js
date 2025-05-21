@@ -6,7 +6,7 @@ import Swal from "sweetalert2";
 import { showConfirmationAlert, showSuccessAlert, showErrorAlert } from "../herpert";
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { BsEyeFill as VerIcon, BsPencilFill as EditarIcon, BsTrashFill as EliminarIcon, BsFilter as FilterIcon, BsFileExcel as ExcelIcon, BsPlusCircle as AddIcon } from 'react-icons/bs';
+import { BsEyeFill as VerIcon, BsPencilFill as EditarIcon, BsTrashFill as EliminarIcon, BsFilter as FaArrowLeft, BsFileExcel as ExcelIcon, BsPlusCircle as AddIcon } from 'react-icons/bs';
 import {styles,} from "../herpert";
 
 const SalesList = () => {
@@ -47,7 +47,7 @@ const SalesList = () => {
   };
 
   const handleCancel = () => {
-    navigate('/');
+    navigate('/home');
   };
 
   useEffect(() => {
@@ -187,44 +187,51 @@ const SalesList = () => {
 
   const columns = [
     {
-      name: 'ID',
-      selector: row => row.id,
+      name: "ID",
+      selector: (row) => row.id,
       sortable: true,
-      width: '80px'
+      width: "80px",
     },
     {
-      name: 'Mecánico',
-      selector: row => row.customer || 'N/A',
+      name: "Mecánico",
+      selector: (row) => row.customer || "N/A",
       sortable: true,
-      cell: row => <span title={row.customer || 'N/A'}>{row.customer || 'N/A'}</span>
+      cell: (row) => (
+        <span title={row.customer || "N/A"}>{row.customer || "N/A"}</span>
+      ),
     },
     {
-      name: 'Fecha',
-      selector: row => new Date(row.date).toLocaleString(),
+      name: "Fecha",
+      selector: (row) => new Date(row.date).toLocaleString(),
       sortable: true,
-      cell: row => <span title={new Date(row.date).toLocaleString()}>
-        {new Date(row.date).toLocaleDateString()}
-      </span>,
-      width: '150px'
+      cell: (row) => (
+        <span title={new Date(row.date).toLocaleString()}>
+          {new Date(row.date).toLocaleDateString()}
+        </span>
+      ),
+      width: "150px",
     },
     {
-      name: 'Total',
-      selector: row => parseFloat(row.total || 0),
+      name: "Total",
+      selector: (row) => parseFloat(row.total || 0),
       sortable: true,
-      cell: row => `$${parseFloat(row.total || 0).toFixed(2)}`,
-      width: '120px'
+      cell: (row) => `$${parseFloat(row.total || 0).toFixed(2)}`,
+      width: "120px",
     },
     {
-      name: 'Productos',
-      selector: row => row.details?.length || 0,
+      name: "Productos",
+      selector: (row) => row.details?.length || 0,
       sortable: true,
-      width: '100px',
-      cell: row => <span className="badge bg-primary">{row.details?.length || 0}</span>
+      width: "100px",
+      cell: (row) => (
+        <span className="badge bg-primary">{row.details?.length || 0}</span>
+      ),
     },
     {
-      name: 'Acciones',
-      cell: row => (
+      name: "Acciones",
+      cell: (row) => (
         <div className="d-flex justify-content-center gap-2">
+         
           <button
             className="btn btn-info btn-sm"
             onClick={() => handleViewDetails(row.details)}
@@ -248,9 +255,9 @@ const SalesList = () => {
           </button>
         </div>
       ),
-      width: '180px',
+      width: "180px",
       ignoreRowClick: true,
-      allowOverflow: true
+      allowOverflow: true,
     },
   ];
 
@@ -272,7 +279,7 @@ const SalesList = () => {
             ...(hoverStates.cancel ? styles.cancelButtonHover : {}),
           }}
         >
-          Cancela
+          Cancelar
         </button>
         <Link to="/sales" className="btn btn-primary">
           <AddIcon className="me-2" />

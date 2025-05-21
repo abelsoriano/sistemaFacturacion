@@ -8,6 +8,8 @@ import  CategoryList from './components/CategoryList';
 import  SalesForm from './components/SalesForm';
 import  SalesList from './components/SalesList';
 import InvoiceForm from "./components/InvoiceForm";
+import InvoiceList from "./components/InvoiceList";
+import InvoiceDetail from "./components/InvoiceDetail";
 import FastSalesForm from "./components/FastSalesForm";
 import AlmacenForm from "./components/AlmacenForm";
 import AlmacenList from "./components/AlmacenList";
@@ -39,6 +41,8 @@ function App() {
         <Route path="/Fastsales/:id" element={<SalesForm />} />
         
         <Route path="/create-invoice" element={<InvoiceForm />} />
+        <Route path="/invoices" element={<InvoiceList />} />
+        <Route path="/invoiced" element={<InvoiceDetail />} />
 
         <Route path="/register-item" element={<AlmacenForm />} />
         <Route path="/list-item" element={<AlmacenList />} />

@@ -24,7 +24,7 @@ function Home() {
     ingresosMensuales: "0"
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [setError] = useState(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -165,7 +165,7 @@ function Home() {
           title: "Facturación", 
           icon: <FaFileInvoice size={28} />, 
           description: "Genera y gestiona facturas", 
-          route: "/create-invoice",
+          route: "/invoices",
           badge: stats.facturasPendientes,
           colorClass: "danger" 
         }
