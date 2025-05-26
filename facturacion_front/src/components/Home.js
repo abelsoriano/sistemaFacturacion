@@ -165,7 +165,7 @@ function Home() {
           title: "Facturación", 
           icon: <FaFileInvoice size={28} />, 
           description: "Genera y gestiona facturas", 
-          route: "/invoices",
+          route: "/invoice-list",
           badge: stats.facturasPendientes,
           colorClass: "danger" 
         }
