@@ -8,6 +8,7 @@
     "@emotion/styled": "^11.14.0",
     "@mui/material": "^6.3.0",
     "@react-icons/all-files": "^4.1.0",
+    "@react-pdf/renderer": "^4.3.0",
     "antd": "^5.25.2",
     "axios": "^1.7.9",
     "bootstrap": "^5.3.6",
@@ -31,7 +32,8 @@
     "recharts": "^2.15.3",
     "styled-jsx": "^5.1.7",
     "sweetalert2": "^11.15.10",
-    "web-vitals": "^4.2.4"
+    "web-vitals": "^4.2.4",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "react-scripts start",

@@ -21,6 +21,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = '__all__'
+        
 class SaleDetailSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all()) 
     class Meta:
@@ -102,6 +103,8 @@ class ClientSerializer(serializers.ModelSerializer):
 
 class InvoiceDetailSerializer(serializers.ModelSerializer):
     product_id = serializers.IntegerField(write_only=True)
+    # product_name = serializers.CharField(source='product.name', read_only=True)
+    # product_description = serializers.CharField(source='product.description', read_only=True)
     product = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(), 
         required=False, 

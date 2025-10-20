@@ -214,7 +214,7 @@ const InvoiceForm = () => {
                 <h2 className="mb-0">{id ? "Editar Factura" : "Crear Nueva Factura"}</h2>
                 <div>
                     <button 
-                        onClick={() => navigate('/invoices')} 
+                        onClick={() => navigate('/invoice-list')} 
                         className="btn btn-outline-secondary me-2"
                     >
                         <FaArrowLeft className="me-2" /> Volver

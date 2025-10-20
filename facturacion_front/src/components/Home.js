@@ -1,4 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { FaFilePdf } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
+
+
+
 import { 
   FaTags, 
   FaBoxOpen, 
@@ -25,6 +30,7 @@ function Home() {
   });
   const [loading, setLoading] = useState(true);
   const [setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -140,6 +146,7 @@ function Home() {
           route: "/list-item",
           colorClass: "dark" 
         }
+        
       ]
     },
     {
@@ -165,7 +172,7 @@ function Home() {
           title: "Facturación", 
           icon: <FaFileInvoice size={28} />, 
           description: "Genera y gestiona facturas", 
-          route: "/invoices",
+          route: "/invoice-list",
           badge: stats.facturasPendientes,
           colorClass: "danger" 
         }
@@ -254,7 +261,11 @@ function Home() {
           </div>
         </div>
 
-        <div className="col-md-3 mb-3">
+        <div
+          className="col-md-3 mb-3"
+          style={{ cursor: 'pointer' }} // opcional para que se vea como clickeable
+          onClick={() => navigate('/low-stock-report')}
+        >
           <div className="card border-left-danger shadow h-100 py-2">
             <div className="card-body">
               <div className="row no-gutters align-items-center">
@@ -275,6 +286,7 @@ function Home() {
             </div>
           </div>
         </div>
+
 
         <div className="col-md-3 mb-3">
           <div className="card border-left-warning shadow h-100 py-2">

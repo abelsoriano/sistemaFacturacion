@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../services/api";
 import imgPro from "../img/product.jpg";
@@ -9,23 +9,42 @@ function ProductForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
+  const [filteredCategories, setFilteredCategories] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     price: "",
     stock: "",
     category: "",
+    categoryName: "",
     image: null
   });
   const [previewImage, setPreviewImage] = useState(imgPro);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const dropdownRef = useRef(null);
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setFormData(prev => ({ ...prev, image: file }));
       
-      // Crear vista previa
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewImage(reader.result);
@@ -34,11 +53,13 @@ function ProductForm() {
     }
   };
 
+  // Cargar categorías
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const response = await api.get("categories/");
         setCategories(response.data);
+        setFilteredCategories(response.data.slice(0, 10)); // Mostrar solo las primeras 10
       } catch (err) {
         showGenericAlert("Error al obtener las categorías.");
       }
@@ -47,29 +68,53 @@ function ProductForm() {
     fetchCategories();
   }, []);
 
-  useEffect(() => {
-    if (id) {
-      const fetchProduct = async () => {
-        try {
-          const response = await api.get(`products/${id}/`);
-          const productData = {
-            ...response.data,
-            category: response.data.category.id // Asegurar que category sea el ID
-          };
-          setFormData(productData);
-          
-          // Si hay imagen, establecer la vista previa
-          if (response.data.image_url) {
-            setPreviewImage(response.data.image_url);
-          }
-        } catch (err) {
-          console.error("Error cargando producto:", err);
-          showGenericAlert("Error al cargar el producto.");
+ // Cargar producto para edición
+useEffect(() => {
+  if (id) {
+    const fetchProduct = async () => {
+      try {
+        const response = await api.get(`products/${id}/`);
+        console.log("Respuesta completa:", response.data);
+        
+        const productData = {
+          ...response.data,
+          category: response.data.category || "", // Esto debería ser el ID
+          categoryName: response.data.category_name || "" // Usar category_name del serializer
+        };
+        
+        console.log("Product data procesado:", productData);
+        setFormData(productData);
+        
+        // Establecer el término de búsqueda con el nombre de la categoría actual
+        if (response.data.category_name) {
+          setSearchTerm(response.data.category_name);
+          console.log("SearchTerm establecido:", response.data.category_name);
         }
-      };
-      fetchProduct();
+        
+        if (response.data.image_url) {
+          setPreviewImage(response.data.image_url);
+        }
+      } catch (err) {
+        console.error("Error cargando producto:", err);
+        showGenericAlert("Error al cargar el producto.");
+      }
+    };
+    fetchProduct();
+  }
+}, [id]);
+
+  // Filtrar categorías basado en la búsqueda
+  useEffect(() => {
+    if (searchTerm) {
+      const filtered = categories.filter(category =>
+        category.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredCategories(filtered.slice(0, 10)); // Limitar a 10 resultados
+    } else {
+      // Cuando no hay búsqueda, mostrar las primeras 10 categorías
+      setFilteredCategories(categories.slice(0, 10));
     }
-  }, [id]);
+  }, [searchTerm, categories]);
 
   const handleChange = (e) => {
     setFormData({
@@ -78,8 +123,37 @@ function ProductForm() {
     });
   };
 
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setShowDropdown(true);
+  };
+
+  const handleCategorySelect = (category) => {
+    setFormData({
+      ...formData,
+      category: category.id,
+      categoryName: category.name
+    });
+    setSearchTerm(category.name);
+    setShowDropdown(false);
+  };
+
+  const handleSearchFocus = () => {
+    setShowDropdown(true);
+    // Mostrar las primeras 10 categorías cuando se enfoca el campo
+    if (!searchTerm) {
+      setFilteredCategories(categories.slice(0, 10));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!formData.category) {
+      showGenericAlert("Por favor selecciona una categoría.");
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
@@ -90,16 +164,13 @@ function ProductForm() {
       formDataToSend.append('stock', formData.stock);
       formDataToSend.append('category', formData.category);
       
-      // Solo adjuntar la imagen si es un archivo nuevo o si estamos creando
       if (formData.image instanceof File) {
         formDataToSend.append('image', formData.image);
       } else if (!id && !formData.image) {
-        // Para nuevos productos sin imagen, puedes omitir el campo o enviar null
         formDataToSend.append('image', '');
       }
 
       if (id) {
-        // Usar PATCH para edición parcial (solo campos modificados)
         await api.patch(`products/${id}/`, formDataToSend, {
           headers: {
             'Content-Type': 'multipart/form-data'
@@ -226,26 +297,64 @@ function ProductForm() {
                 />
               </div>
             </div>
+            
+            {/* Campo de categoría con búsqueda */}
             <div className="mb-3">
-              <label htmlFor="category" className="form-label">
+              <label htmlFor="category-search" className="form-label">
                 Categoría *
               </label>
-              <select
-                className="form-control"
-                id="category"
+              <div className="position-relative" ref={dropdownRef}>
+                <input
+                  type="text"
+                  className="form-control"
+                  id="category-search"
+                  placeholder="Buscar categoría..."
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  onFocus={handleSearchFocus}
+                  required
+                />
+                
+                {/* Dropdown de categorías con scroll */}
+                {showDropdown && filteredCategories.length > 0 && (
+                  <div 
+                    className="position-absolute w-100 bg-white border mt-1 rounded shadow-sm z-3 category-dropdown"
+                    style={{ maxHeight: '200px', overflowY: 'auto' }}
+                  >
+                    {filteredCategories.map((category) => (
+                      <div
+                        key={category.id}
+                        className="dropdown-item cursor-pointer"
+                        onClick={() => handleCategorySelect(category)}
+                        style={{ 
+                          cursor: 'pointer', 
+                          padding: '8px 12px',
+                          borderBottom: '1px solid #f8f9fa'
+                        }}
+                      >
+                        {category.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {showDropdown && filteredCategories.length === 0 && searchTerm && (
+                  <div className="position-absolute w-100 bg-white border mt-1 rounded shadow-sm z-3">
+                    <div className="dropdown-item text-muted">
+                      No se encontraron categorías
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <input
+                type="hidden"
                 name="category"
                 value={formData.category}
-                onChange={handleChange}
                 required
-              >
-                <option value="">Selecciona una categoría</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
+
             <div className="d-flex justify-content-end mt-4">
               <Link to="/productsList" className="btn btn-outline-secondary me-2">
                 Cancelar

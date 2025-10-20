@@ -19,6 +19,8 @@ const InvoiceList = () => {
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [filteredInvoices, setFilteredInvoices] = useState([]);
+
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [clients, setClients] = useState({});
@@ -347,7 +349,7 @@ const InvoiceList = () => {
                     <td>
                       <div className="btn-group">
                         <Link
-                          to={`/invoice-detail/${invoice.id}`}
+                          to={`/invoices/${invoice.id}`}
                           className="btn btn-sm btn-outline-primary"
                         >
                           <FaEye />

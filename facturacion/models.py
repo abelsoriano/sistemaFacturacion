@@ -14,6 +14,13 @@ class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
     image = models.ImageField(upload_to='products/', blank=True, null=True)  # Nuevo campo
 
+    min_stock = models.IntegerField(
+        default=3, 
+        blank=True, 
+        null=True,
+        verbose_name="Stock Mínimo"
+    )
+
     def __str__(self):
         return self.name
     

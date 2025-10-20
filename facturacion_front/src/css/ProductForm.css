@@ -43,3 +43,60 @@
   content: " *";
   color: red;
 }
+
+/* catogria edicion */
+/* Estilos para el dropdown de categorías */
+.category-dropdown {
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.category-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.category-dropdown::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 0 4px 4px 0;
+}
+
+.category-dropdown::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.category-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.dropdown-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-bottom: 1px solid #f8f9fa;
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item:hover {
+  background-color: #f8f9fa;
+}
+
+.position-relative {
+  position: relative;
+}
+
+.position-absolute {
+  position: absolute;
+}
+
+.z-3 {
+  z-index: 1000;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}

@@ -338,6 +338,10 @@ const Sale = () => {
                           <small className="text-muted">
                             Stock: {product.stock}
                           </small>
+
+                           <small className="text-muted">
+                            Precio Unitario: {product.price}
+                          </small>
                           <button
                             className="btn btn-sm btn-success"
                             onClick={() => addToCart(product)}
