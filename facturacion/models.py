@@ -1,5 +1,5 @@
 from django.db import models
-
+import uuid 
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
 
@@ -12,14 +12,33 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.PositiveIntegerField()
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
-    image = models.ImageField(upload_to='products/', blank=True, null=True)  # Nuevo campo
-
+    image = models.ImageField(upload_to='products/', blank=True, null=True)
     min_stock = models.IntegerField(
         default=3, 
         blank=True, 
         null=True,
         verbose_name="Stock Mínimo"
     )
+    # NUEVO CAMPO
+    barcode = models.CharField(
+        max_length=50, 
+        unique=True, 
+        blank=True, 
+        null=True,
+        verbose_name="Código de Barras"
+    )
+
+    def save(self, *args, **kwargs):
+        # Generar código de barras automáticamente si no existe
+        if not self.barcode:
+            self.barcode = self.generate_barcode()
+        super().save(*args, **kwargs)
+
+    def generate_barcode(self):
+        """Genera un código de barras único tipo Code128"""
+        # Genera un código único basado en timestamp y uuid
+        unique_id = str(uuid.uuid4().int)[:12]  # 12 dígitos
+        return f"PRD{unique_id}"
 
     def __str__(self):
         return self.name
@@ -56,7 +75,7 @@ class SaleDetail(models.Model):
     def __str__(self):
         return f"{self.product.name} - {self.quantity} pcs"
 
-class Client(models.Model):
+class Client(models.Model):   
     name = models.CharField(max_length=100)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)

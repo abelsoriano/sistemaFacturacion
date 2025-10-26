@@ -11,6 +11,7 @@ class CategorySerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     image_url = serializers.SerializerMethodField()
+    barcode = serializers.CharField(read_only=True)  # Solo lectura, se genera automáticamente
     
     def get_image_url(self, obj):
         if obj.image and hasattr(obj.image, 'url'):
@@ -21,6 +22,13 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = '__all__'
+
+class PrintLabelSerializer(serializers.Serializer):
+    """Serializer para la solicitud de impresión de etiquetas"""
+    product_id = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1, max_value=100, default=1)
+    label_width = serializers.IntegerField(default=50)  # en mm
+    label_height = serializers.IntegerField(default=25)  # en mm
         
 class SaleDetailSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all()) 
@@ -30,32 +38,66 @@ class SaleDetailSerializer(serializers.ModelSerializer):
 
 class SaleSerializer(serializers.ModelSerializer):
     details = SaleDetailSerializer(many=True)
+    # Campos opcionales que vienen del frontend pero no se guardan directamente
+    subtotal = serializers.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        required=False, 
+        write_only=True
+    )
+    tax = serializers.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        required=False, 
+        write_only=True
+    )
+    # El campo total se puede sobrescribir opcionalmente
+    total = serializers.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        required=False
+    )
 
     class Meta:
         model = Sale
-        fields = ['customer', 'details']
+        fields = ['customer', 'details', 'subtotal', 'tax', 'total']
 
     def to_internal_value(self, data):
         """
         Modifica los datos entrantes para que `products` sea tratado como `details`.
+        También acepta `items` como alternativa.
         """
-        # Convertir 'products' a 'details' si existe
+        # Convertir 'products' o 'items' a 'details' si existe
         if 'products' in data:
             data['details'] = [
                 {
-                    "product": product['product_id'],
+                    "product": product['product_id'] if 'product_id' in product else product['product'],
                     "quantity": product['quantity'],
-                    "price": product['subtotal'] / product['quantity']
+                    "price": product.get('price', product['subtotal'] / product['quantity'])
                 }
                 for product in data['products']
             ]
-            data.pop('products')  # Eliminar el campo 'products' para evitar conflictos
+            data.pop('products')
+        elif 'items' in data:
+            # Si viene 'items' (como en tu ejemplo)
+            data['details'] = [
+                {
+                    "product": item['product'],
+                    "quantity": item['quantity'],
+                    "price": item['price']
+                }
+                for item in data['items']
+            ]
+            data.pop('items')
 
         return super().to_internal_value(data)
 
     def create(self, validated_data):
-        # Extraer detalles de la venta
+        # Extraer detalles y campos opcionales
         details_data = validated_data.pop('details')
+        validated_data.pop('subtotal', None)  # Remover si existe
+        validated_data.pop('tax', None)  # Remover si existe
+        
         # Crear la venta
         sale = Sale.objects.create(**validated_data)
 
@@ -66,6 +108,7 @@ class SaleSerializer(serializers.ModelSerializer):
 
             # Validar stock del producto
             if product.stock < quantity:
+                sale.delete()  # Eliminar la venta si falla
                 raise serializers.ValidationError(
                     f"No hay suficiente stock para {product.name}. Disponible: {product.stock}"
                 )

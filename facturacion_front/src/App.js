@@ -55,9 +55,12 @@ function App() {
         <Route path="/register-labour/:id" element={<LabourForm />} /> {/* Para editar */}
 
         <Route path="/sales-reports" element={<SalesPDFReport />} />
-        // Agrega esta ruta
+
 
         <Route path="/low-stock-report" element={<LowStockProducts />} />
+
+        <Route path="/products/new" element={<ProductForm />} />
+        <Route path="/products/:id/edit" element={<ProductForm />} />
 
        
 
