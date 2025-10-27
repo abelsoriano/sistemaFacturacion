@@ -140,7 +140,7 @@ class GenerateBarcodeImageView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-class GenerateZPLLabelView(APIView):
+
     """
     Vista para generar etiqueta ZPL para impresora Zebra
     POST /api/products/print-label/
@@ -205,20 +205,378 @@ class GenerateZPLLabelView(APIView):
         Ajusta las dimensiones según tu etiqueta
         """
         # Truncar nombre si es muy largo
-        product_name = product.name[:25] if len(product.name) > 25 else product.name
+        product_name = product.name[:30] if len(product.name) > 30 else product.name
         price_formatted = f"${product.price:.2f}"
         
         # Comandos ZPL para etiqueta 50x25mm
         zpl = f"""^XA
-^PW300
-^LL200
 ^PQ{quantity}
-^FO20,10^A0N,22,22^FD{product_name}^FS
-^FO20,40^BY1.5,2,40^BCN,40,Y,N,N^FD{product.barcode}^FS
-^FO20,90^A0N,20,20^FD{price_formatted}^FS
+^FO50,20^A0N,25,25^FD{product_name}^FS
+^FO50,50^BY2,2,50^BCN,50,Y,N,N^FD{product.barcode}^FS
+^FO50,110^A0N,20,20^FD{price_formatted}^FS
 ^XZ"""
         return zpl
 
+class GenerateZPLLabelView(APIView):
+    """
+    Vista para generar etiqueta ZPL para impresora Zebra
+    POST /api/products/print-label/
+    Body: {"product_id": 1, "quantity": 1}
+    """
+    def post(self, request):
+        try:
+            product_id = request.data.get('product_id')
+            quantity = request.data.get('quantity', 1)
+            
+            # Debugging: Ver qué datos llegan
+            print(f"Datos recibidos - product_id: {product_id}, quantity: {quantity}")
+            print(f"Request data completo: {request.data}")
+            
+            if not product_id:
+                return Response(
+                    {"error": "product_id es requerido"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                product = Product.objects.get(pk=product_id)
+            except Product.DoesNotExist:
+                return Response(
+                    {"error": f"Producto con ID {product_id} no encontrado"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if not product.barcode:
+                return Response(
+                    {"error": "Este producto no tiene código de barras"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Generar código ZPL
+            zpl_commands = self.generate_zpl_label(product, quantity)
+            
+            return Response({
+                "success": True,
+                "zpl": zpl_commands,
+                "product": {
+                    "id": product.id,
+                    "name": product.name,
+                    "barcode": product.barcode,
+                    "price": str(product.price)
+                },
+                "quantity": quantity
+            })
+            
+        except Exception as e:
+            print(f"Error en GenerateZPLLabelView: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"error": f"Error interno: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def generate_zpl_label(self, product, quantity=1):
+        """
+        Genera comandos ZPL para etiqueta de 50x25mm (2x1 pulgadas)
+        Optimizado para códigos de barras largos
+        """
+        # Truncar nombre si es muy largo
+        product_name = product.name[:30] if len(product.name) > 30 else product.name
+        price_formatted = f"${product.price:.2f}"
+        
+        # Calcular tamaño del código de barras según longitud
+        barcode_length = len(product.barcode)
+        
+        if barcode_length <= 10:
+            # Código corto: barras más anchas
+            barcode_width = 3
+            barcode_height = 60
+        elif barcode_length <= 13:
+            # Código mediano: tamaño estándar
+            barcode_width = 3
+            barcode_height = 50
+        else:
+            # Código largo (como el tuyo de 15 caracteres): barras más delgadas
+            barcode_width = 1.3
+            barcode_height = 40
+        
+        # ZPL optimizado para tu etiqueta
+        zpl = f"""^XA
+    ^SZD
+    ^PQ{quantity}
+    ^FO25,20^A0N,25,25^FD{product_name}^FS
+    ^FO60,50^BY{barcode_width},2,{barcode_height}^BCN,{barcode_height},N,N^FD{product.barcode}^FS
+    ^FO60,100^A0N,28,28^FD{product.barcode}^FS
+    ^FO30,130^A0N,20,20^FD{price_formatted}^FS
+    ^XZ"""
+        
+        return zpl
+
+
+
+
+class PrintLabelDirectView(APIView):
+    """
+    Vista para enviar directamente a imprimir (requiere configuración del servidor)
+    POST /api/products/print-direct/
+    """
+    def post(self, request):
+        try:
+            product_id = request.data.get('product_id')
+            quantity = request.data.get('quantity', 1)
+            
+            # Debugging
+            print(f"PrintDirect - product_id: {product_id}, quantity: {quantity}")
+            
+            if not product_id:
+                return Response(
+                    {"error": "product_id es requerido"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                product = Product.objects.get(pk=product_id)
+            except Product.DoesNotExist:
+                return Response(
+                    {"error": f"Producto con ID {product_id} no encontrado"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if not product.barcode:
+                return Response(
+                    {"error": "Este producto no tiene código de barras"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Generar ZPL
+            view = GenerateZPLLabelView()
+            zpl_commands = view.generate_zpl_label(product, quantity)
+            
+            # Aquí podrías enviar directamente a la impresora si está en red
+            # IMPORTANTE: Descomenta y configura solo si tu impresora está en red
+            # import socket
+            # printer_ip = "192.168.1.100"  # IP de tu impresora
+            # printer_port = 9100
+            # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # sock.connect((printer_ip, printer_port))
+            # sock.send(zpl_commands.encode())
+            # sock.close()
+            
+            return Response({
+                "success": True,
+                "message": "Etiqueta generada (impresión directa no configurada)",
+                "product": product.name,
+                "quantity": quantity,
+                "zpl": zpl_commands
+            })
+            
+        except Exception as e:
+            print(f"Error en PrintLabelDirectView: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"error": f"Error interno: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class PrintLabelDirectView(APIView):
+    """
+    Vista para enviar directamente a imprimir
+    POST /api/products/print-direct/
+    Body: {"product_id": 1, "quantity": 1, "printer_name": "USB001"}
+    """
+    def post(self, request):
+        try:
+            product_id = request.data.get('product_id')
+            quantity = request.data.get('quantity', 1)
+            printer_name = request.data.get('printer_name', 'USB001')
+            
+            print(f"PrintDirect - product_id: {product_id}, quantity: {quantity}, printer: {printer_name}")
+            
+            if not product_id:
+                return Response(
+                    {"error": "product_id es requerido"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                product = Product.objects.get(pk=product_id)
+            except Product.DoesNotExist:
+                return Response(
+                    {"error": f"Producto con ID {product_id} no encontrado"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if not product.barcode:
+                return Response(
+                    {"error": "Este producto no tiene código de barras"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Generar ZPL
+            view = GenerateZPLLabelView()
+            zpl_commands = view.generate_zpl_label(product, quantity)
+            
+            # Debug
+            print(f"ZPL generado ({len(zpl_commands)} caracteres)")
+            print("Primeras 3 líneas:")
+            for i, line in enumerate(zpl_commands.split('\n')[:3]):
+                print(f"  {i+1}: {line}")
+            
+            # Intentar imprimir
+            success, message = self.print_to_zebra(zpl_commands, printer_name)
+            
+            if success:
+                return Response({
+                    "success": True,
+                    "message": message,
+                    "product": product.name,
+                    "quantity": quantity
+                })
+            else:
+                return Response({
+                    "success": False,
+                    "error": message,
+                    "zpl": zpl_commands,
+                    "suggestion": "Intenta con 'Descargar ZPL' o ejecuta Django como Administrador"
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+        except Exception as e:
+            print(f"Error en PrintLabelDirectView: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"error": f"Error interno: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def print_to_zebra(self, zpl_content, printer_name):
+        """Envía comandos ZPL a la impresora Zebra"""
+        system = platform.system()
+        
+        if system == "Windows":
+            # Intentar métodos en orden (win32print es el más confiable)
+            methods = [
+                ("Python win32print", self.print_windows_win32),
+                ("CMD copy", self.print_windows_copy),
+            ]
+            
+            for method_name, method_func in methods:
+                try:
+                    print(f"\n>>> Intentando: {method_name}")
+                    success, message = method_func(zpl_content, printer_name)
+                    if success:
+                        print(f"✓✓✓ {method_name} FUNCIONÓ!")
+                        return True, message
+                    else:
+                        print(f"✗ {method_name} falló: {message}")
+                except Exception as e:
+                    print(f"✗ {method_name} error: {str(e)}")
+                    continue
+            
+            return False, "Todos los métodos fallaron. Descarga el ZPL manualmente."
+        else:
+            return False, f"Sistema no soportado: {system}"
+    
+    def print_windows_win32(self, zpl_content, printer_name):
+        """Impresión usando win32print (RECOMENDADO)"""
+        try:
+            import win32print
+            
+            # Buscar impresora Zebra
+            real_printer_name = self.find_zebra_printer_name()
+            if not real_printer_name:
+                return False, "No se encontró impresora Zebra"
+            
+            print(f"Impresora encontrada: {real_printer_name}")
+            
+            # Abrir impresora
+            hPrinter = win32print.OpenPrinter(real_printer_name)
+            
+            try:
+                # Modo RAW = Envío directo sin procesar
+                hJob = win32print.StartDocPrinter(hPrinter, 1, ("Etiqueta ZPL", None, "RAW"))
+                
+                try:
+                    win32print.StartPagePrinter(hPrinter)
+                    
+                    # CRÍTICO: Enviar como ASCII puro
+                    win32print.WritePrinter(hPrinter, zpl_content.encode('ascii'))
+                    
+                    win32print.EndPagePrinter(hPrinter)
+                    print(f"✓ Datos enviados correctamente")
+                    
+                finally:
+                    win32print.EndDocPrinter(hPrinter)
+                    
+                return True, f"Etiqueta enviada a {real_printer_name}"
+                
+            finally:
+                win32print.ClosePrinter(hPrinter)
+                
+        except ImportError:
+            return False, "win32print no instalado (pip install pywin32)"
+        except Exception as e:
+            print(f"Error win32print completo:")
+            import traceback
+            traceback.print_exc()
+            return False, f"Error: {str(e)}"
+    
+    def print_windows_copy(self, zpl_content, printer_name):
+        """Impresión usando CMD copy (requiere permisos admin)"""
+        port = printer_name if printer_name.startswith(('USB', 'COM', 'LPT')) else 'USB001'
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.zpl', delete=False, encoding='ascii') as tmp:
+            tmp.write(zpl_content)
+            tmp_path = tmp.name
+        
+        try:
+            cmd = f'copy /b "{tmp_path}" {port}'
+            print(f"Ejecutando: {cmd}")
+            
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                return True, f"Etiqueta enviada a {port}"
+            else:
+                return False, f"copy falló: {result.stderr}"
+                
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+    
+    def find_zebra_printer_name(self):
+        """Encuentra el nombre exacto de la impresora Zebra"""
+        try:
+            result = subprocess.run(
+                ['powershell', '-Command', 
+                 'Get-Printer | Where-Object {$_.Name -like "*Zebra*" -or $_.Name -like "*ZDesigner*"} | Select-Object -ExpandProperty Name -First 1'],
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+            
+            printer_name = result.stdout.strip()
+            if printer_name:
+                return printer_name
+                
+        except Exception as e:
+            print(f"Error buscando impresora: {str(e)}")
+        
+        return None
 
 class PrintLabelDirectView(APIView):
     """
