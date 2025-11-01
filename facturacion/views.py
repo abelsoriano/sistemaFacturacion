@@ -42,7 +42,7 @@ class CategoryRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
 
-class ProductListCreateView(generics.ListCreateAPIView):
+class ProductListCreateView(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
     
     def get_serializer_context(self):

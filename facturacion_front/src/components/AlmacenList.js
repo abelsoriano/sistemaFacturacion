@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
-import {stylesAlmacens, styles, showConfirmationAlert, showSuccessAlert, showErrorAlert} from "../herpert";
+import { stylesAlmacens, styles, showConfirmationAlert, showSuccessAlert, showErrorAlert } from "../herpert";
 import { ArrowUp, Edit, ArrowDown, Trash, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FileX, Package, Plus, Search } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
-import api from "../services/api"; 
+import api from "../services/api";
 
 
 
@@ -11,7 +11,7 @@ import api from "../services/api";
 const AlmacenList = () => {
 
   const [items, setItems] = useState([]);
-  const [ setFiltereditems] = useState([]);
+  const [setFiltereditems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,31 +27,31 @@ const AlmacenList = () => {
   const [hoveredRow, setHoveredRow] = useState(null);
   const [buttonHoverStates, setButtonHoverStates] = useState({});
   const [hoverStates, setHoverStates] = useState({
-      cancel: false,
-      submit: false
-    });
+    cancel: false,
+    submit: false
+  });
 
   const newItem = () => {
     navigate('/register-item');
   };
 
-// Componente Modal para confirmar eliminación
+  // Componente Modal para confirmar eliminación
   const handleDelete = async (id) => {
     const result = await showConfirmationAlert(
       "¿Estás seguro?",
       "Esta acción no se puede deshacer."
     );
-  if (result.isConfirmed) {
-    try {
-      await api.delete(`/almacens/${id}/`);
-      const updatedItem = items.filter((item) => item.id !== id);
-      setItems(updatedItem);
-      setFiltereditems(updatedItem);
-      showSuccessAlert("Eliminado", "El producto ha sido eliminado.");
+    if (result.isConfirmed) {
+      try {
+        await api.delete(`/almacens/${id}/`);
+        const updatedItem = items.filter((item) => item.id !== id);
+        setItems(updatedItem);
+        setFiltereditems(updatedItem);
+        showSuccessAlert("Eliminado", "El producto ha sido eliminado.");
       } catch (error) {
-          showErrorAlert("Error", "No se pudo eliminar el producto.");
-        }
+        showErrorAlert("Error", "No se pudo eliminar el producto.");
       }
+    }
   };
 
   const handleCancel = () => {
@@ -98,13 +98,13 @@ const AlmacenList = () => {
   // Filtrado de datos
   const filteredItems = items.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          item.location.toLowerCase().includes(searchTerm.toLowerCase());
-  
+      item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.location.toLowerCase().includes(searchTerm.toLowerCase());
+
     // Usar category_id directamente ya que ahora está disponible
-    const matchesCategory = !categoryFilter || 
-                           (item.category_id && item.category_id.toString() === categoryFilter);
-  
+    const matchesCategory = !categoryFilter ||
+      (item.category_id && item.category_id.toString() === categoryFilter);
+
     return matchesSearch && matchesCategory;
   });
 
@@ -183,25 +183,46 @@ const AlmacenList = () => {
           </span>
           <span>Inventario de Almacén</span>
         </div>
-        <button
-          style={{
-            ...stylesAlmacens.button,
-            ...stylesAlmacens.primaryButton,
-            ...(buttonHoverStates["addNew"]
-              ? stylesAlmacens.primaryButtonHover
-              : {}),
-          }}
-          onMouseEnter={() => handleButtonHover("addNew", true)}
-          onMouseLeave={() => handleButtonHover("addNew", false)}
-          onClick={newItem}
-        >
-          <span style={{ marginRight: "8px" }}>
-            <Plus size={16} />
-          </span>
-          Nuevo Artículo
-        </button>
-      </div>
+        <div className="d-flex gap-2">
 
+          <button
+            onClick={handleCancel}
+            onMouseEnter={() =>
+              setHoverStates((prev) => ({ ...prev, cancel: true }))
+            }
+            onMouseLeave={() =>
+              setHoverStates((prev) => ({ ...prev, cancel: false }))
+            }
+            style={{
+              ...styles.button,
+              ...styles.cancelButton,
+              ...(hoverStates.cancel ? styles.cancelButtonHover : {}),
+            }}
+          >
+            Cancelar
+          </button>
+
+
+
+          <button
+            style={{
+              ...stylesAlmacens.button,
+              ...stylesAlmacens.primaryButton,
+              ...(buttonHoverStates["addNew"]
+                ? stylesAlmacens.primaryButtonHover
+                : {}),
+            }}
+            onMouseEnter={() => handleButtonHover("addNew", true)}
+            onMouseLeave={() => handleButtonHover("addNew", false)}
+            onClick={newItem}
+          >
+            <span style={{ marginRight: "8px" }}>
+              <Plus size={16} />
+            </span>
+            Nuevo Artículo
+          </button>
+        </div>
+      </div>
       <div style={stylesAlmacens.searchFilterContainer}>
         <div style={stylesAlmacens.searchContainer}>
           <input

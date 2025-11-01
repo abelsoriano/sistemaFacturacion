@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
 import BarcodeScannerInput from './BarcodeScannerInput';
 import api from '../services/api';
+import { useNavigate } from 'react-router-dom';
 import { showSuccessAlert, showGenericAlert } from '../herpert';
 
 function SalesForm() {
   const [cartItems, setCartItems] = useState([]);
   const [customer, setCustomer] = useState(null);
+  const navigate = useNavigate();
+
+  const handleCancel = () => {
+    navigate('/home');
+  };
 
   // Manejar producto encontrado por el escáner
   const handleProductFound = (product) => {
@@ -81,7 +87,7 @@ function SalesForm() {
   };
 
   const calculateTotal = () => {
-    return calculateSubtotal() + calculateTax();
+    return calculateSubtotal();
   };
 
   // Procesar venta
@@ -273,9 +279,17 @@ function SalesForm() {
                   🗑️ Vaciar Carrito
                 </button>
               )}
-               
             </div>
           </div>
+         
+                <button
+                  className="card-text text-muted mt-3 btn btn-outline-secondary w-100"
+                  onClick={() => handleCancel([])}
+                >
+                   Volver 
+                </button>
+              
+
         </div>
       </div>
     </div>

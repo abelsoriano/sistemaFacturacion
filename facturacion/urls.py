@@ -29,6 +29,8 @@ router.register(r'clients', ClientViewSet, basename='client')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'almacens', AlmacenViewSet, basename='almacen')
 router.register(r'labours', LabourViewSet, basename='labour')
+router.register(r'products', ProductListCreateView, basename='products')
+
 
 # Combinar las URLs generadas por el router con las rutas personalizadas
 urlpatterns = router.urls + [
@@ -41,7 +43,6 @@ urlpatterns = router.urls + [
     # ==========================================
     # PRODUCTOS
     # ==========================================
-    path('products/', ProductListCreateView.as_view(), name='product-list-create'),
     path('products/<int:pk>/', ProductRetrieveUpdateDeleteView.as_view(), name='product-detail'),
     path('products/low-stock/', views.LowStockProductsView.as_view(), name='low-stock-products'),
     
@@ -52,7 +53,7 @@ urlpatterns = router.urls + [
     path('products/print-label/', GenerateZPLLabelView.as_view(), name='print-label'),
     path('products/print-direct/', PrintLabelDirectView.as_view(), name='print-direct'),
     path('products/search-barcode/', SearchByBarcodeView.as_view(), name='search-barcode'),
-    path('products/list-printers/', ListPrintersView.as_view(), name='list-printers'),  # NUEVA
+    path('products/list-printers/', ListPrintersView.as_view(), name='list-printers'), 
     
     # ==========================================
     # VENTAS

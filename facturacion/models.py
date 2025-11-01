@@ -19,7 +19,6 @@ class Product(models.Model):
         null=True,
         verbose_name="Stock Mínimo"
     )
-    # NUEVO CAMPO
     barcode = models.CharField(
         max_length=50, 
         unique=True, 
@@ -35,14 +34,32 @@ class Product(models.Model):
         super().save(*args, **kwargs)
 
     def generate_barcode(self):
-        """Genera un código de barras único tipo Code128"""
-        # Genera un código único basado en timestamp y uuid
-        unique_id = str(uuid.uuid4().int)[:12]  # 12 dígitos
-        return f"PRD{unique_id}"
-
-    def __str__(self):
-        return self.name
-    
+        """Genera un código de barras secuencial único basado en el ID más alto"""
+        # Obtener el número más alto de todos los códigos existentes
+        productos_con_codigo = Product.objects.exclude(
+            barcode__isnull=True
+        ).exclude(
+            barcode=''
+        ).values_list('barcode', flat=True)
+        
+        max_number = 0
+        
+        for barcode in productos_con_codigo:
+            try:
+                # Extrae todos los dígitos del código
+                digits = ''.join(filter(str.isdigit, barcode))
+                if digits:
+                    number = int(digits)
+                    if number > max_number:
+                        max_number = number
+            except ValueError:
+                continue
+        
+        # El siguiente número
+        new_number = max_number + 1
+        
+        return f"BB{new_number:05d}"  # PRD00001, PRD00002...
+        
 
 class Sale(models.Model):
     customer = models.CharField(max_length=100, blank=True, null=True)  

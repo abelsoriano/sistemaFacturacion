@@ -63,7 +63,7 @@ const ProductList = () => {
     navigate(`/productsForm/${id}`);
   };
 
-    const handleCancel = () => {
+  const handleCancel = () => {
     navigate('/home');
   };
 
@@ -255,6 +255,7 @@ const ProductList = () => {
             >
               Cancelar
             </button>
+            
             <Link to="/productsForm" className="btn btn-primary me-2">
               <i className="bi bi-plus-circle me-2"></i>Nuevo Producto
             </Link>

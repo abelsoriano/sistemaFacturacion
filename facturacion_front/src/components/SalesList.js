@@ -7,7 +7,7 @@ import { showConfirmationAlert, showSuccessAlert, showErrorAlert } from "../herp
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { BsEyeFill as VerIcon, BsPencilFill as EditarIcon, BsTrashFill as EliminarIcon, BsFilter as FaArrowLeft, BsFileExcel as ExcelIcon, BsPlusCircle as AddIcon } from 'react-icons/bs';
-import {styles,} from "../herpert";
+import { styles, } from "../herpert";
 
 const SalesList = () => {
   const [sales, setSales] = useState([]);
@@ -20,9 +20,9 @@ const SalesList = () => {
   });
   const navigate = useNavigate();
   const [hoverStates, setHoverStates] = useState({
-          cancel: false,
-          submit: false
-        });
+    cancel: false,
+    submit: false
+  });
 
   // Función para normalizar fechas (elimina la información de zona horaria)
   const normalizeDate = (dateString) => {
@@ -57,7 +57,7 @@ const SalesList = () => {
   // Filtrado optimizado con useMemo
   const filteredSales = useMemo(() => {
     let result = [...sales];
-    
+
     // Filtro por búsqueda
     if (search) {
       const searchTerm = search.toLowerCase();
@@ -67,19 +67,19 @@ const SalesList = () => {
         return customer.includes(searchTerm) || date.includes(searchTerm);
       });
     }
-    
+
     // Filtro por rango de fechas
     if (selectedDateRange.start && selectedDateRange.end) {
       const startDate = normalizeDate(selectedDateRange.start);
       const endDate = normalizeDate(selectedDateRange.end);
-      
+
       result = result.filter(sale => {
         const saleDate = normalizeDate(sale.date);
         if (!saleDate) return false;
         return saleDate >= startDate && saleDate <= endDate;
       });
     }
-    
+
     return result;
   }, [sales, search, selectedDateRange]);
 
@@ -178,7 +178,7 @@ const SalesList = () => {
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Ventas");
-      XLSX.writeFile(workbook, `reporte_ventas_${new Date().toISOString().slice(0,10)}.xlsx`);
+      XLSX.writeFile(workbook, `reporte_ventas_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (error) {
       showErrorAlert("Error", "No se pudo generar el archivo Excel.");
       console.error('Error exporting to Excel:', error);
@@ -231,7 +231,7 @@ const SalesList = () => {
       name: "Acciones",
       cell: (row) => (
         <div className="d-flex justify-content-center gap-2">
-         
+
           <button
             className="btn btn-info btn-sm"
             onClick={() => handleViewDetails(row.details)}
@@ -265,31 +265,35 @@ const SalesList = () => {
     <div className="container mt-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="mb-0">Lista de Ventas</h1>
-        <button
-          onClick={handleCancel}
-          onMouseEnter={() =>
-            setHoverStates((prev) => ({ ...prev, cancel: true }))
-          }
-          onMouseLeave={() =>
-            setHoverStates((prev) => ({ ...prev, cancel: false }))
-          }
-          style={{
-            ...styles.button,
-            ...styles.cancelButton,
-            ...(hoverStates.cancel ? styles.cancelButtonHover : {}),
-          }}
-        >
-          Cancelar
-        </button>
-        <Link to="/sales" className="btn btn-primary">
-          <AddIcon className="me-2" />
-          Crear Venta
-        </Link>
+
+        <div className="d-flex gap-2">
+          <button
+            onClick={handleCancel}
+            onMouseEnter={() =>
+              setHoverStates((prev) => ({ ...prev, cancel: true }))
+            }
+            onMouseLeave={() =>
+              setHoverStates((prev) => ({ ...prev, cancel: false }))
+            }
+            style={{
+              ...styles.button,
+              ...styles.cancelButton,
+              ...(hoverStates.cancel ? styles.cancelButtonHover : {}),
+            }}
+          >
+            Cancelar
+          </button>
+
+          <Link to="/sales" className="btn btn-primary">
+            <AddIcon className="me-2" />
+            Crear Venta
+          </Link>
+        </div>
       </div>
 
-      
-        
-      
+
+
+
 
       <div className="card shadow-sm mb-4">
         <div className="card-body">
