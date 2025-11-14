@@ -39,3 +39,17 @@ for producto in productos:
     print(f"✓ {producto.name}: {producto.barcode}")
 
 print("¡Completado!")
+
+
+para windos 
+
+from facturacion.models import Product
+
+productos = Product.objects.filter(barcode__isnull=True)
+print(f"Productos sin código: {productos.count()}")
+
+for producto in productos:
+    producto.save()
+    print(f"✓ {producto.name}: {producto.barcode}")
+
+print("¡Completado!")
