@@ -29,7 +29,7 @@ router.register(r'clients', ClientViewSet, basename='client')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'almacens', AlmacenViewSet, basename='almacen')
 router.register(r'labours', LabourViewSet, basename='labour')
-router.register(r'products', ProductListCreateView, basename='products')
+# router.register(r'products', ProductListCreateView, basename='products')
 
 
 # Combinar las URLs generadas por el router con las rutas personalizadas
@@ -37,6 +37,7 @@ urlpatterns = router.urls + [
     # ==========================================
     # CATEGORÍAS
     # ==========================================
+    path('products/', ProductListCreateView.as_view(), name='products'),
     path('categories/', CategoryListCreateView.as_view(), name='category-list-create'),
     path('categories/<int:pk>/', CategoryRetrieveUpdateDeleteView.as_view(), name='category-detail'),
     

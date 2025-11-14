@@ -82,9 +82,11 @@ function SalesForm() {
     return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
-  const calculateTax = () => {
-    return calculateSubtotal() * 0.18; // 18% ITBIS (ajusta según tu país)
-  };
+const calculateTax = () => {
+  const tax = calculateSubtotal() * 0.18;
+  return Number(tax.toFixed(2));
+};
+
 
   const calculateTotal = () => {
     return calculateSubtotal();
@@ -99,7 +101,7 @@ function SalesForm() {
 
     try {
       const saleData = {
-        customer: customer?.name || '',  // Enviar string vacío si no hay cliente
+        customer: customer?.name || 'Despachador',  // Enviar string vacío si no hay cliente
         items: cartItems.map(item => ({
           product: item.id,
           quantity: item.quantity,
