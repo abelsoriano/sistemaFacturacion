@@ -19,7 +19,8 @@ import Dashboard from './components/Dashboard';
 import InvoiceList from'./components/InvoiceList';
 import InvoiceDetail from'./components/InvoiceDetail';
 import LowStockProducts from './components/LowStockProducts'
-
+import AssetsManager from './components/AssetsManager'
+import AssetForm from './components/AssetForm'
 
 function App() {
   return (
@@ -61,6 +62,9 @@ function App() {
 
         <Route path="/products/new" element={<ProductForm />} />
         <Route path="/products/:id/edit" element={<ProductForm />} />
+
+        <Route path="/assetsManager" element={<AssetsManager />} />
+        <Route path="/assetsForm" element={<AssetForm />} />
 
        
 

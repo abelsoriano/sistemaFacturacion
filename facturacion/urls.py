@@ -29,7 +29,9 @@ router.register(r'clients', ClientViewSet, basename='client')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'almacens', AlmacenViewSet, basename='almacen')
 router.register(r'labours', LabourViewSet, basename='labour')
-# router.register(r'products', ProductListCreateView, basename='products')
+router.register(r'assets/categories', AssetCategoryViewSet, basename='asset-category')
+router.register(r'assets', AssetViewSet, basename='assets')
+
 
 
 # Combinar las URLs generadas por el router con las rutas personalizadas

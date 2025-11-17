@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from datetime import datetime
 from django.utils.timezone import make_aware
-
+from rest_framework.decorators import action
 from django.http import HttpResponse, JsonResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -28,11 +28,11 @@ import barcode
 from barcode.writer import ImageWriter
 from io import BytesIO
 import base64
-import socket
+from django_filters.rest_framework import DjangoFilterBackend
 import subprocess
 import platform
-import tempfile
-import os
+from rest_framework import viewsets, status, filters
+
 
 class CategoryListCreateView(generics.ListCreateAPIView):
     queryset = Category.objects.all()
@@ -279,6 +279,7 @@ class GenerateZPLLabelView(APIView):
     def generate_zpl_label(self, product, quantity=1):
         """
         Versión alternativa con código de barras más compacto
+        ^FO75,130^A0N,20,20^FD{price_formatted}^FS
         """
         product_name = product.name[:22].upper() if len(product.name) > 22 else product.name.upper()
         price_formatted = f"${product.price:.2f}"
@@ -296,8 +297,6 @@ class GenerateZPLLabelView(APIView):
 ^FO75,55^BY2^BCN,50,N,N,N^FD{barcode}^FS
 
 ^FO75,110^A0N,18,18^FD{barcode}^FS
-
-^FO75,130^A0N,20,20^FD{price_formatted}^FS
 
 
 ^XZ"""
@@ -1047,7 +1046,97 @@ class DashboardView(APIView):
                 'categories': []
             }
 
+
+# Testing views for Asset Management Module
    
+class AssetCategoryViewSet(viewsets.ModelViewSet):
+    queryset = AssetCategory.objects.all()
+    serializer_class = AssetCategorySerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['name']
 
 
-
+class AssetViewSet(viewsets.ModelViewSet):
+    queryset = Asset.objects.select_related('category').all()
+    serializer_class = AssetSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'condition', 'category', 'assigned_to']
+    search_fields = ['code', 'name', 'description', 'brand', 'model', 'serial_number', 'location']
+    ordering_fields = ['code', 'name', 'created_at', 'purchase_date']
+    ordering = ['-created_at']
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return AssetListSerializer
+        return AssetSerializer
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """Obtener estadísticas de activos"""
+        total = self.queryset.count()
+        by_status = self.queryset.values('status').annotate(count=Count('id'))
+        by_condition = self.queryset.values('condition').annotate(count=Count('id'))
+        by_category = self.queryset.values('category__name').annotate(count=Count('id'))
+        
+        # Activos que necesitan mantenimiento
+        from django.utils import timezone
+        needs_maintenance = self.queryset.filter(
+            next_maintenance__lte=timezone.now().date()
+        ).count()
+        
+        return Response({
+            'total': total,
+            'by_status': list(by_status),
+            'by_condition': list(by_condition),
+            'by_category': list(by_category),
+            'needs_maintenance': needs_maintenance,
+        })
+    
+    @action(detail=False, methods=['get'])
+    def available(self, request):
+        """Listar solo activos disponibles"""
+        available_assets = self.queryset.filter(status='available')
+        serializer = self.get_serializer(available_assets, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def maintenance_required(self, request):
+        """Listar activos que necesitan mantenimiento"""
+        from django.utils import timezone
+        assets = self.queryset.filter(
+            next_maintenance__lte=timezone.now().date()
+        )
+        serializer = self.get_serializer(assets, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def assign(self, request, pk=None):
+        """Asignar activo a una persona"""
+        asset = self.get_object()
+        assigned_to = request.data.get('assigned_to')
+        
+        if not assigned_to:
+            return Response(
+                {'error': 'Se requiere especificar a quién se asignará el activo'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        asset.assigned_to = assigned_to
+        asset.status = 'in_use'
+        asset.save()
+        
+        serializer = self.get_serializer(asset)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def return_asset(self, request, pk=None):
+        """Devolver activo (marcarlo como disponible)"""
+        asset = self.get_object()
+        asset.assigned_to = None
+        asset.status = 'available'
+        asset.save()
+        
+        serializer = self.get_serializer(asset)
+        return Response(serializer.data)

@@ -204,3 +204,56 @@ class LabourSerializer(serializers.ModelSerializer):
         model = Labour
         fields = '__all__'
     
+
+#Testing serializers for Asset Management Module
+
+class AssetCategorySerializer(serializers.ModelSerializer):
+    assets_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = AssetCategory
+        fields = ['id', 'name', 'description', 'assets_count', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_assets_count(self, obj):
+        return obj.assets.count()
+
+
+class AssetSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    condition_display = serializers.CharField(source='get_condition_display', read_only=True)
+    is_available = serializers.BooleanField(read_only=True)
+    needs_maintenance = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = Asset
+        fields = [
+            'id', 'code', 'name', 'description', 'category', 'category_name',
+            'brand', 'model', 'serial_number', 'status', 'status_display',
+            'condition', 'condition_display', 'location', 'assigned_to',
+            'purchase_price', 'purchase_date', 'warranty_expiry',
+            'last_maintenance', 'next_maintenance', 'maintenance_notes',
+            'notes', 'is_available', 'needs_maintenance', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def validate_code(self, value):
+        """Validar que el código sea único"""
+        instance = self.instance
+        if Asset.objects.filter(code=value).exclude(pk=instance.pk if instance else None).exists():
+            raise serializers.ValidationError("Ya existe un activo con este código.")
+        return value.upper()
+
+
+class AssetListSerializer(serializers.ModelSerializer):
+    """Serializer simplificado para listados"""
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = Asset
+        fields = [
+            'id', 'code', 'name', 'category_name', 'model', 'brand',  'serial_number', 'status', 'status_display',
+            'condition', 'location', 'assigned_to', 'created_at'
+        ]

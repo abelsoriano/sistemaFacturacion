@@ -7,6 +7,7 @@ import { showSuccessAlert, showGenericAlert } from '../herpert';
 function SalesForm() {
   const [cartItems, setCartItems] = useState([]);
   const [customer, setCustomer] = useState(null);
+  const [amountPaid, setAmountPaid] = useState('');
   const navigate = useNavigate();
 
   const handleCancel = () => {
@@ -31,7 +32,7 @@ function SalesForm() {
 
       updatedCart[existingItemIndex].quantity += 1;
       setCartItems(updatedCart);
-      // showSuccessAlert(`${product.name} agregado. Cantidad: ${updatedCart[existingItemIndex].quantity}`);
+      showSuccessAlert(`${product.name} agregado. Cantidad: ${updatedCart[existingItemIndex].quantity}`);
     } else {
       // Si no existe, agregar al carrito
       if (product.stock < 1) {
@@ -82,14 +83,20 @@ function SalesForm() {
     return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
-const calculateTax = () => {
-  const tax = calculateSubtotal() * 0.18;
-  return Number(tax.toFixed(2));
-};
-
+  const calculateTax = () => {
+    const tax = calculateSubtotal() * 0.18;
+    return Number(tax.toFixed(2));
+  };
 
   const calculateTotal = () => {
     return calculateSubtotal();
+  };
+
+  // Calcular cambio
+  const calculateChange = () => {
+    const paid = parseFloat(amountPaid) || 0;
+    const total = calculateTotal();
+    return paid - total;
   };
 
   // Procesar venta
@@ -99,9 +106,17 @@ const calculateTax = () => {
       return;
     }
 
+    const paid = parseFloat(amountPaid) || 0;
+    const total = calculateTotal();
+
+    if (paid < total) {
+      showGenericAlert('El monto pagado es insuficiente.');
+      return;
+    }
+
     try {
       const saleData = {
-        customer: customer?.name || 'Despachador',  // Enviar string vacío si no hay cliente
+        customer: customer?.name || 'Despachador',
         items: cartItems.map(item => ({
           product: item.id,
           quantity: item.quantity,
@@ -113,11 +128,18 @@ const calculateTax = () => {
       };
 
       await api.post('sales/', saleData);
-      showSuccessAlert('Venta registrada exitosamente.');
       
-      // Limpiar carrito
+      const change = calculateChange();
+      if (change > 0) {
+        showSuccessAlert(`Venta registrada exitosamente. Cambio: $${change.toFixed(2)}`);
+      } else {
+        showSuccessAlert('Venta registrada exitosamente.');
+      }
+      
+      // Limpiar carrito y monto pagado
       setCartItems([]);
       setCustomer(null);
+      setAmountPaid('');
     } catch (error) {
       console.error('Error registrando venta:', error);
       if (error.response?.data) {
@@ -131,6 +153,9 @@ const calculateTax = () => {
       }
     }
   };
+
+  // Botones de montos rápidos
+  const quickAmounts = [100, 200, 500, 1000];
 
   return (
     <div className="container mt-4">
@@ -256,14 +281,68 @@ const calculateTax = () => {
                 <span>${calculateSubtotal().toFixed(2)}</span>
               </div>
               <div className="d-flex justify-content-between mb-2">
-                <span>ITBIS (18%):</span>
-                <span>${calculateTax().toFixed(2)}</span>
+                {/* <span>ITBIS (18%):</span> */}
+                {/* <span>${calculateTax().toFixed(2)}</span> */}
               </div>
               <hr />
               <div className="d-flex justify-content-between mb-3">
                 <strong>Total:</strong>
                 <strong className="text-primary fs-4">${calculateTotal().toFixed(2)}</strong>
               </div>
+
+              {/* Sección de pago y cambio */}
+              {cartItems.length > 0 && (
+                <>
+                  <div className="mb-3">
+                    <label className="form-label fw-bold">Monto Recibido:</label>
+                    <input
+                      type="number"
+                      className="form-control form-control-lg"
+                      placeholder="0.00"
+                      value={amountPaid}
+                      onChange={(e) => setAmountPaid(e.target.value)}
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
+
+                  {/* Botones de montos rápidos */}
+                  <div className="mb-3">
+                    <small className="text-muted d-block mb-2">Montos rápidos:</small>
+                    <div className="d-grid gap-2">
+                      <div className="row g-2">
+                        {quickAmounts.map(amount => (
+                          <div className="col-6" key={amount}>
+                            <button
+                              className="btn btn-outline-secondary btn-sm w-100"
+                              onClick={() => setAmountPaid(amount.toString())}
+                            >
+                              ${amount}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mostrar cambio */}
+                  {amountPaid && parseFloat(amountPaid) > 0 && (
+                    <div className={`alert ${calculateChange() >= 0 ? 'alert-success' : 'alert-warning'} mb-3`}>
+                      <div className="d-flex justify-content-between align-items-center">
+                        <strong>Cambio:</strong>
+                        <span className="fs-5">
+                          ${calculateChange() >= 0 ? calculateChange().toFixed(2) : '0.00'}
+                        </span>
+                      </div>
+                      {calculateChange() < 0 && (
+                        <small className="text-danger d-block mt-1">
+                          Falta: ${Math.abs(calculateChange()).toFixed(2)}
+                        </small>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
 
               <button
                 className="btn btn-success w-100 btn-lg"
@@ -276,7 +355,10 @@ const calculateTax = () => {
               {cartItems.length > 0 && (
                 <button
                   className="btn btn-outline-danger w-100 mt-2"
-                  onClick={() => setCartItems([])}
+                  onClick={() => {
+                    setCartItems([]);
+                    setAmountPaid('');
+                  }}
                 >
                   🗑️ Vaciar Carrito
                 </button>
@@ -284,14 +366,12 @@ const calculateTax = () => {
             </div>
           </div>
          
-                <button
-                  className="card-text text-muted mt-3 btn btn-outline-secondary w-100"
-                  onClick={() => handleCancel([])}
-                >
-                   Volver 
-                </button>
-              
-
+          <button
+            className="btn btn-outline-secondary w-100 mt-3"
+            onClick={handleCancel}
+          >
+            ← Volver 
+          </button>
         </div>
       </div>
     </div>

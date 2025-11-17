@@ -23,8 +23,10 @@ function HomeConfig({ isOpen, onClose, onSave }) {
     { id: 'sales', label: 'Ventas', category: 'modules', type: 'module', parent: 'salesCategory' },
     { id: 'fastSales', label: 'Venta Rápida', category: 'modules', type: 'module', parent: 'salesCategory' },
     { id: 'invoicing', label: 'Facturación', category: 'modules', type: 'module', parent: 'salesCategory' },
-    { id: 'labour', label: 'Mano de Obra', category: 'modules', type: 'module', parent: 'servicesCategory' }
+    { id: 'labour', label: 'Mano de Obra', category: 'modules', type: 'module', parent: 'servicesCategory' },
+    { id: 'assetsManager', label: 'Administrador de Activos', category: 'modules', type: 'module', parent: 'servicesCategory' }
   ];
+
 
   useEffect(() => {
     if (isOpen) {

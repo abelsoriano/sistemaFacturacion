@@ -94,7 +94,8 @@ const ProductList = () => {
         (product.description && product.description.toLowerCase().includes(searchTerm)) ||
         (product.category_name && product.category_name.toLowerCase().includes(searchTerm)) ||
         (product.price && product.price.toString().includes(searchTerm)) ||
-        (product.stock && product.stock.toString().includes(searchTerm))
+        (product.stock && product.stock.toString().includes(searchTerm)) ||
+        (product.barcode && product.barcode.toLowerCase().includes(searchTerm))
     );
     setFilteredProducts(filtered);
   };

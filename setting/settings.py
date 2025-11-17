@@ -41,7 +41,8 @@ INSTALLED_APPS = [
 
     'facturacion',
     'rest_framework',
-    'corsheaders'
+    'corsheaders', 
+    'django_filters'
 ]
 
 MIDDLEWARE = [

@@ -203,7 +203,15 @@ const [categoryOrder, setCategoryOrder] = useState([]);
           description: "Gestión de servicios y trabajos", 
           route: "/labour-list",
           colorClass: "secondary" 
-        }
+        },
+         { 
+          id: 'assetsManager',
+          title: "Administrador de Activos", 
+          icon: <FaShoppingCart size={28} />, 
+          description: "Gestión de servicios y activos", 
+          route: "/assetsManager",
+          colorClass: "secondary" 
+        },
       ]
     }
   ];
@@ -412,7 +420,7 @@ return (
           {category.items.map((item, itemIndex) => (
             <div key={itemIndex} className="col-md-4 mb-4">
               <div 
-                className={`card h-100 shadow-sm border-left-5 cursor-pointer border-hover-${item.colorClass}`} 
+                className={`card h-100 shadow-sm border-left-5    cursor-pointer border-hover-${item.colorClass}`} 
                 onClick={() => handleCardClick(item.route)}
                 style={{cursor: 'pointer', borderLeft: `5px solid var(--bs-${item.colorClass})`}}
               >
