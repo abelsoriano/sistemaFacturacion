@@ -326,7 +326,7 @@ const InvoiceList = () => {
                   <tr key={invoice.id}>
                     <td>{invoice.invoice_number || `FACT-${invoice.id}`}</td>
                     <td>
-                      {clients[invoice.client] || "Cliente no disponible"}
+                      {clients[invoice.client] || "Cliente no disponible"} 
                     </td>
                     <td>{formatDate(invoice.date)}</td>
                     <td className="text-end">

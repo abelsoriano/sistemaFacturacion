@@ -15,7 +15,10 @@ const InvoiceForm = () => {
         details: [],
         status: "pending",
         date: new Date().toISOString().split('T')[0],
-        notes: ""
+        notes: "",
+        receipt_type: "cash", // Valor por defecto
+        cash_received: 0,
+        change: 0
     });
     const [errors, setErrors] = useState({});
 
@@ -59,7 +62,6 @@ const InvoiceForm = () => {
     const handleClientChange = (e) => {
         setInvoice({ ...invoice, client: e.target.value });
         
-        // Limpiar error de cliente si existe
         if (errors.client) {
             setErrors({ ...errors, client: null });
         }
@@ -85,19 +87,16 @@ const InvoiceForm = () => {
     const handleDetailChange = (index, field, value) => {
         const updatedDetails = [...invoice.details];
         
-        // Convertir a número si es un campo numérico
         if (field === "price" || field === "quantity") {
             value = Number(value);
         }
         
         updatedDetails[index][field] = value;
         
-        // Si el campo es "product", actualizar el precio automáticamente
         if (field === "product" && value && productDetails[value]) {
             updatedDetails[index].price = productDetails[value].price || 0;
         }
         
-        // Calcular subtotal
         if (field === "product" || field === "price" || field === "quantity") {
             updatedDetails[index].subtotal = 
                 updatedDetails[index].quantity * updatedDetails[index].price;
@@ -105,7 +104,6 @@ const InvoiceForm = () => {
         
         setInvoice({ ...invoice, details: updatedDetails });
         
-        // Limpiar errores si existen
         if (errors.details) {
             setErrors({ ...errors, details: null });
         }
@@ -114,6 +112,19 @@ const InvoiceForm = () => {
     // Calcular total de la factura
     const calculateTotal = () => {
         return invoice.details.reduce((sum, detail) => sum + (detail.subtotal || detail.quantity * detail.price), 0);
+    };
+
+    // Manejar cambio en dinero recibido (auto-calcular cambio)
+    const handleCashReceivedChange = (value) => {
+        const cashReceived = parseFloat(value) || 0;
+        const total = calculateTotal();
+        const change = Math.max(0, cashReceived - total);
+        
+        setInvoice({
+            ...invoice,
+            cash_received: cashReceived,
+            change: change
+        });
     };
 
     // Validar el formulario
@@ -127,7 +138,6 @@ const InvoiceForm = () => {
         if (invoice.details.length === 0) {
             newErrors.details = "Debe agregar al menos un detalle a la factura";
         } else {
-            // Verificar que todos los detalles tengan producto y cantidad
             const invalidDetails = invoice.details.some(
                 detail => !detail.product || detail.quantity <= 0
             );
@@ -135,6 +145,11 @@ const InvoiceForm = () => {
             if (invalidDetails) {
                 newErrors.details = "Todos los detalles deben tener producto y cantidad válida";
             }
+        }
+
+        // Validar efectivo recibido si es pago en efectivo
+        if (invoice.receipt_type === 'cash' && invoice.cash_received < calculateTotal()) {
+            newErrors.cash_received = "El efectivo recibido debe ser mayor o igual al total";
         }
         
         setErrors(newErrors);
@@ -163,29 +178,58 @@ const InvoiceForm = () => {
         setIsLoading(true);
         
         try {
+            // Preparar datos para el backend
+            const invoiceData = {
+                client: invoice.client,
+                status: invoice.status,
+                date: invoice.date,
+                notes: invoice.notes,
+                receipt_type: invoice.receipt_type,
+                cash_received: parseFloat(invoice.cash_received) || 0,
+                change: parseFloat(invoice.change) || 0,
+                total: calculateTotal(),
+                // Transformar details para que usen product_id
+                details: invoice.details.map(detail => ({
+                    product_id: detail.product, // ← CAMBIO CLAVE
+                    quantity: detail.quantity,
+                    price: parseFloat(detail.price)
+                }))
+            };
+
+            console.log('Datos a enviar:', invoiceData);
+            
             let response;
             
-            // Preparar datos para el envío
-            const invoiceData = {
-                ...invoice,
-                total: calculateTotal()
-            };
-            
             if (id) {
-                // Actualizar factura existente
                 response = await api.put(`invoices/${id}/`, invoiceData);
                 alert("Factura actualizada con éxito!");
             } else {
-                // Crear nueva factura
                 response = await api.post("invoices/", invoiceData);
                 alert("Factura creada con éxito!");
             }
             
-            // Redireccionar a la lista de facturas o a la vista de detalle
-            navigate(`/invoice-detail/${response.data.id}`);
+            navigate(`/invoices/${response.data.id}`);
         } catch (error) {
             console.error("Error al guardar factura:", error);
-            alert("Error al guardar la factura. Por favor intente nuevamente.");
+            console.error("Detalles del error:", error.response?.data);
+            
+            // Mostrar errores específicos del backend
+            if (error.response?.data) {
+                const backendErrors = error.response.data;
+                let errorMessage = "Error al guardar la factura:\n";
+                
+                Object.keys(backendErrors).forEach(key => {
+                    if (Array.isArray(backendErrors[key])) {
+                        errorMessage += `${key}: ${backendErrors[key].join(', ')}\n`;
+                    } else {
+                        errorMessage += `${key}: ${backendErrors[key]}\n`;
+                    }
+                });
+                
+                alert(errorMessage);
+            } else {
+                alert("Error al guardar la factura. Por favor intente nuevamente.");
+            }
         } finally {
             setIsLoading(false);
         }
@@ -244,9 +288,9 @@ const InvoiceForm = () => {
                 <div className="card-body">
                     <form onSubmit={handleSubmit}>
                         <div className="row mb-4">
-                            <div className="col-md-6">
+                            <div className="col-md-4">
                                 <div className="mb-3">
-                                    <label htmlFor="client" className="form-label">Cliente:</label>
+                                    <label htmlFor="client" className="form-label">Cliente: *</label>
                                     <select
                                         id="client"
                                         className={`form-select ${errors.client ? 'is-invalid' : ''}`}
@@ -266,7 +310,7 @@ const InvoiceForm = () => {
                                     )}
                                 </div>
                             </div>
-                            <div className="col-md-6">
+                            <div className="col-md-4">
                                 <div className="mb-3">
                                     <label htmlFor="date" className="form-label">Fecha:</label>
                                     <input
@@ -277,6 +321,22 @@ const InvoiceForm = () => {
                                         onChange={(e) => setInvoice({ ...invoice, date: e.target.value })}
                                         disabled={isLoading}
                                     />
+                                </div>
+                            </div>
+                            <div className="col-md-4">
+                                <div className="mb-3">
+                                    <label htmlFor="receipt_type" className="form-label">Tipo de Pago: *</label>
+                                    <select
+                                        id="receipt_type"
+                                        className="form-select"
+                                        value={invoice.receipt_type}
+                                        onChange={(e) => setInvoice({ ...invoice, receipt_type: e.target.value })}
+                                        disabled={isLoading}
+                                    >
+                                        <option value="cash">Efectivo</option>
+                                        <option value="card">Tarjeta</option>
+                                        <option value="transfer">Transferencia</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -303,10 +363,10 @@ const InvoiceForm = () => {
                                     <thead className="table-light">
                                         <tr>
                                             <th>Producto</th>
-                                            <th>Cantidad</th>
-                                            <th>Precio Unitario</th>
-                                            <th>Subtotal</th>
-                                            <th style={{ width: "50px" }}></th>
+                                            <th style={{width: "120px"}}>Cantidad</th>
+                                            <th style={{width: "150px"}}>Precio Unitario</th>
+                                            <th style={{width: "150px"}}>Subtotal</th>
+                                            <th style={{ width: "60px" }}></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -329,7 +389,7 @@ const InvoiceForm = () => {
                                                             <option value="">Seleccionar Producto</option>
                                                             {products.map((product) => (
                                                                 <option key={product.id} value={product.id}>
-                                                                    {product.name}
+                                                                    {product.name} - ${product.price}
                                                                 </option>
                                                             ))}
                                                         </select>
@@ -356,7 +416,7 @@ const InvoiceForm = () => {
                                                         />
                                                     </td>
                                                     <td className="text-end">
-                                                        {(detail.subtotal || detail.quantity * detail.price).toFixed(2)}
+                                                        ${(detail.subtotal || detail.quantity * detail.price).toFixed(2)}
                                                     </td>
                                                     <td className="text-center">
                                                         <button
@@ -382,6 +442,38 @@ const InvoiceForm = () => {
                                 </table>
                             </div>
                         </div>
+
+                        {/* Sección de pago */}
+                        {invoice.receipt_type === 'cash' && (
+                            <div className="row mb-4">
+                                <div className="col-md-6">
+                                    <label htmlFor="cash_received" className="form-label">Efectivo Recibido: *</label>
+                                    <input
+                                        type="number"
+                                        id="cash_received"
+                                        className={`form-control ${errors.cash_received ? 'is-invalid' : ''}`}
+                                        step="0.01"
+                                        min="0"
+                                        value={invoice.cash_received}
+                                        onChange={(e) => handleCashReceivedChange(e.target.value)}
+                                        disabled={isLoading}
+                                    />
+                                    {errors.cash_received && (
+                                        <div className="invalid-feedback">{errors.cash_received}</div>
+                                    )}
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label">Cambio:</label>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        value={`$${invoice.change.toFixed(2)}`}
+                                        disabled
+                                        readOnly
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         <div className="mb-4">
                             <label htmlFor="notes" className="form-label">Notas:</label>

@@ -1,12 +1,9 @@
 import json
 from rest_framework import generics, viewsets
-
 from .serializers import *
 from django.db.models import Q, F
-
 from rest_framework import status
 from django.utils import timezone
-
 from django.db.models import Sum,  Count
 from collections import defaultdict
 from datetime import timedelta
@@ -32,6 +29,11 @@ from django_filters.rest_framework import DjangoFilterBackend
 import subprocess
 import platform
 from rest_framework import viewsets, status, filters
+from django.contrib.auth import authenticate
+from rest_framework.authtoken.models import Token
+from rest_framework.permissions import IsAuthenticated
+
+
 
 
 class CategoryListCreateView(generics.ListCreateAPIView):
@@ -342,16 +344,6 @@ class PrintLabelDirectView(APIView):
             view = GenerateZPLLabelView()
             zpl_commands = view.generate_zpl_label(product, quantity)
             
-            # Aquí podrías enviar directamente a la impresora si está en red
-            # IMPORTANTE: Descomenta y configura solo si tu impresora está en red
-            # import socket
-            # printer_ip = "192.168.1.100"  # IP de tu impresora
-            # printer_port = 9100
-            # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            # sock.connect((printer_ip, printer_port))
-            # sock.send(zpl_commands.encode())
-            # sock.close()
-            
             return Response({
                 "success": True,
                 "message": "Etiqueta generada (impresión directa no configurada)",
@@ -368,7 +360,6 @@ class PrintLabelDirectView(APIView):
                 {"error": f"Error interno: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
 class PrintLabelDirectView(APIView):
     """
@@ -464,8 +455,11 @@ class PrintLabelDirectView(APIView):
                 
                 try:
                     win32print.StartPagePrinter(hPrinter)
-                    # Enviar como ASCII
-                    win32print.WritePrinter(hPrinter, zpl_content.encode('ascii'))
+                    
+                    # CORRECCIÓN: Usar latin-1 en lugar de ascii
+                    # latin-1 (ISO-8859-1) incluye Ñ y otros caracteres españoles
+                    win32print.WritePrinter(hPrinter, zpl_content.encode('latin-1', errors='replace'))
+                    
                     win32print.EndPagePrinter(hPrinter)
                 finally:
                     win32print.EndDocPrinter(hPrinter)
@@ -486,8 +480,8 @@ class PrintLabelDirectView(APIView):
         import subprocess
         import os
         
-        # Crear archivo temporal
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.zpl', delete=False, encoding='ascii') as tmp:
+        # CORRECCIÓN: Usar latin-1 en lugar de ascii
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.zpl', delete=False, encoding='latin-1') as tmp:
             tmp.write(zpl_content)
             tmp_path = tmp.name
         
@@ -1140,3 +1134,91 @@ class AssetViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(asset)
         return Response(serializer.data)
+
+
+class LoginView(APIView):
+    permission_classes = []
+    
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+        
+        if not username or not password:
+            return Response(
+                {"error": "Usuario y contraseña son requeridos"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user = authenticate(username=username, password=password)
+        
+        if user is not None:
+            token, created = Token.objects.get_or_create(user=user)
+            
+            return Response({
+                "token": token.key,
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "first_name": user.first_name,  # ← Asegúrate que esté aquí
+                    "last_name": user.last_name      # ← Y aquí
+                }
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {"error": "Usuario o contraseña incorrectos"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+    
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name
+        })
+
+    def put(self, request):
+        user = request.user
+
+        user.first_name = request.data.get('first_name', user.first_name)
+        user.last_name = request.data.get('last_name', user.last_name)
+        user.email = request.data.get('email', user.email)
+
+        user.save()
+
+        return Response({
+            'message': 'Perfil actualizado correctamente',
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            }
+        })
+    
+class VerifyTokenView(APIView):
+    """
+    Vista para verificar si un token es válido
+    GET /api/verify-token/
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        # Si llega aquí, el token es válido (IsAuthenticated lo verifica)
+        return Response({
+            "valid": True,
+            "user": {
+                "id": request.user.id,
+                "username": request.user.username,
+                "email": request.user.email,
+                "first_name": request.user.first_name,
+                "last_name": request.user.last_name
+            }
+        }, status=status.HTTP_200_OK)

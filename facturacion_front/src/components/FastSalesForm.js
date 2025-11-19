@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
 import BarcodeScannerInput from './BarcodeScannerInput';
 import api from '../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -9,10 +10,16 @@ function SalesForm() {
   const [customer, setCustomer] = useState(null);
   const [amountPaid, setAmountPaid] = useState('');
   const navigate = useNavigate();
-
+  const [currentUser, setCurrentUser] = useState(null);
   const handleCancel = () => {
     navigate('/home');
   };
+
+    // Cargar usuario actual
+  useEffect(() => {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      setCurrentUser(user);
+    }, []);
 
   // Manejar producto encontrado por el escáner
   const handleProductFound = (product) => {
@@ -116,7 +123,8 @@ function SalesForm() {
 
     try {
       const saleData = {
-        customer: customer?.name || 'Despachador',
+        customer: currentUser.username || 'Despachador',
+        
         items: cartItems.map(item => ({
           product: item.id,
           quantity: item.quantity,
@@ -126,6 +134,7 @@ function SalesForm() {
         tax: calculateTax(),
         total: calculateTotal()
       };
+      console.log('Datos de la venta a enviar:', saleData);
 
       await api.post('sales/', saleData);
       

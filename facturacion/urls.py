@@ -4,7 +4,7 @@ from django.conf.urls.static import static
 from django.conf import settings
 from .views import *
 from . import views
-
+from django.contrib.auth import views as auth_views
 from .views import (
     CategoryListCreateView,
     CategoryRetrieveUpdateDeleteView,
@@ -75,4 +75,9 @@ urlpatterns = router.urls + [
     # ==========================================
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     path('reports/low-stock-pdf/', generate_low_stock_pdf, name='low-stock-pdf'),
+
+    # path('login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
+    path('logout/', auth_views.LogoutView.as_view(next_page='reservar_turno'), name='logout'),
+    path('profile/', ProfileView.as_view()),
+    path('verify-token/', VerifyTokenView.as_view(), name='verify-token'),
 ]

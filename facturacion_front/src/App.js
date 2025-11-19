@@ -1,5 +1,7 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import ProtectedRoute from './components/ProtectedRoute';
+
 import Home from './components/Home';
 import CategoryForm from './components/CategoryForm';
 import ProductForm from './components/ProductForm';
@@ -21,50 +23,76 @@ import InvoiceDetail from'./components/InvoiceDetail';
 import LowStockProducts from './components/LowStockProducts'
 import AssetsManager from './components/AssetsManager'
 import AssetForm from './components/AssetForm'
+import Login from './components/Login'
+import Profile from './components/Profile';
+
+
+/**
+ * Componente para rutas públicas (solo Login)
+ * Si ya está autenticado, redirige al home
+ */
+function PublicRoute({ children }) {
+  const token = localStorage.getItem('token');
+  
+  if (token) {
+    return <Navigate to="/" replace />;
+  }
+  
+  return children;
+}
+
 
 function App() {
   return (
     <Router>
       <Routes>
+
+        {/* ============================================ */}
+        {/* RUTAS PÚBLICAS - No requieren autenticación */}
+        {/* ============================================ */}
+        <Route path="/" element={<PublicRoute> <Login /> </PublicRoute>} />
+        <Route path="/profile" element={<Profile />} />
         
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/home" element={<Home />} />
+        <Route path="/dashboard" element={ <ProtectedRoute> <Dashboard /> </ProtectedRoute> }/>
+        <Route path="/home" element={ <ProtectedRoute> <Home/> </ProtectedRoute>} />
 
-        <Route path="/categoriesForm" element={<CategoryForm />} />
-        <Route path="/categoriaList" element={<CategoryList />} />
-        <Route path="/categoriesForm/:id"  element={<CategoryForm />} /> {/* Para editar */}
+        <Route path="/categoriesForm" element={<ProtectedRoute> <CategoryForm /> </ProtectedRoute> } />
+        <Route path="/categoriaList" element={<ProtectedRoute><CategoryList /></ProtectedRoute>} />
+        <Route path="/categoriesForm/:id"  element={<ProtectedRoute><CategoryForm /></ProtectedRoute>} /> {/* Para editar */}
 
-        <Route path="/productsList" element={<ProductList />} />
-        <Route path="/productsForm" element={<ProductForm />} />
-        <Route path="/productsForm/:id" element={<ProductForm />} /> {/* Para editar */}
+        <Route path="/productsList" element={<ProtectedRoute><ProductList /></ProtectedRoute>} />
+        <Route path="/productsForm" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
+        <Route path="/productsForm/:id" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} /> {/* Para editar */}
 
-        <Route path="/sales" element={<SalesForm />} />
-        <Route path="/Fastsales" element={<FastSalesForm />} />
-        <Route path="/salesList" element={<SalesList />} />
-        <Route path="/Fastsales/:id" element={<SalesForm />} />
+        <Route path="/sales" element={<ProtectedRoute><SalesForm /></ProtectedRoute>} />
+        <Route path="/Fastsales" element={<ProtectedRoute><FastSalesForm /></ProtectedRoute>} />
+        <Route path="/salesList" element={<ProtectedRoute><SalesList /></ProtectedRoute>} />
+        <Route path="/Fastsales/:id" element={<ProtectedRoute><SalesForm /></ProtectedRoute>} />
         
-        <Route path="/create-invoice" element={<InvoiceForm />} />
-        <Route path="/invoice-list" element={<InvoiceList />} />
-         <Route path="/invoices/:id" element={<InvoiceDetail />} />
+        <Route path="/create-invoice" element={<ProtectedRoute><InvoiceForm /></ProtectedRoute>} />
+        <Route path="/invoice-list" element={<ProtectedRoute><InvoiceList /></ProtectedRoute>} />
+         <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetail /></ProtectedRoute>} />
 
-        <Route path="/register-item" element={<AlmacenForm />} />
-        <Route path="/list-item" element={<AlmacenList />} />
-        <Route path="/register-item/:id" element={<AlmacenForm />} /> {/* Para editar */}
+        <Route path="/register-item" element={<ProtectedRoute><AlmacenForm /></ProtectedRoute>} />
+        <Route path="/list-item" element={<ProtectedRoute><AlmacenList /></ProtectedRoute>} />
+        <Route path="/register-item/:id" element={<ProtectedRoute><AlmacenForm /></ProtectedRoute>} /> {/* Para editar */}
 
-        <Route path="/register-labour" element={<LabourForm />} />
-        <Route path="/labour-list" element={<LabourList />} />
-        <Route path="/register-labour/:id" element={<LabourForm />} /> {/* Para editar */}
+        <Route path="/register-labour" element={<ProtectedRoute><LabourForm /></ProtectedRoute>} />
+        <Route path="/labour-list" element={<ProtectedRoute><LabourList /></ProtectedRoute>} />
+        <Route path="/register-labour/:id" element={<ProtectedRoute><LabourForm /></ProtectedRoute>} /> {/* Para editar */}
 
-        <Route path="/sales-reports" element={<SalesPDFReport />} />
+        <Route path="/sales-reports" element={<ProtectedRoute><SalesPDFReport /></ProtectedRoute>} />
 
 
-        <Route path="/low-stock-report" element={<LowStockProducts />} />
+        <Route path="/low-stock-report" element={<ProtectedRoute><LowStockProducts /></ProtectedRoute>} />
 
-        <Route path="/products/new" element={<ProductForm />} />
-        <Route path="/products/:id/edit" element={<ProductForm />} />
+        <Route path="/products/new" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
+        <Route path="/products/:id/edit" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
 
-        <Route path="/assetsManager" element={<AssetsManager />} />
-        <Route path="/assetsForm" element={<AssetForm />} />
+        <Route path="/assetsManager" element={<ProtectedRoute><AssetsManager /></ProtectedRoute>} />
+        <Route path="/assetsForm" element={<ProtectedRoute><AssetForm /></ProtectedRoute>} />
+
+       
 
        
 
