@@ -1,24 +1,17 @@
-name: Build and deploy GitHub Pages
+name: Build and deploy frontend to GitHub Pages (gh-pages)
 
 on:
   push:
     branches:
       - main
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 concurrency:
-  group: pages-${{ github.ref }}
+  group: gh-pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    outputs:
-      artifact-path: ${{ steps.upload.outputs.artifact-path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,18 +29,9 @@ jobs:
         working-directory: facturacion_front
         run: npm run build --if-present
 
-      - name: Upload Pages artifact
-        id: upload
-        uses: actions/upload-pages-artifact@v1
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          path: facturacion_front/build
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    steps:
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./facturacion_front/build
