@@ -1,0 +1,66 @@
+# Python
+myenv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm
+
+# Build
+_site/
+.sass-cache/
+.jekyll-cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+/media/
+/staticfiles/
+
+# React
+facturacion_front/node_modules/
+facturacion_front/build/
+facturacion_front/.env.local
+facturacion_front/.env.development.local
+facturacion_front/.env.test.local
+facturacion_front/.env.production.local

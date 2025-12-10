@@ -1,0 +1,29 @@
+# Jekyll configuration for GitHub Pages
+
+# Exclude directories from Jekyll processing
+exclude:
+  - myenv/
+  - node_modules/
+  - __pycache__/
+  - .git/
+  - .gitignore
+  - README.md
+  - manage.py
+  - tes.py
+  - force_zpl_mode.py
+  - package.json
+  - .env
+  - .env.local
+  - facturacion/
+  - setting/
+  - media/
+
+# Theme
+theme: jekyll-theme-primer
+
+# Site settings
+title: Sistema de Facturación
+description: Sistema de gestión de facturación y ventas
+
+# Build settings
+markdown: GFM
