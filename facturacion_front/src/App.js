@@ -44,7 +44,7 @@ function PublicRoute({ children }) {
 
 function App() {
   return (
-    <Router>
+    <Router basename="/sistemaFacturacion">
       <Routes>
 
         {/* ============================================ */}
