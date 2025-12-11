@@ -51,7 +51,7 @@ function AssetForm() {
     if (isEditMode) {
       fetchAsset();
     }
-  }, [id]);
+  }, [id, isEditMode]);
 
   const fetchCategories = async () => {
     try {

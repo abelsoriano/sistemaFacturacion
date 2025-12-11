@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     FaTools, FaPlus, FaEdit, FaTrash, FaSearch,
     FaBox, FaExclamationTriangle, FaCheckCircle, FaWrench,
-    FaEye, FaUserCheck, FaUndo, FaChartBar
+    FaEye, FaUserCheck, FaUndo
 } from 'react-icons/fa';
 import api from '../services/api';
 import { showSuccessAlert, showGenericAlert } from '../herpert';
@@ -27,7 +27,7 @@ const AssetsList = () => {
 
     useEffect(() => {
         loadData();
-    }, [statusFilter, categoryFilter, conditionFilter]);
+    }, [statusFilter, categoryFilter, conditionFilter, loadData]);
 
     const handleCancel = () => {
         navigate('/home');

@@ -9,7 +9,6 @@ import {
   Button,
   Table,
   Input,
-  Pagination,
   Tabs,
   Collapse,
   Badge,
@@ -23,14 +22,12 @@ import {
   StockOutlined,
   TagOutlined,
   HomeOutlined,
-  SearchOutlined,
   EyeOutlined,
   BarChartOutlined,
-  PieChartOutlined,
   LineChartOutlined,
   TableOutlined
 } from '@ant-design/icons';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import {
   BarChart,
@@ -62,9 +59,6 @@ const Dashboard = () => {
   const [dateRange, setDateRange] = useState([moment().startOf('month'), moment().endOf('month')]);
   const [timeFrame, setTimeFrame] = useState('month');
   const [activeTab, setActiveTab] = useState('overview');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
   const [dashboardData, setDashboardData] = useState({
     salesSummary: {},
     topProducts: [],

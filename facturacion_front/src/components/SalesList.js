@@ -6,7 +6,7 @@ import Swal from "sweetalert2";
 import { showConfirmationAlert, showSuccessAlert, showErrorAlert } from "../herpert";
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { BsEyeFill as VerIcon, BsPencilFill as EditarIcon, BsTrashFill as EliminarIcon, BsFilter as FaArrowLeft, BsFileExcel as ExcelIcon, BsPlusCircle as AddIcon } from 'react-icons/bs';
+import { BsEyeFill as VerIcon, BsPencilFill as EditarIcon, BsTrashFill as EliminarIcon, BsFileExcel as ExcelIcon, BsPlusCircle as AddIcon } from 'react-icons/bs';
 import { styles, } from "../herpert";
 
 const SalesList = () => {

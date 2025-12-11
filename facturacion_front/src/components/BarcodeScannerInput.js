@@ -46,7 +46,7 @@ const BarcodeScannerInput = ({ onProductFound, placeholder = "Escanea o busca pr
       document.removeEventListener('keypress', handleKeyPress);
       clearTimeout(scannerTimerRef.current);
     };
-  }, []);
+  }, [searchByBarcode]);
 
   // Buscar producto por código de barras
   const searchByBarcode = async (barcode) => {

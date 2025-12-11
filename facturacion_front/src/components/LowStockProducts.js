@@ -49,7 +49,6 @@ const LowStockProducts = ({ onBack }) => {
 
     // Filtrar productos según el filtro activo
     const filteredProducts = products.filter(product => {
-        const status = getStockStatus(product.stock, product.min_stock);
         
         switch(activeFilter) {
             case 'outOfStock':

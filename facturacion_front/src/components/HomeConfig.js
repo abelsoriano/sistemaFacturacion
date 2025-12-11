@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { FaEye, FaEyeSlash, FaSave, FaTimes, FaCog, FaArrowUp, FaArrowDown } from 'react-icons/fa';
 
 function HomeConfig({ isOpen, onClose, onSave }) {
-  const [visibleItems, setVisibleItems] = useState({});
   const [tempConfig, setTempConfig] = useState({});
   const [itemOrder, setItemOrder] = useState([]);
 
@@ -34,7 +33,6 @@ function HomeConfig({ isOpen, onClose, onSave }) {
       const savedConfig = JSON.parse(localStorage.getItem('homeConfig') || '{}');
       const savedOrder = JSON.parse(localStorage.getItem('homeItemOrder') || '[]');
       
-      setVisibleItems(savedConfig);
       setTempConfig(savedConfig);
       
       // Si no hay orden guardado, usar orden por defecto
@@ -44,11 +42,11 @@ function HomeConfig({ isOpen, onClose, onSave }) {
           .map(item => item.id);
         setItemOrder(defaultOrder);
       } else {
+      } else {
         setItemOrder(savedOrder);
       }
     }
-  }, [isOpen]);
-
+  }, [isOpen, configurableItems]);
   const toggleItem = (itemId) => {
     setTempConfig(prev => ({
       ...prev,
