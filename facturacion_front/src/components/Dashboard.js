@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Row,
@@ -59,6 +59,9 @@ const Dashboard = () => {
   const [dateRange, setDateRange] = useState([moment().startOf('month'), moment().endOf('month')]);
   const [timeFrame, setTimeFrame] = useState('month');
   const [activeTab, setActiveTab] = useState('overview');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [dashboardData, setDashboardData] = useState({
     salesSummary: {},
     topProducts: [],
@@ -70,7 +73,7 @@ const Dashboard = () => {
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d', '#ffc658', '#ff7c7c'];
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       const [startDate, endDate] = dateRange;
@@ -87,11 +90,11 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange, timeFrame]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, [dateRange, timeFrame]);
+  }, [fetchDashboardData]);
 
   const handleDateChange = (dates) => {
     if (dates) {
@@ -225,10 +228,10 @@ const Dashboard = () => {
   ];
 
   // Datos paginados para ventas recientes
-  const paginatedSales = dashboardData.recentSales.slice(
+  const paginatedSales = dashboardData.recentSales?.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
-  );
+  ) || [];
 
   return (
     <div className={styles.dashboardContainer}>

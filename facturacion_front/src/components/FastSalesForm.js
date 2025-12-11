@@ -7,6 +7,7 @@ import { showSuccessAlert, showGenericAlert } from '../herpert';
 
 function SalesForm() {
   const [cartItems, setCartItems] = useState([]);
+  const [customer, setCustomer] = useState(null);
   const [amountPaid, setAmountPaid] = useState('');
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(null);

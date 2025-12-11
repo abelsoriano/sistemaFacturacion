@@ -31,6 +31,7 @@ function Home() {
     ingresosMensuales: "0"
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
   const [homeConfig, setHomeConfig] = useState({});
   const [categoryOrder, setCategoryOrder] = useState([]);

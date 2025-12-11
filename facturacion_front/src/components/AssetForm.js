@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { showSuccessAlert, showGenericAlert } from '../herpert';
@@ -46,14 +46,7 @@ function AssetForm() {
     { value: 'poor', label: 'Malo' }
   ];
 
-  useEffect(() => {
-    fetchCategories();
-    if (isEditMode) {
-      fetchAsset();
-    }
-  }, [id, isEditMode]);
-
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const response = await api.get('assets/categories/');
       setCategories(response.data);
@@ -61,9 +54,9 @@ function AssetForm() {
       console.error('Error al cargar categorías:', error);
       showGenericAlert('Error al cargar las categorías');
     }
-  };
+  }, []);
 
-  const fetchAsset = async () => {
+  const fetchAsset = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get(`assets/${id}/`);
@@ -93,7 +86,14 @@ function AssetForm() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchCategories();
+    if (isEditMode) {
+      fetchAsset();
+    }
+  }, [id, isEditMode, fetchAsset, fetchCategories]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

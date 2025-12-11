@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../services/api';
 
 /**
@@ -13,6 +13,28 @@ const BarcodeScannerInput = ({ onProductFound, placeholder = "Escanea o busca pr
   const inputRef = useRef(null);
   const scannerBufferRef = useRef('');
   const scannerTimerRef = useRef(null);
+
+  // Buscar producto por código de barras
+  const searchByBarcode = useCallback(async (barcode) => {
+    if (!barcode || barcode.length < 3) return;
+
+    setIsSearching(true);
+    try {
+      const response = await api.get(`products/search-barcode/?barcode=${barcode}`);
+      if (response.data) {
+        onProductFound(response.data);
+        setSearchValue('');
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      console.error('Producto no encontrado:', error);
+      // Buscar por nombre si no se encuentra por código de barras
+      searchByName(barcode);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [onProductFound]);
 
   // Detectar escaneo de código de barras
   useEffect(() => {
@@ -47,28 +69,6 @@ const BarcodeScannerInput = ({ onProductFound, placeholder = "Escanea o busca pr
       clearTimeout(scannerTimerRef.current);
     };
   }, [searchByBarcode]);
-
-  // Buscar producto por código de barras
-  const searchByBarcode = async (barcode) => {
-    if (!barcode || barcode.length < 3) return;
-
-    setIsSearching(true);
-    try {
-      const response = await api.get(`products/search-barcode/?barcode=${barcode}`);
-      if (response.data) {
-        onProductFound(response.data);
-        setSearchValue('');
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    } catch (error) {
-      console.error('Producto no encontrado:', error);
-      // Buscar por nombre si no se encuentra por código de barras
-      searchByName(barcode);
-    } finally {
-      setIsSearching(false);
-    }
-  };
 
   // Buscar producto por nombre (búsqueda manual)
   const searchByName = async (query) => {

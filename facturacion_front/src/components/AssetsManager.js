@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     FaTools, FaPlus, FaEdit, FaTrash, FaSearch,
@@ -25,16 +25,7 @@ const AssetsList = () => {
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [conditionFilter, setConditionFilter] = useState('all');
 
-    useEffect(() => {
-        loadData();
-    }, [statusFilter, categoryFilter, conditionFilter, loadData]);
-
-    const handleCancel = () => {
-        navigate('/home');
-    };
-
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true);
         try {
             // Construir parámetros de filtro
@@ -58,6 +49,14 @@ const AssetsList = () => {
         } finally {
             setLoading(false);
         }
+    }, [statusFilter, categoryFilter, conditionFilter]);
+
+    useEffect(() => {
+        loadData();
+    }, [statusFilter, categoryFilter, conditionFilter, loadData]);
+
+    const handleCancel = () => {
+        navigate('/home');
     };
 
     const handleDelete = async (id) => {
