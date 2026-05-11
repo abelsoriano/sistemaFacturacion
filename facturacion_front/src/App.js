@@ -10,6 +10,7 @@ import  CategoryList from './components/CategoryList';
 import  SalesForm from './components/SalesForm';
 import  SalesList from './components/SalesList';
 import InvoiceForm from "./components/InvoiceForm";
+import ProductHistory from './components/ProductHistory';
 
 import FastSalesForm from "./components/FastSalesForm";
 import AlmacenForm from "./components/AlmacenForm";
@@ -25,6 +26,8 @@ import AssetsManager from './components/AssetsManager'
 import AssetForm from './components/AssetForm'
 import Login from './components/Login'
 import Profile from './components/Profile';
+import ClientList from './components/ClientList';
+import ClientForm from './components/ClientForm';
 
 
 /**
@@ -63,6 +66,7 @@ function App() {
         <Route path="/productsList" element={<ProtectedRoute><ProductList /></ProtectedRoute>} />
         <Route path="/productsForm" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
         <Route path="/productsForm/:id" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} /> {/* Para editar */}
+        <Route path="/products/:id/history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
 
         <Route path="/sales" element={<ProtectedRoute><SalesForm /></ProtectedRoute>} />
         <Route path="/Fastsales" element={<ProtectedRoute><FastSalesForm /></ProtectedRoute>} />
@@ -92,9 +96,9 @@ function App() {
         <Route path="/assetsManager" element={<ProtectedRoute><AssetsManager /></ProtectedRoute>} />
         <Route path="/assetsForm" element={<ProtectedRoute><AssetForm /></ProtectedRoute>} />
 
-       
-
-       
+        <Route path="/clients" element={<ProtectedRoute><ClientList /></ProtectedRoute>} />
+        <Route path="/clients/new" element={<ProtectedRoute><ClientForm /></ProtectedRoute>} />
+        <Route path="/clients/:id/edit" element={<ProtectedRoute><ClientForm /></ProtectedRoute>} />
 
       </Routes>
     </Router>

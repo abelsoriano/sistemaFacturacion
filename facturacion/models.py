@@ -1,5 +1,7 @@
 from django.db import models
-import uuid 
+from django.db.models.signals import pre_save, post_save
+from django.dispatch import receiver
+import uuid
 from django.core.validators import MinValueValidator
 from decimal import Decimal
 
@@ -62,7 +64,80 @@ class Product(models.Model):
         new_number = max_number + 1
         
         return f"BB{new_number:05d}"  # PRD00001, PRD00002...
-        
+
+
+class ProductHistory(models.Model):
+    ACTION_CHOICES = [
+        ('created', 'Creado'),
+        ('updated', 'Actualizado'),
+    ]
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='history')
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    changed_fields = models.JSONField(blank=True, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Historial de Producto'
+        verbose_name_plural = 'Historiales de Productos'
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Historial de {self.product.name} ({self.action}) - {self.timestamp:%Y-%m-%d %H:%M:%S}"
+
+
+@receiver(pre_save, sender=Product)
+def create_product_history_record(sender, instance, **kwargs):
+    if not instance.pk:
+        return
+
+    try:
+        previous = Product.objects.get(pk=instance.pk)
+    except Product.DoesNotExist:
+        return
+
+    changed = {}
+    fields_to_check = ['name', 'description', 'price', 'stock', 'category_id', 'min_stock']
+
+    for field in fields_to_check:
+        old_value = getattr(previous, field)
+        new_value = getattr(instance, field)
+        if old_value != new_value:
+            if field == 'category_id':
+                changed['category'] = {
+                    'old': previous.category.name if previous.category else None,
+                    'new': instance.category.name if instance.category else None,
+                }
+            else:
+                changed[field] = {
+                    'old': str(old_value) if old_value is not None else None,
+                    'new': str(new_value) if new_value is not None else None,
+                }
+
+    if changed:
+        ProductHistory.objects.create(product=instance, action='updated', changed_fields=changed)
+
+
+@receiver(post_save, sender=Product)
+def create_product_history_on_create(sender, instance, created, **kwargs):
+    if not created:
+        return
+
+    ProductHistory.objects.create(
+        product=instance,
+        action='created',
+        changed_fields={
+            'name': {'old': None, 'new': instance.name},
+            'description': {'old': None, 'new': instance.description},
+            'price': {'old': None, 'new': str(instance.price)},
+            'stock': {'old': None, 'new': str(instance.stock)},
+            'category': {'old': None, 'new': instance.category.name if instance.category else None},
+            'min_stock': {'old': None, 'new': str(instance.min_stock)},
+            'barcode': {'old': None, 'new': instance.barcode},
+        }
+    )
+
 
 class Sale(models.Model):
     customer = models.CharField(max_length=100, blank=True, null=True)  
@@ -100,21 +175,166 @@ class Client(models.Model):
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
+    # Agrega estos campos opcionales
+    ruc_ci = models.CharField(max_length=20, blank=True, null=True, verbose_name="RUC/CI")
+    client_type = models.CharField(
+        max_length=20,
+        choices=[('regular', 'Regular'), ('frequent', 'Frecuente'), ('occasional', 'Ocasional')],
+        default='occasional'
+    )
+    
+    def __str__(self):
+        return self.name
+    name = models.CharField(max_length=100)
+    email = models.EmailField(blank=True, null=True)
+    phone = models.CharField(max_length=15, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name
 
+# ============ INVOICE MODEL - COMPLETAMENTE CORREGIDO ============PAYMENT_METHODS
 class Invoice(models.Model):
-    total = models.DecimalField(max_digits=10, decimal_places=2)
-    cash_received = models.DecimalField(max_digits=10, decimal_places=2)
-    change = models.DecimalField(max_digits=10, decimal_places=2)
-    receipt_type = models.CharField(max_length=20, choices=[('ticket', 'Ticket'), ('invoice', 'Invoice')])
+    # Métodos de pago
+    PAYMENT_METHODS = [
+        ('cash', 'Efectivo'),
+        ('card', 'Tarjeta'),
+        ('transfer', 'Transferencia'),
+    ]
+    
+    # Tipos de comprobante
+    RECEIPT_TYPES = [
+        ('ticket', 'Ticket (Venta Rápida)'),
+        ('invoice', 'Factura (Completa)'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pendiente'),
+        ('paid', 'Pagada'),
+        ('cancelled', 'Anulada'),
+        ('refunded', 'Reembolsada'),
+    ]
+    
+    # Campos
+    client = models.ForeignKey(
+        Client, 
+        on_delete=models.PROTECT, 
+        related_name='invoices',
+        null=True, 
+        blank=True
+    )
+    
+    invoice_number = models.CharField(max_length=20, unique=True, blank=True)
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    tax = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    cash_received = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    change = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, default='cash')
+    
+    # ✅ Este es el campo correcto para tipo de comprobante
+    receipt_type = models.CharField(
+        max_length=20, 
+        choices=RECEIPT_TYPES, 
+        default='invoice'
+    )
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
     created_at = models.DateTimeField(auto_now_add=True)
-
-
-
+    updated_at = models.DateTimeField(auto_now=True)
+    notes = models.TextField(blank=True, null=True)
+    
+    # ... resto del código
+    PAYMENT_METHODS = [
+        ('cash', 'Efectivo'),          
+        ('efectivo', 'Efectivo'),      
+        ('card', 'Tarjeta'),
+        ('tarjeta', 'Tarjeta'),
+        ('transfer', 'Transferencia'),
+        ('transferencia', 'Transferencia'),
+    ]
+    
+    RECEIPT_TYPES = [
+        ('ticket', 'Ticket'),
+        ('invoice', 'Factura'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pendiente'),
+        ('paid', 'Pagada'),
+        ('cancelled', 'Anulada'),
+        ('refunded', 'Reembolsada'),
+    ]
+    
+    client = models.ForeignKey(
+        Client, 
+        on_delete=models.PROTECT, 
+        related_name='invoices',
+        null=True, 
+        blank=True,
+        verbose_name="Cliente"
+    )
+    
+    invoice_number = models.CharField(max_length=20, unique=True, blank=True, verbose_name="N° Factura")
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Subtotal")
+    tax = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="IVA")
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Descuento")
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Total")
+    
+    cash_received = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Efectivo Recibido")
+    change = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Cambio")
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, default='cash', verbose_name="Método de Pago")
+    
+    # ✅ CAMBIADO: solo UNA definición de receipt_type
+    receipt_type = models.CharField(
+        max_length=20, 
+        choices=RECEIPT_TYPES, 
+        default='invoice',
+        verbose_name="Tipo de Comprobante"
+    )
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Estado")
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Creación")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última Actualización")
+    notes = models.TextField(blank=True, null=True, verbose_name="Notas")
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Factura"
+        verbose_name_plural = "Facturas"
+    
+    def save(self, *args, **kwargs):
+        if not self.invoice_number:
+            last_invoice = Invoice.objects.order_by('-id').first()
+            if last_invoice and last_invoice.invoice_number:
+                try:
+                    last_num = int(last_invoice.invoice_number.split('-')[-1])
+                    new_num = last_num + 1
+                except:
+                    new_num = 1
+            else:
+                new_num = 1
+            self.invoice_number = f"FAC-{new_num:08d}"
+        
+        if self.subtotal and self.tax is not None and self.discount is not None:
+            self.total = self.subtotal + self.tax - self.discount
+        
+        super().save(*args, **kwargs)
+    
+    def calculate_totals(self):
+        details = self.details.all()
+        self.subtotal = sum(detail.subtotal for detail in details)
+        self.tax = self.subtotal * Decimal('0.16')
+        self.total = self.subtotal + self.tax - self.discount
+        self.save()
+    
     def __str__(self):
-        return f"Factura #{self.id} - {self.client.name}"
+        client_name = self.client.name if self.client else "Consumidor Final"
+        return f"{self.invoice_number} - {client_name} - ${self.total}"
 
 class InvoiceDetail(models.Model):
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="details")

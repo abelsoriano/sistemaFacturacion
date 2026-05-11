@@ -25,7 +25,7 @@ function ProductForm() {
     barcode: ""
   });
   const [previewImage, setPreviewImage] = useState(imgPro);
-  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
   // Estados para impresión - ASEGÚRATE DE TENER ESTOS
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -36,6 +36,31 @@ function ProductForm() {
   const [loadingPrinters, setLoadingPrinters] = useState(false);    // ← IMPORTANTE
 
   const dropdownRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [submitMode, setSubmitMode] = useState('save');
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = "El nombre del producto es requerido.";
+    }
+
+    if (!formData.price || formData.price <= 0) {
+      newErrors.price = "El precio debe ser mayor a 0.";
+    }
+
+    if (!formData.stock || formData.stock < 0) {
+      newErrors.stock = "El stock no puede ser negativo.";
+    }
+
+    if (!formData.category) {
+      newErrors.category = "Por favor selecciona una categoría.";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
@@ -166,14 +191,16 @@ function ProductForm() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e, mode = 'save') => {
+    if (e) {
+      e.preventDefault();
+    }
 
-    if (!formData.category) {
-      showGenericAlert("Por favor selecciona una categoría.");
+    if (!validateForm()) {
       return;
     }
 
+    setSubmitMode(mode);
     setIsLoading(true);
 
     try {
@@ -220,6 +247,30 @@ function ProductForm() {
           await loadBarcodeImage(savedProduct.id);
         }
 
+        if (mode === 'save_and_new') {
+          showSuccessAlert("Producto guardado", "Puedes crear un nuevo producto ahora.");
+
+          if (id) {
+            navigate('/productsForm');
+            return;
+          }
+
+          setFormData({
+            name: "",
+            description: "",
+            price: "",
+            stock: "",
+            category: "",
+            categoryName: "",
+            image: null,
+            barcode: ""
+          });
+          setPreviewImage(imgPro);
+          setErrors({});
+          setSearchTerm("");
+          return;
+        }
+
         // Navegar a la URL de edición para que el ID esté en la URL
         navigate(`/products/${savedProduct.id}/edit`, { replace: true });
       }
@@ -236,7 +287,7 @@ function ProductForm() {
     setLoadingPrinters(true);
     try {
       const response = await api.get('products/list-printers/');
-      console.log("Impresoras detectadas:", response.data);
+      // console.log("Impresoras detectadas:", response.data);
 
       if (response.data.printers && response.data.printers.length > 0) {
         setAvailablePrinters(response.data.printers);
@@ -271,19 +322,11 @@ function ProductForm() {
     }
 
     try {
-      console.log("Imprimiendo directamente...", {
-        product_id: parseInt(productId),
-        quantity: printQuantity,
-        printer_name: selectedPrinter
-      });
-
       const response = await api.post('products/print-direct/', {
         product_id: parseInt(productId),
         quantity: parseInt(printQuantity),
         printer_name: selectedPrinter
       });
-
-      console.log("Respuesta:", response.data);
 
       if (response.data.success) {
         showSuccessAlert(response.data.message || "Etiqueta enviada a la impresora correctamente.");
@@ -322,14 +365,14 @@ function ProductForm() {
     }
 
     try {
-      console.log("Enviando datos:", { product_id: parseInt(productId), quantity: printQuantity });
+      // console.log("Enviando datos:", { product_id: parseInt(productId), quantity: printQuantity });
 
       const response = await api.post('products/print-label/', {
         product_id: parseInt(productId),  // Asegurar que sea número
         quantity: parseInt(printQuantity)  // Asegurar que sea número
       });
 
-      console.log("Respuesta recibida:", response.data);
+      // console.log("Respuesta recibida:", response.data);
 
       if (response.data.success === false || response.data.error) {
         showGenericAlert(response.data.error || "Error al generar la etiqueta.");
@@ -429,13 +472,14 @@ function ProductForm() {
               </label>
               <input
                 type="text"
-                className="form-control"
+                className={`form-control ${errors.name ? 'is-invalid' : ''}`}
                 id="name"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
                 required
               />
+              {errors.name && <div className="invalid-feedback">{errors.name}</div>}
             </div>
 
             <div className="mb-3">
@@ -461,7 +505,7 @@ function ProductForm() {
                   <span className="input-group-text">$</span>
                   <input
                     type="number"
-                    className="form-control"
+                    className={`form-control ${errors.price ? 'is-invalid' : ''}`}
                     id="price"
                     name="price"
                     value={formData.price}
@@ -470,6 +514,7 @@ function ProductForm() {
                     step="0.01"
                     required
                   />
+                  {errors.price && <div className="invalid-feedback">{errors.price}</div>}
                 </div>
               </div>
               <div className="col-md-6 mb-3">
@@ -478,7 +523,7 @@ function ProductForm() {
                 </label>
                 <input
                   type="number"
-                  className="form-control"
+                  className={`form-control ${errors.stock ? 'is-invalid' : ''}`}
                   id="stock"
                   name="stock"
                   value={formData.stock}
@@ -486,6 +531,7 @@ function ProductForm() {
                   min="0"
                   required
                 />
+                {errors.stock && <div className="invalid-feedback">{errors.stock}</div>}
               </div>
             </div>
 
@@ -497,7 +543,7 @@ function ProductForm() {
               <div className="position-relative" ref={dropdownRef}>
                 <input
                   type="text"
-                  className="form-control"
+                  className={`form-control ${errors.category ? 'is-invalid' : ''}`}
                   id="category-search"
                   placeholder="Buscar categoría..."
                   value={searchTerm}
@@ -505,6 +551,8 @@ function ProductForm() {
                   onFocus={handleSearchFocus}
                   required
                 />
+
+                {errors.category && <div className="invalid-feedback d-block">{errors.category}</div>}
 
                 {showDropdown && filteredCategories.length > 0 && (
                   <div
@@ -545,22 +593,38 @@ function ProductForm() {
               />
             </div>
 
-            <div className="d-flex justify-content-end mt-4">
-              <Link to="/productsList" className="btn btn-outline-secondary me-2">
+            <div className="d-flex justify-content-end gap-2 mt-4">
+              <Link to="/productsList" className="btn btn-outline-secondary">
                 Cancelar
               </Link>
               <button
-                type="submit"
-                className="btn btn-primary"
+                type="button"
+                className="btn btn-outline-primary"
+                onClick={(e) => handleSubmit(e, 'save_and_new')}
                 disabled={isLoading}
+                title="Guardar este producto y preparar un nuevo formulario"
               >
-                {isLoading ? (
+                {isLoading && submitMode === 'save_and_new' ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                     Guardando...
                   </>
                 ) : (
-                  "Guardar"
+                  'Guardar y crear otro'
+                )}
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isLoading}
+              >
+                {isLoading && submitMode === 'save' ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Guardando...
+                  </>
+                ) : (
+                  'Guardar' 
                 )}
               </button>
             </div>

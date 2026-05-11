@@ -10,6 +10,7 @@ from .views import (
     CategoryRetrieveUpdateDeleteView,
     ProductListCreateView,
     ProductRetrieveUpdateDeleteView,
+    ProductHistoryListView,
     SaleCreateView,
     SaleListView,
     SalesUpdateDeleteView,
@@ -36,6 +37,11 @@ router.register(r'assets', AssetViewSet, basename='assets')
 
 # Combinar las URLs generadas por el router con las rutas personalizadas
 urlpatterns = router.urls + [
+
+    # ==========================================
+    # AUTENTICACIÓN - ¡AGREGAR ESTO!
+    # ==========================================
+    path('login/', LoginView.as_view(), name='login'),  # ← ESTA LÍNEA FALTA
     # ==========================================
     # CATEGORÍAS
     # ==========================================
@@ -47,6 +53,7 @@ urlpatterns = router.urls + [
     # PRODUCTOS
     # ==========================================
     path('products/<int:pk>/', ProductRetrieveUpdateDeleteView.as_view(), name='product-detail'),
+    path('products/<int:pk>/history/', ProductHistoryListView.as_view(), name='product-history'),
     path('products/low-stock/', views.LowStockProductsView.as_view(), name='low-stock-products'),
     
     # ==========================================

@@ -85,7 +85,7 @@ const AlmacenForm = () => {
         stock: parseInt(formData.stock, 10) // Asegurarse que stock es un número
       };
 
-      console.log("Datos a enviar:", dataToSend); // Para depuración
+      // console.log("Datos a enviar:", dataToSend); // Para depuración
       
       if (id) {
         // Editar producto existente
