@@ -6,12 +6,37 @@ import Swal from 'sweetalert2';
 import { 
   FaUsers, FaPlus, FaEdit, FaTrash, FaSearch, 
   FaEye, FaFileExport, FaUser, FaPhone, FaEnvelope,
-  FaMapMarkerAlt, FaIdCard, FaStar, FaFilter
+  FaMapMarkerAlt, FaIdCard, FaStar, FaFilter,
+  FaArrowLeft, FaHashtag, FaMoneyBillWave, FaFileInvoice,
+  FaChevronLeft, FaChevronRight, FaTimes  
 } from 'react-icons/fa';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import '../css/listaCliente.css';
+import { SALE_TOTALS_PERMISSION, userHasPermissions } from '../utils/permissions';
 
+
+/* ─── Helper Functions ─────────────────────────────────────────────────── */
+const formatMoney = (n) => `$${(+n || 0).toFixed(2)}`;
+
+const getInitials = (name = "") =>
+  name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "?";
+
+const getTypeBadge = (type) => {
+  switch(type) {
+    case 'frequent':
+      return <span className="type-badge type-frequent"><FaStar size={10} /> Frecuente</span>;
+    case 'regular':
+      return <span className="type-badge type-regular">Regular</span>;
+    default:
+      return <span className="type-badge type-occasional">Ocasional</span>;
+  }
+};
+
+/* ─── Main Component ───────────────────────────────────────────────────── */
 const ClientList = () => {
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const canViewSalesTotals = userHasPermissions(currentUser, [SALE_TOTALS_PERMISSION]);
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +46,7 @@ const ClientList = () => {
   const [pageSize] = useState(10);
   const [selectedClient, setSelectedClient] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Cargar clientes
   const loadClients = async () => {
@@ -49,11 +75,7 @@ const ClientList = () => {
       client.ruc_ci?.includes(searchTerm);
     
     if (filterType === 'all') return matchesSearch;
-    if (filterType === 'regular') return matchesSearch && client.client_type === 'regular';
-    if (filterType === 'frequent') return matchesSearch && client.client_type === 'frequent';
-    if (filterType === 'occasional') return matchesSearch && client.client_type === 'occasional';
-    
-    return matchesSearch;
+    return matchesSearch && client.client_type === filterType;
   });
 
   // Paginación
@@ -63,16 +85,27 @@ const ClientList = () => {
     currentPage * pageSize
   );
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType]);
+
+  // Estadísticas
+  const totalClients = clients.length;
+  const frequentCount = clients.filter(c => c.client_type === 'frequent').length;
+  const regularCount = clients.filter(c => c.client_type === 'regular').length;
+  const totalSpent = clients.reduce((sum, c) => sum + (c.total_spent || 0), 0);
+
   // Eliminar cliente
   const handleDelete = async (client) => {
     const result = await Swal.fire({
       title: '¿Eliminar cliente?',
       html: `¿Estás seguro de eliminar a <strong>${client.name}</strong>?<br/>
-             <small class="text-muted">Esta acción no se puede deshacer.</small>`,
+             <small>Esta acción no se puede deshacer.</small>`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#3085d6',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6b7280',
       confirmButtonText: 'Sí, eliminar',
       cancelButtonText: 'Cancelar'
     });
@@ -83,7 +116,6 @@ const ClientList = () => {
         toast.success('Cliente eliminado correctamente');
         loadClients();
       } catch (error) {
-        console.error('Error:', error);
         if (error.response?.status === 409) {
           toast.error('No se puede eliminar el cliente porque tiene facturas asociadas');
         } else {
@@ -111,7 +143,7 @@ const ClientList = () => {
       client.ruc_ci || '',
       client.client_type === 'frequent' ? 'Frecuente' : client.client_type === 'regular' ? 'Regular' : 'Ocasional',
       client.total_invoices || 0,
-      client.total_spent ? `$${client.total_spent.toFixed(2)}` : '$0.00'
+      client.total_spent ? formatMoney(client.total_spent) : '$0.00'
     ]);
 
     const csvContent = [headers, ...data].map(row => row.join(',')).join('\n');
@@ -127,285 +159,333 @@ const ClientList = () => {
     toast.success('Exportación completada');
   };
 
-  // Obtener badge del tipo de cliente
-  const getClientTypeBadge = (type) => {
-    switch(type) {
-      case 'frequent':
-        return <span className="badge bg-success"><FaStar className="me-1" /> Frecuente</span>;
-      case 'regular':
-        return <span className="badge bg-primary">Regular</span>;
-      default:
-        return <span className="badge bg-secondary">Ocasional</span>;
-    }
+  // Reset filters
+  const resetFilters = () => {
+    setSearchTerm('');
+    setFilterType('all');
   };
 
+  const hasActiveFilters = searchTerm !== '' || filterType !== 'all';
+
+  if (loading) {
+    return (
+      <div className="cl-root">
+        <div className="cl-state-center">
+          <div className="cl-spinner" />
+          <span style={{ color: "var(--text-muted)" }}>Cargando clientes...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container-fluid px-4 py-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+    <div className="cl-root">
       <Toaster position="top-right" />
-      
+
       {/* Modal de detalles */}
       {showDetailsModal && selectedClient && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header bg-primary text-white">
-                <h5 className="modal-title">
-                  <FaUser className="me-2" />
-                  Detalles del Cliente
-                </h5>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setShowDetailsModal(false)}></button>
-              </div>
-              <div className="modal-body">
-                <div className="text-center mb-3">
-                  <div className="bg-primary bg-opacity-10 rounded-circle d-inline-flex p-3">
-                    <FaUser size={48} className="text-primary" />
-                  </div>
-                  <h4 className="mt-2">{selectedClient.name}</h4>
-                  {getClientTypeBadge(selectedClient.client_type)}
+        <div className="cl-modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowDetailsModal(false)}>
+          <div className="cl-modal">
+            <div className="cl-modal-header">
+              <h5 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FaUser size={16} /> Detalles del Cliente
+              </h5>
+              <button 
+                onClick={() => setShowDetailsModal(false)}
+                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.25rem' }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="cl-modal-body">
+              <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                <div className="cl-avatar" style={{ width: '4rem', height: '4rem', fontSize: '1.25rem', margin: '0 auto' }}>
+                  {getInitials(selectedClient.name)}
                 </div>
-                
-                <div className="row g-3">
-                  <div className="col-md-6">
-                    <div className="text-muted small">Email</div>
-                    <div><FaEnvelope className="me-2 text-muted" /> {selectedClient.email || 'No registrado'}</div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="text-muted small">Teléfono</div>
-                    <div><FaPhone className="me-2 text-muted" /> {selectedClient.phone || 'No registrado'}</div>
-                  </div>
-                  <div className="col-12">
-                    <div className="text-muted small">Dirección</div>
-                    <div><FaMapMarkerAlt className="me-2 text-muted" /> {selectedClient.address || 'No registrada'}</div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="text-muted small">RUC/CI</div>
-                    <div><FaIdCard className="me-2 text-muted" /> {selectedClient.ruc_ci || 'No registrado'}</div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="text-muted small">Facturas</div>
-                    <div><strong>{selectedClient.total_invoices || 0}</strong> facturas</div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="text-muted small">Total gastado</div>
-                    <div className="text-success fw-bold">${(selectedClient.total_spent || 0).toFixed(2)}</div>
-                  </div>
-                </div>
+                <h4 style={{ marginTop: '0.75rem', marginBottom: '0.25rem' }}>{selectedClient.name}</h4>
+                {getTypeBadge(selectedClient.client_type)}
               </div>
-              <div className="modal-footer">
-                <button className="btn btn-primary" onClick={() => {
+              
+              <div className="cl-info-row">
+                <span className="cl-info-label"><FaEnvelope size={11} /> Email</span>
+                <span className="cl-info-value">{selectedClient.email || 'No registrado'}</span>
+              </div>
+              <div className="cl-info-row">
+                <span className="cl-info-label"><FaPhone size={11} /> Teléfono</span>
+                <span className="cl-info-value">{selectedClient.phone || 'No registrado'}</span>
+              </div>
+              <div className="cl-info-row">
+                <span className="cl-info-label"><FaMapMarkerAlt size={11} /> Dirección</span>
+                <span className="cl-info-value">{selectedClient.address || 'No registrada'}</span>
+              </div>
+              <div className="cl-info-row">
+                <span className="cl-info-label"><FaIdCard size={11} /> RUC/CI</span>
+                <span className="cl-info-value">{selectedClient.ruc_ci || 'No registrado'}</span>
+              </div>
+              
+              <div className="cl-info-row">
+                <span className="cl-info-label"><FaFileInvoice size={11} /> Facturas</span>
+                <span className="cl-info-value"><strong>{selectedClient.total_invoices || 0}</strong> facturas</span>
+              </div>
+              {canViewSalesTotals && (
+              <div className="cl-info-row">
+                <span className="cl-info-label"><FaMoneyBillWave size={11} /> Total gastado</span>
+                <span className="cl-info-value" style={{ color: 'var(--success)', fontWeight: 700 }}>
+                  {formatMoney(selectedClient.total_spent)}
+                </span>
+              </div>
+              )}
+            </div>
+            <div className="cl-modal-footer">
+              <button className="cl-btn cl-btn-outline cl-btn-sm" onClick={() => setShowDetailsModal(false)}>
+                Cerrar
+              </button>
+              <button 
+                className="cl-btn cl-btn-primary cl-btn-sm"
+                onClick={() => {
                   setShowDetailsModal(false);
                   navigate(`/edit-client/${selectedClient.id}`);
-                }}>
-                  <FaEdit className="me-1" /> Editar
-                </button>
-                <button className="btn btn-secondary" onClick={() => setShowDetailsModal(false)}>Cerrar</button>
-              </div>
+                }}
+              >
+                <FaEdit size={12} /> Editar
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-        <div>
-          <h2 className="mb-0">
-            <FaUsers className="me-2 text-primary" />
-            Gestión de Clientes
-          </h2>
-          <p className="text-muted mt-1">Administra tus clientes, visualiza sus compras y estadísticas</p>
+      <header className="cl-header">
+        <button className="cl-btn cl-btn-outline cl-btn-sm" onClick={() => navigate('/home')}>
+          <FaArrowLeft size={12} /> Volver
+        </button>
+
+        <div className="cl-header-title">
+          <FaUsers size={14} style={{ color: 'var(--primary)' }} />
+          Gestión de Clientes
+          <span className="cl-badge">{totalClients}</span>
         </div>
-        <div className="d-flex gap-2">
-          <button className="btn btn-outline-success" onClick={exportToCSV}>
-            <FaFileExport className="me-2" /> Exportar CSV
+
+        <div className="cl-header-actions">
+          <button className="cl-btn cl-btn-outline cl-btn-sm" onClick={exportToCSV}>
+            <FaFileExport size={11} /> Exportar
           </button>
           <button 
-            className="btn btn-primary"
+            className="cl-btn cl-btn-primary cl-btn-sm"
             onClick={() => navigate('/clients/new')}
           >
-            <FaPlus className="me-2" /> Nuevo Cliente
+            <FaPlus size={11} /> Nuevo Cliente
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Filtros y búsqueda */}
-      <div className="card shadow-sm border-0 mb-4">
-        <div className="card-body">
-          <div className="row g-3">
-            <div className="col-md-6">
-              <div className="input-group">
-                <span className="input-group-text bg-white">
-                  <FaSearch className="text-primary" />
-                </span>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Buscar por nombre, email, teléfono o RUC..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="col-md-4">
-              <select 
-                className="form-select"
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-              >
-                <option value="all">Todos los clientes</option>
-                <option value="frequent">⭐ Clientes frecuentes</option>
-                <option value="regular">📌 Clientes regulares</option>
-                <option value="occasional">🔄 Clientes ocasionales</option>
-              </select>
-            </div>
-            <div className="col-md-2">
-              <div className="text-muted text-end">
-                <small>{filteredClients.length} clientes encontrados</small>
-              </div>
-            </div>
+      <div className="cl-body">
+        {/* Stats Cards */}
+        <div className="cl-stats">
+          <div className="cl-stat-card">
+            <div className="cl-stat-label">Total Clientes</div>
+            <div className="cl-stat-value primary">{totalClients}</div>
+            <div className="cl-stat-sub">registrados</div>
+          </div>
+          <div className="cl-stat-card">
+            <div className="cl-stat-label">Frecuentes</div>
+            <div className="cl-stat-value primary">{frequentCount}</div>
+            <div className="cl-stat-sub">⭐ clientes frecuentes</div>
+          </div>
+          <div className="cl-stat-card">
+            <div className="cl-stat-label">Regulares</div>
+            <div className="cl-stat-value">{regularCount}</div>
+            <div className="cl-stat-sub">clientes regulares</div>
+          </div>
+          <div className="cl-stat-card">
+            <div className="cl-stat-label">Total Gastado</div>
+            <div className="cl-stat-value success">{formatMoney(totalSpent)}</div>
+            <div className="cl-stat-sub">en todas las facturas</div>
           </div>
         </div>
-      </div>
 
-      {/* Tabla de clientes */}
-      <div className="card shadow-sm border-0">
-        <div className="card-body p-0">
-          {loading ? (
-            <div className="text-center py-5">
-              <div className="spinner-border text-primary" role="status">
-                <span className="visually-hidden">Cargando...</span>
-              </div>
-              <p className="mt-2 text-muted">Cargando clientes...</p>
+        {/* Filter Panel */}
+        <div className="cl-filter-card">
+          <div className="cl-filter-header">
+            <div className="cl-filter-title">
+              <FaFilter size={11} /> Filtros
+              {hasActiveFilters && (
+                <span className="cl-badge" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>
+                  activos
+                </span>
+              )}
             </div>
-          ) : paginatedClients.length === 0 ? (
-            <div className="text-center py-5">
-              <FaUsers size={48} className="text-muted opacity-25 mb-3" />
-              <p className="text-muted">No hay clientes registrados</p>
-              <button className="btn btn-primary" onClick={() => navigate('/clients/new')}>
-                <FaPlus className="me-2" /> Crear primer cliente
+            {hasActiveFilters && (
+              <button className="cl-btn cl-btn-outline cl-btn-sm" onClick={resetFilters}>
+                <FaTimes size={10} /> Limpiar
               </button>
+            )}
+          </div>
+          <div className="cl-filter-body">
+            <div className="cl-search-wrapper">
+              <FaSearch className="cl-search-icon" />
+              <input
+                type="text"
+                className="cl-search-input"
+                placeholder="Buscar por nombre, email, teléfono o RUC..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
+            <select 
+              className="cl-select"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              <option value="all">Todos los clientes</option>
+              <option value="frequent">⭐ Clientes frecuentes</option>
+              <option value="regular">📌 Clientes regulares</option>
+              <option value="occasional">🔄 Clientes ocasionales</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="cl-table-card">
+          <div className="cl-table-header">
+            <div className="cl-table-title">
+              <FaUsers size={12} /> Clientes
+              <span className="cl-badge">{filteredClients.length} resultados</span>
+            </div>
+            {filteredClients.length > 0 && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)' }}>
+                Total: {formatMoney(filteredClients.reduce((sum, c) => sum + (c.total_spent || 0), 0))}
+              </span>
+            )}
+          </div>
+
+          <div className="cl-table-wrapper">
+            <table className="cl-table">
+              <thead>
+                <tr>
+                  <th><FaHashtag size={10} /> #</th>
+                  <th><FaUser size={10} /> Cliente</th>
+                  <th><FaPhone size={10} /> Contacto</th>
+                  <th><FaIdCard size={10} /> RUC/CI</th>
+                  <th>Tipo</th>
+                  <th className="text-end"><FaFileInvoice size={10} /> Facturas</th>
+                  <th className="text-end"><FaMoneyBillWave size={10} /> Gastado</th>
+                  <th className="text-end">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedClients.length === 0 ? (
                   <tr>
-                    <th>#</th>
-                    <th>Cliente</th>
-                    <th>Contacto</th>
-                    <th>RUC/CI</th>
-                    <th>Tipo</th>
-                    <th className="text-end">Facturas</th>
-                    <th className="text-end">Total Gastado</th>
-                    <th className="text-center">Acciones</th>
+                    <td colSpan="8">
+                      <div className="cl-empty">
+                        <FaUsers size={48} />
+                        <p>
+                          {hasActiveFilters
+                            ? "No hay resultados con los filtros actuales"
+                            : "No hay clientes registrados"}
+                        </p>
+                        {hasActiveFilters && (
+                          <button className="cl-btn cl-btn-outline cl-btn-sm" onClick={resetFilters}>
+                            Limpiar filtros
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {paginatedClients.map((client, index) => (
+                ) : (
+                  paginatedClients.map((client, idx) => (
                     <tr key={client.id}>
-                      <td>{(currentPage - 1) * pageSize + index + 1}</td>
+                      <td>{(currentPage - 1) * pageSize + idx + 1}</td>
                       <td>
-                        <div className="d-flex align-items-center">
-                          <div className="bg-primary bg-opacity-10 rounded-circle p-2 me-2">
-                            <FaUser size={16} className="text-primary" />
-                          </div>
-                          <div>
-                            <strong>{client.name}</strong>
-                          </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div className="cl-avatar">{getInitials(client.name)}</div>
+                          <strong>{client.name}</strong>
                         </div>
                       </td>
                       <td>
-                        <div className="small">
-                          {client.email && <div><FaEnvelope className="text-muted me-1" size={12}/> {client.email}</div>}
-                          {client.phone && <div><FaPhone className="text-muted me-1" size={12}/> {client.phone}</div>}
-                          {!client.email && !client.phone && <span className="text-muted">—</span>}
+                        <div style={{ fontSize: '0.75rem' }}>
+                          {client.email && <div><FaEnvelope size={10} style={{ marginRight: '0.25rem', color: 'var(--text-faint)' }} />{client.email}</div>}
+                          {client.phone && <div><FaPhone size={10} style={{ marginRight: '0.25rem', color: 'var(--text-faint)' }} />{client.phone}</div>}
+                          {!client.email && !client.phone && <span style={{ color: 'var(--text-faint)' }}>—</span>}
                         </div>
                       </td>
-                      <td>{client.ruc_ci || '—'}</td>
-                      <td>{getClientTypeBadge(client.client_type)}</td>
+                      <td style={{ fontFamily: 'var(--mono)', fontSize: '0.75rem' }}>{client.ruc_ci || '—'}</td>
+                      <td>{getTypeBadge(client.client_type)}</td>
                       <td className="text-end">
-                        <span className="badge bg-info">{client.total_invoices || 0}</span>
+                        <span className="cl-badge" style={{ background: 'var(--info-light)', color: 'var(--info)' }}>
+                          {client.total_invoices || 0}
+                        </span>
                       </td>
                       <td className="text-end">
-                        <strong className="text-success">${(client.total_spent || 0).toFixed(2)}</strong>
+                        <strong style={{ color: 'var(--success)' }}>{formatMoney(client.total_spent)}</strong>
                       </td>
-                      <td className="text-center">
-                        <div className="btn-group btn-group-sm">
-                          <button
-                            className="btn btn-outline-info"
-                            onClick={() => handleViewDetails(client)}
-                            title="Ver detalles"
-                          >
-                            <FaEye />
+                      <td className="text-end">
+                        <div className="cl-actions">
+                          <button className="cl-action-btn btn-view" onClick={() => handleViewDetails(client)} title="Ver detalles">
+                            <FaEye size={12} />
                           </button>
-                          <button
-                            className="btn btn-outline-primary"
-                            onClick={() => navigate(`/edit-client/${client.id}`)}
-                            title="Editar"
-                          >
-                            <FaEdit />
+                          <button className="cl-action-btn btn-edit" onClick={() => navigate(`/edit-client/${client.id}`)} title="Editar">
+                            <FaEdit size={12} />
                           </button>
-                          <button
-                            className="btn btn-outline-danger"
-                            onClick={() => handleDelete(client)}
-                            title="Eliminar"
-                          >
-                            <FaTrash />
+                          <button className="cl-action-btn btn-delete" onClick={() => handleDelete(client)} title="Eliminar">
+                            <FaTrash size={12} />
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {!loading && filteredClients.length > 0 && (
+            <div className="cl-pagination">
+              <div className="cl-pagination-info">
+                Mostrando {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredClients.length)} de {filteredClients.length} clientes
+              </div>
+              <div className="cl-pagination-buttons">
+                <button
+                  className="cl-page-btn"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                >
+                  <FaChevronLeft size={10} /> Anterior
+                </button>
+                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`cl-page-btn ${currentPage === pageNum ? 'active' : ''}`}
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  className="cl-page-btn"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                >
+                  Siguiente <FaChevronRight size={10} />
+                </button>
+              </div>
             </div>
           )}
         </div>
-        
-        {/* Paginación */}
-        {!loading && filteredClients.length > 0 && (
-          <div className="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div className="text-muted small">
-              Mostrando {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredClients.length)} de {filteredClients.length} clientes
-            </div>
-            <div className="d-flex gap-1">
-              <button
-                className="btn btn-outline-secondary btn-sm"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(currentPage - 1)}
-              >
-                Anterior
-              </button>
-              {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                return (
-                  <button
-                    key={pageNum}
-                    className={`btn btn-sm ${currentPage === pageNum ? 'btn-primary' : 'btn-outline-secondary'}`}
-                    onClick={() => setCurrentPage(pageNum)}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-              <button
-                className="btn btn-outline-secondary btn-sm"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(currentPage + 1)}
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

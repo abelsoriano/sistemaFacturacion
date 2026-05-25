@@ -2,6 +2,7 @@ import axios from 'axios';
 
 // URL base de tu API
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
+// const API_BASE_URL = 'https://7l51msx7-8000.use2.devtunnels.ms/api/';
 
 // Crear instancia de axios
 const api = axios.create({
@@ -10,6 +11,8 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+let lastPermissionAlertAt = 0;
 
 // ============================================
 // INTERCEPTOR DE PETICIONES
@@ -56,7 +59,15 @@ api.interceptors.response.use(
     
     // Si el error es 403 (Prohibido)
     if (error.response && error.response.status === 403) {
-      console.error('No tienes permisos para realizar esta acción');
+      const message = error.response.data?.detail || 'No tienes permisos para realizar esta acción.';
+      console.log('Permisos insuficientes:', message);
+      // console.error(message);
+
+      // const now = Date.now();
+      // if (now - lastPermissionAlertAt > 1500) {
+      //   lastPermissionAlertAt = now;
+      //   window.alert(message);
+      // }
     }
     
     return Promise.reject(error);

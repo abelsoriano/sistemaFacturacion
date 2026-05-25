@@ -1,17 +1,23 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { userHasPermissions } from '../utils/permissions';
 
 /**
  * Componente para proteger rutas que requieren autenticación
  * Uso: <ProtectedRoute><TuComponente /></ProtectedRoute>
  */
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({ children, permissions = [] }) {
   const [isAuthenticated, setIsAuthenticated] = useState(null); // null = cargando
+  const [isAllowed, setIsAllowed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const permissionsKey = permissions.join('|');
 
   useEffect(() => {
     const verifyToken = async () => {
+      const requiredPermissions = permissionsKey ? permissionsKey.split('|') : [];
       const token = localStorage.getItem('token');
 
       // Si no hay token, no está autenticado
@@ -23,10 +29,16 @@ export default function ProtectedRoute({ children }) {
 
       // Verificar que el token sea válido con el backend
       try {
-        await axios.get('http://127.0.0.1:8000/api/verify-token/', {
+        const response = await axios.get('http://127.0.0.1:8000/api/verify-token/', {
+        //  const response = await axios.get('https://7l51msx7-8000.use2.devtunnels.ms/api/verify-token/', {
           headers: { Authorization: `Token ${token}` }
         });
+        const user = response.data?.user;
+        if (user) {
+          localStorage.setItem('user', JSON.stringify(user));
+        }
         setIsAuthenticated(true);
+        setIsAllowed(userHasPermissions(user, requiredPermissions));
       } catch (error) {
         console.error('Token inválido:', error);
         // Token inválido, limpiar localStorage
@@ -39,7 +51,7 @@ export default function ProtectedRoute({ children }) {
     };
 
     verifyToken();
-  }, []);
+  }, [location.pathname, permissionsKey]);
 
   // Mientras verifica el token, muestra un loading
   if (isLoading) {
@@ -74,6 +86,66 @@ export default function ProtectedRoute({ children }) {
   // Si no está autenticado, redirige al login
   if (!isAuthenticated) {
     return <Navigate to="/" replace />;
+  }
+
+  if (!isAllowed) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f8fafc',
+        padding: '24px'
+      }}>
+        <div style={{
+          width: '100%',
+          maxWidth: '460px',
+          background: '#ffffff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '28px',
+          textAlign: 'center',
+          boxShadow: '0 18px 45px rgba(15, 23, 42, 0.08)'
+        }}>
+          <div style={{
+            width: '54px',
+            height: '54px',
+            borderRadius: '50%',
+            background: '#fff7ed',
+            color: '#c2410c',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '28px',
+            fontWeight: 700,
+            marginBottom: '16px'
+          }}>!</div>
+          <h2 style={{ margin: '0 0 10px', color: '#111827', fontSize: '22px' }}>
+            No tienes permiso para entrar
+          </h2>
+          <p style={{ margin: '0 0 22px', color: '#4b5563', lineHeight: 1.5 }}>
+            Tu usuario no tiene el rol o permiso necesario para ver esta pantalla.
+            Si necesitas acceso, solicita al administrador que actualice tus roles.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/home', { replace: true })}
+            style={{
+              border: 0,
+              borderRadius: '8px',
+              background: '#2563eb',
+              color: '#fff',
+              fontWeight: 600,
+              padding: '10px 16px',
+              cursor: 'pointer'
+            }}
+          >
+            Volver al inicio
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Si está autenticado, muestra el componente hijo

@@ -1,159 +1,110 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Package, Check, AlertCircle, Tag, FileText, Loader } from 'lucide-react';
-import { useNavigate, useParams} from "react-router-dom";
-import {styles,  showSuccessAlert} from "../herpert";
-import api from "../services/api"; // Importa la instancia de Axios
+import { Save, Package, Check, AlertCircle, Tag, FileText, Loader, CreditCard, DollarSign } from 'lucide-react';
+import { useNavigate, useParams } from "react-router-dom";
+import { styles, showSuccessAlert } from "../herpert";
+import api from "../services/api";
 
-
-
-
-const LabourForm = () => {
+const ServicioForm = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    price: 0,
+    nombre_persona: '',
+    descripcion: '',
+    precio_total: '',
     factura_asociada: '',
+    modalidad_pago: 'contado',
   });
 
-  const navigate = useNavigate();
   const [status, setStatus] = useState({ type: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hoverStates, setHoverStates] = useState({
-    cancel: false,
-    submit: false
-  });
+  const [hoverStates, setHoverStates] = useState({ cancel: false, submit: false });
 
-
-
-  // Cargar datos del producto si se está editando
+  // Cargar datos si se está editando
   useEffect(() => {
     if (id) {
-      const fetchProduct = async () => {
+      const fetchServicio = async () => {
         try {
-          const response = await api.get(`labours/${id}/`);
-          setFormData(response.data); // Carga los datos en formData
+          const response = await api.get(`servicios-mano-obra/${id}/`);
+          setFormData({
+            nombre_persona: response.data.nombre_persona || '',
+            descripcion: response.data.descripcion || '',
+            precio_total: response.data.precio_total || '',
+            factura_asociada: response.data.factura_asociada || '',
+            modalidad_pago: response.data.modalidad_pago || 'contado',
+          });
         } catch (err) {
-          console.error("Error cargando producto:");
+          console.error("Error cargando servicio:", err);
+          setStatus({ type: 'error', message: 'Error al cargar los datos del servicio.' });
         }
       };
-      
-      fetchProduct();
+      fetchServicio();
     }
   }, [id]);
 
-
-    // Manejar cambios en los campos del formulario
   const handleChange = (e) => {
-      setFormData({
-        ...formData,
-        [e.target.name]: e.target.value,
-      });
-    };
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-  setStatus({ type: '', message: '' });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setStatus({ type: '', message: '' });
 
-  // Validación más completa
-  const validationErrors = [];
-  
-  if (!formData.name || formData.name.trim() === '') {
-    validationErrors.push('El nombre es requerido');
-  }
-  
-  if (!formData.price || isNaN(parseFloat(formData.price)) || parseFloat(formData.price) <= 0) {
-    validationErrors.push('El precio debe ser un número mayor que cero');
-  }
-  
-  // Si hay errores de validación, mostrarlos y detener el envío
-  if (validationErrors.length > 0) {
-    setStatus({ 
-      type: 'error', 
-      message: validationErrors.join('. ')
-    });
-    setIsSubmitting(false);
-    return;
-  }
-
-  try {
-    // Asegurarse de que los datos numéricos se envíen como números
-    const dataToSend = {
-      ...formData,
-      price: parseFloat(formData.price)
-    };
-    
-    // Añadir logs para depuración
-    console.log("Datos a enviar:", dataToSend);
-    
-    let response;
-    if (id) {
-      response = await api.put(`labours/${id}/`, dataToSend);
-      console.log("Respuesta actualización:", response.data);
-      showSuccessAlert("Servicio actualizado correctamente.");
-    } else {
-      response = await api.post("/labours/", dataToSend);
-      console.log("Respuesta creación:", response.data);
-      showSuccessAlert("El servicio fue creado correctamente.");
+    // Validaciones
+    const errors = [];
+    if (!formData.nombre_persona.trim()) errors.push('El nombre de la persona es requerido');
+    if (!formData.precio_total || isNaN(parseFloat(formData.precio_total)) || parseFloat(formData.precio_total) <= 0) {
+      errors.push('El precio debe ser un número mayor que cero');
     }
-    
-    // Redirigir después de guardar con un pequeño retraso para que se muestre el mensaje
-    setTimeout(() => navigate("/labour-list"), 1500);
-  } catch (err) {
-    console.error("Error al guardar:", err);
-    
-    // Mejorado el manejo de errores para mostrar mensajes más detallados
-    let errorMsg = "Error al guardar el servicio. Intente nuevamente.";
-    
-    if (err.response) {
-      console.error("Datos del error:", err.response.data);
-      
-      // Si el error viene como un objeto (común en APIs RESTful)
-      if (typeof err.response.data === 'object') {
-        const errorDetails = [];
-        
-        // Recorrer todas las propiedades del objeto de error para mostrarlas
-        Object.entries(err.response.data).forEach(([field, errors]) => {
-          if (Array.isArray(errors)) {
-            errorDetails.push(`${field}: ${errors.join(', ')}`);
-          } else if (typeof errors === 'string') {
-            errorDetails.push(`${field}: ${errors}`);
-          }
-        });
-        
-        if (errorDetails.length > 0) {
-          errorMsg = errorDetails.join('. ');
-        } else if (err.response.data.detail) {
-          errorMsg = err.response.data.detail;
-        } else if (err.response.data.message) {
-          errorMsg = err.response.data.message;
-        }
-      } 
-      // Si el error viene como texto
-      else if (typeof err.response.data === 'string') {
+
+    if (errors.length > 0) {
+      setStatus({ type: 'error', message: errors.join('. ') });
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const dataToSend = {
+        ...formData,
+        precio_total: parseFloat(formData.precio_total),
+        factura_asociada: formData.factura_asociada || null,
+      };
+
+      if (id) {
+        await api.put(`servicios-mano-obra/${id}/`, dataToSend);
+        showSuccessAlert("Servicio actualizado correctamente.");
+      } else {
+        await api.post("servicios-mano-obra/", dataToSend);
+        showSuccessAlert("Servicio creado correctamente.");
+      }
+
+      setTimeout(() => navigate("/labour-list"), 1500);
+    } catch (err) {
+      console.error("Error al guardar:", err);
+      let errorMsg = "Error al guardar el servicio. Intente nuevamente.";
+
+      if (err.response?.data && typeof err.response.data === 'object') {
+        const details = Object.entries(err.response.data).map(([field, errs]) =>
+          `${field}: ${Array.isArray(errs) ? errs.join(', ') : errs}`
+        );
+        if (details.length > 0) errorMsg = details.join('. ');
+      } else if (typeof err.response?.data === 'string') {
         errorMsg = err.response.data;
       }
+
+      setStatus({ type: 'error', message: errorMsg });
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    setStatus({ type: 'error', message: errorMsg });
-  } finally {
-    setIsSubmitting(false);
-  }
-};
-
-
-  const handleCancel = () => {
-    navigate('/labour-list');
   };
-  
 
   return (
     <div className="container mt-5">
-    {/* <div style={styles.formContainer}> */}
       <h2 style={styles.formHeader}>
         <span style={{ marginRight: '8px' }}><Package /></span>
-        Agregar Servicio Mano de Obra
+        {id ? 'Editar Servicio de Mano de Obra' : 'Nuevo Servicio de Mano de Obra'}
       </h2>
 
       {status.message && (
@@ -170,103 +121,139 @@ const handleSubmit = async (e) => {
 
       <div>
         <div style={styles.formGrid}>
+
+          {/* Nombre */}
           <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="name">
+            <label style={styles.label} htmlFor="nombre_persona">
               Nombre de la persona
             </label>
             <div style={{ position: 'relative' }}>
               <input
-                id="name"
+                id="nombre_persona"
                 type="text"
-                name="name"
-                value={formData.name}
+                name="nombre_persona"
+                value={formData.nombre_persona}
                 onChange={handleChange}
-                style={{
-                  ...styles.input,
-                  paddingLeft: '36px'
-                }}
-                placeholder="Ingrese un nombre"
+                style={{ ...styles.input, paddingLeft: '36px' }}
+                placeholder="Ingrese el nombre"
                 required
               />
-              <div style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#9ca3af'
-              }}>
+              <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
                 <Tag />
               </div>
             </div>
           </div>
 
+          {/* Precio */}
           <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="price">
+            <label style={styles.label} htmlFor="precio_total">
               Precio del servicio
             </label>
-            <input
-              id="price"
-              type="number"
-              name="price"
-              value={formData.price}
-              onChange={handleChange}
-              style={styles.input}
-              min="0"
-              required
-              placeholder="0"
-            />
-          
+            <div style={{ position: 'relative' }}>
+              <input
+                id="precio_total"
+                type="number"
+                name="precio_total"
+                value={formData.precio_total}
+                onChange={handleChange}
+                style={{ ...styles.input, paddingLeft: '36px' }}
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                required
+              />
+              <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
+                <DollarSign size={16} />
+              </div>
+            </div>
           </div>
 
+          {/* Factura */}
           <div style={styles.formGroup}>
             <label style={styles.label} htmlFor="factura_asociada">
               Factura asociada
             </label>
             <input
               id="factura_asociada"
-              type="number"
+              type="text"
               name="factura_asociada"
               value={formData.factura_asociada}
               onChange={handleChange}
               style={styles.input}
-              min="0"
-              required
-              placeholder="0"
+              placeholder="Número de factura (opcional)"
             />
           </div>
+
+          {/* Modalidad de pago */}
+          <div style={styles.formGroup}>
+            <label style={styles.label} htmlFor="modalidad_pago">
+              Modalidad de pago
+            </label>
+            <div style={{ position: 'relative' }}>
+              <select
+                id="modalidad_pago"
+                name="modalidad_pago"
+                value={formData.modalidad_pago}
+                onChange={handleChange}
+                style={{ ...styles.input, paddingLeft: '36px', appearance: 'none', cursor: 'pointer' }}
+              >
+                <option value="contado">Contado (pago inmediato)</option>
+                <option value="credito">Crédito (abonos)</option>
+              </select>
+              <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
+                <CreditCard size={16} />
+              </div>
+            </div>
+          </div>
+
         </div>
 
+        {/* Indicador visual si es crédito */}
+        {formData.modalidad_pago === 'credito' && (
+          <div style={{
+            backgroundColor: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            color: '#1d4ed8',
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <CreditCard size={16} />
+            <span>
+              Este servicio se registrará a crédito. Podrás registrar abonos desde la lista de servicios una vez guardado.
+            </span>
+          </div>
+        )}
+
+        {/* Descripción */}
         <div style={styles.formGroup}>
-          <label style={styles.label} htmlFor="description">
+          <label style={styles.label} htmlFor="descripcion">
             Descripción
           </label>
           <div style={{ position: 'relative' }}>
             <textarea
-              id="description"
-              name="description"
-              value={formData.description}
+              id="descripcion"
+              name="descripcion"
+              value={formData.descripcion}
               onChange={handleChange}
-              style={{
-                ...styles.textarea,
-                paddingLeft: '36px'
-              }}
-              placeholder="Ingresa los detalles relevantes del artículo..."
+              style={{ ...styles.textarea, paddingLeft: '36px' }}
+              placeholder="Ingresa los detalles del servicio..."
             />
-            <div style={{
-              position: 'absolute',
-              left: '12px',
-              top: '16px',
-              color: '#9ca3af'
-            }}>
+            <div style={{ position: 'absolute', left: '12px', top: '16px', color: '#9ca3af' }}>
               <FileText />
             </div>
           </div>
         </div>
 
+        {/* Botones */}
         <div style={styles.buttonContainer}>
           <button
             type="button"
-            onClick={handleCancel}
+            onClick={() => navigate('/labour-list')}
             onMouseEnter={() => setHoverStates(prev => ({ ...prev, cancel: true }))}
             onMouseLeave={() => setHoverStates(prev => ({ ...prev, cancel: false }))}
             style={{
@@ -277,6 +264,7 @@ const handleSubmit = async (e) => {
           >
             Cancelar
           </button>
+
           <button
             type="button"
             disabled={isSubmitting}
@@ -298,15 +286,14 @@ const handleSubmit = async (e) => {
             ) : (
               <React.Fragment>
                 <span style={{ marginRight: '8px' }}><Save /></span>
-                Guardar Artículo
+                Guardar Servicio
               </React.Fragment>
             )}
           </button>
         </div>
       </div>
     </div>
-    // </div>
   );
 };
 
-export default LabourForm;
+export default ServicioForm;

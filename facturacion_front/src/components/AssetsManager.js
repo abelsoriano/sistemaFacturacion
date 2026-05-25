@@ -3,11 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import {
     FaTools, FaPlus, FaEdit, FaTrash, FaSearch,
     FaBox, FaExclamationTriangle, FaCheckCircle, FaWrench,
-    FaEye, FaUserCheck, FaUndo, FaChartBar
+    FaEye, FaUserCheck, FaUndo, FaChartBar, FaArrowLeft,
+    FaTimes, FaFilter, FaBuilding, FaTag, FaMapMarkerAlt,
+    FaInfoCircle, FaCalendarAlt, FaMoneyBillWave, FaBarcode, FaFolderOpen, FaChartLine, FaUser
 } from 'react-icons/fa';
 import api from '../services/api';
-import { showSuccessAlert, showGenericAlert } from '../herpert';
+import { toast, Toaster } from 'react-hot-toast';
+import Swal from 'sweetalert2';
+import '../css/activo.css';
 
+
+/* ─── Componente Principal ─────────────────────────────────────────────── */
 const AssetsList = () => {
     const navigate = useNavigate();
     const [assets, setAssets] = useState([]);
@@ -18,6 +24,7 @@ const AssetsList = () => {
     const [selectedAsset, setSelectedAsset] = useState(null);
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [assignTo, setAssignTo] = useState('');
+    const [showFilters, setShowFilters] = useState(false);
 
     // Filtros
     const [searchTerm, setSearchTerm] = useState('');
@@ -29,15 +36,9 @@ const AssetsList = () => {
         loadData();
     }, [statusFilter, categoryFilter, conditionFilter]);
 
-    const handleCancel = () => {
-        navigate('/home');
-    };
-
-
     const loadData = async () => {
         setLoading(true);
         try {
-            // Construir parámetros de filtro
             const params = {};
             if (statusFilter !== 'all') params.status = statusFilter;
             if (categoryFilter !== 'all') params.category = categoryFilter;
@@ -54,28 +55,40 @@ const AssetsList = () => {
             setStatistics(statsData.data);
         } catch (error) {
             console.error('Error loading data:', error);
-            showGenericAlert('Error al cargar los datos');
+            toast.error('Error al cargar los datos');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDelete = async (id) => {
-        if (window.confirm('¿Estás seguro de eliminar este activo?')) {
+    const handleDelete = async (asset) => {
+        const result = await Swal.fire({
+            title: '¿Eliminar activo?',
+            html: `¿Estás seguro de eliminar <strong>${asset.name}</strong>?<br/>
+                   <small>Esta acción no se puede deshacer.</small>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (result.isConfirmed) {
             try {
-                await api.delete(`assets/${id}/`);
-                showSuccessAlert('Activo eliminado exitosamente');
+                await api.delete(`assets/${asset.id}/`);
+                toast.success('Activo eliminado exitosamente');
                 loadData();
             } catch (error) {
                 console.error('Error deleting asset:', error);
-                showGenericAlert('Error al eliminar el activo');
+                toast.error('Error al eliminar el activo');
             }
         }
     };
 
     const handleAssign = async () => {
         if (!assignTo.trim()) {
-            showGenericAlert('Ingresa el nombre de la persona');
+            toast.error('Ingresa el nombre de la persona');
             return;
         }
 
@@ -83,34 +96,55 @@ const AssetsList = () => {
             await api.post(`assets/${selectedAsset.id}/assign/`, {
                 assigned_to: assignTo
             });
-            showSuccessAlert('Activo asignado exitosamente');
+            toast.success('Activo asignado exitosamente');
             setShowAssignModal(false);
             setAssignTo('');
             loadData();
         } catch (error) {
             console.error('Error assigning asset:', error);
-            showGenericAlert('Error al asignar el activo');
+            toast.error('Error al asignar el activo');
         }
     };
 
-    const handleReturn = async (assetId) => {
-        if (window.confirm('¿Confirmas la devolución de este activo?')) {
+    const handleReturn = async (asset) => {
+        const result = await Swal.fire({
+            title: '¿Devolver activo?',
+            text: `¿Confirmas la devolución de ${asset.name}?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#f59e0b',
+            confirmButtonText: 'Sí, devolver',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (result.isConfirmed) {
             try {
-                await api.post(`assets/${assetId}/return_asset/`);
-                showSuccessAlert('Activo devuelto exitosamente');
+                await api.post(`assets/${asset.id}/return_asset/`);
+                toast.success('Activo devuelto exitosamente');
                 loadData();
             } catch (error) {
                 console.error('Error returning asset:', error);
-                showGenericAlert('Error al devolver el activo');
+                toast.error('Error al devolver el activo');
             }
         }
     };
 
+    const handleCancel = () => {
+        navigate('/home');
+    };
+
+    const resetFilters = () => {
+        setSearchTerm('');
+        setStatusFilter('all');
+        setCategoryFilter('all');
+        setConditionFilter('all');
+    };
+
     // Filtrar activos por búsqueda
     const filteredAssets = assets.filter(asset => {
-        const matchesSearch =
-            asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            asset.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        const matchesSearch = searchTerm === '' ||
+            asset.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            asset.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             asset.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             asset.model?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             asset.serial_number?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -118,175 +152,180 @@ const AssetsList = () => {
         return matchesSearch;
     });
 
-    const getStatusBadge = (status) => {
-        const badges = {
-            available: { color: 'success', icon: FaCheckCircle, text: 'Disponible' },
-            in_use: { color: 'primary', icon: FaUserCheck, text: 'En Uso' },
-            maintenance: { color: 'warning', icon: FaWrench, text: 'Mantenimiento' },
-            damaged: { color: 'danger', icon: FaExclamationTriangle, text: 'Dañado' },
-            retired: { color: 'secondary', icon: FaBox, text: 'Dado de Baja' }
+    const getStatusConfig = (status) => {
+        const configs = {
+            available: { class: 'status-available', icon: FaCheckCircle, text: 'Disponible' },
+            in_use: { class: 'status-in_use', icon: FaUserCheck, text: 'En Uso' },
+            maintenance: { class: 'status-maintenance', icon: FaWrench, text: 'Mantenimiento' },
+            damaged: { class: 'status-damaged', icon: FaExclamationTriangle, text: 'Dañado' },
+            retired: { class: 'status-retired', icon: FaBox, text: 'Dado de Baja' }
         };
-        return badges[status] || badges.available;
+        return configs[status] || configs.available;
     };
 
-    const getConditionBadge = (condition) => {
-        const colors = {
-            excellent: 'success',
-            good: 'info',
-            fair: 'warning',
-            poor: 'danger'
+    const getConditionConfig = (condition) => {
+        const configs = {
+            excellent: { class: 'condition-excellent', text: 'Excelente' },
+            good: { class: 'condition-good', text: 'Bueno' },
+            fair: { class: 'condition-fair', text: 'Regular' },
+            poor: { class: 'condition-poor', text: 'Malo' }
         };
-        const labels = {
-            excellent: 'Excelente',
-            good: 'Bueno',
-            fair: 'Regular',
-            poor: 'Malo'
-        };
-        return { color: colors[condition] || 'secondary', label: labels[condition] || condition };
+        return configs[condition] || configs.good;
     };
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return 'N/A';
+        return new Date(dateStr).toLocaleDateString('es-ES');
+    };
+
+    const formatMoney = (value) => {
+        if (!value) return 'N/A';
+        return `$${parseFloat(value).toFixed(2)}`;
+    };
+
+    const hasActiveFilters = searchTerm !== '' || 
+                             statusFilter !== 'all' || 
+                             categoryFilter !== 'all' || 
+                             conditionFilter !== 'all';
 
     if (loading) {
         return (
-            <div className="container-fluid py-5">
-                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                    <div className="text-center">
-                        <div className="spinner-border text-primary mb-3" style={{ width: '3rem', height: '3rem' }}></div>
-                        <h4 className="text-muted">Cargando activos...</h4>
-                    </div>
+            <div className="al-root">
+                <div className="al-loading">
+                    <div className="al-spinner" />
+                    <span style={{ color: 'var(--text-muted)' }}>Cargando activos...</span>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="container-fluid py-4">
+        <div className="al-root">
+            <Toaster position="top-right" />
+
             {/* Header */}
-            <div className="row mb-4">
-                <div className="col-md-8">
-                    <h1 className="h3 mb-2">
-                        <FaTools className="me-2 text-primary" />
-                        Gestión de Activos y Herramientas
-                    </h1>
-                    <p className="text-muted">Administra todas las herramientas y equipos del negocio</p>
+            <header className="al-header">
+                <button className="al-btn al-btn-secondary al-btn-sm" onClick={handleCancel}>
+                    <FaArrowLeft size={12} /> Volver
+                </button>
+
+                <div className="al-header-title">
+                    <FaTools size={14} style={{ color: 'var(--primary)' }} />
+                    Gestión de Activos y Herramientas
+                    <span className="al-badge">{assets.length}</span>
                 </div>
-                <div className="col-md-4 text-end">
-                    <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={handleCancel}
-                        disabled={loading}
+
+                <div className="al-header-actions">
+                    <button 
+                        className="al-btn al-btn-secondary al-btn-sm"
+                        onClick={() => setShowFilters(!showFilters)}
                     >
-                        ❌ Cancelar
+                        <FaFilter size={11} /> Filtros
+                        {hasActiveFilters && (
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)', display: 'inline-block' }} />
+                        )}
                     </button>
-                    <button
-                        className="btn btn-primary"
+                    <button 
+                        className="al-btn al-btn-primary al-btn-sm"
                         onClick={() => navigate('/assetsForm')}
                     >
-                        <FaPlus className="me-2" />
-                        Nuevo Activo
+                        <FaPlus size={11} /> Nuevo Activo
                     </button>
                 </div>
-            </div>
+            </header>
 
-            {/* Estadísticas */}
-            {statistics && (
-                <div className="row mb-4">
-                    <div className="col-md-3">
-                        <div className="card bg-primary text-white">
-                            <div className="card-body">
-                                <div className="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h6 className="card-subtitle mb-2">Total Activos</h6>
-                                        <h2 className="card-title mb-0">{statistics.total}</h2>
-                                    </div>
-                                    <FaTools size={40} className="opacity-50" />
+            <div className="al-body">
+                {/* Estadísticas */}
+                {statistics && (
+                    <div className="al-stats">
+                        <div className="al-stat-card primary">
+                            <div className="al-stat-content">
+                                <div className="al-stat-info">
+                                    <h6>Total Activos</h6>
+                                    <h2 className="primary">{statistics.total}</h2>
                                 </div>
+                                <FaTools className="al-stat-icon" />
+                            </div>
+                        </div>
+                        <div className="al-stat-card success">
+                            <div className="al-stat-content">
+                                <div className="al-stat-info">
+                                    <h6>Disponibles</h6>
+                                    <h2 className="success">
+                                        {statistics.by_status?.find(s => s.status === 'available')?.count || 0}
+                                    </h2>
+                                </div>
+                                <FaCheckCircle className="al-stat-icon" />
+                            </div>
+                        </div>
+                        <div className="al-stat-card info">
+                            <div className="al-stat-content">
+                                <div className="al-stat-info">
+                                    <h6>En Uso</h6>
+                                    <h2 className="info">
+                                        {statistics.by_status?.find(s => s.status === 'in_use')?.count || 0}
+                                    </h2>
+                                </div>
+                                <FaUserCheck className="al-stat-icon" />
+                            </div>
+                        </div>
+                        <div className="al-stat-card warning">
+                            <div className="al-stat-content">
+                                <div className="al-stat-info">
+                                    <h6>Necesitan Mantenimiento</h6>
+                                    <h2 className="warning">{statistics.needs_maintenance || 0}</h2>
+                                </div>
+                                <FaWrench className="al-stat-icon" />
                             </div>
                         </div>
                     </div>
-                    <div className="col-md-3">
-                        <div className="card bg-success text-white">
-                            <div className="card-body">
-                                <div className="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h6 className="card-subtitle mb-2">Disponibles</h6>
-                                        <h2 className="card-title mb-0">
-                                            {statistics.by_status.find(s => s.status === 'available')?.count || 0}
-                                        </h2>
-                                    </div>
-                                    <FaCheckCircle size={40} className="opacity-50" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="col-md-3">
-                        <div className="card bg-info text-white">
-                            <div className="card-body">
-                                <div className="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h6 className="card-subtitle mb-2">En Uso</h6>
-                                        <h2 className="card-title mb-0">
-                                            {statistics.by_status.find(s => s.status === 'in_use')?.count || 0}
-                                        </h2>
-                                    </div>
-                                    <FaUserCheck size={40} className="opacity-50" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="col-md-3">
-                        <div className="card bg-warning text-dark">
-                            <div className="card-body">
-                                <div className="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h6 className="card-subtitle mb-2">Necesitan Mantenimiento</h6>
-                                        <h2 className="card-title mb-0">{statistics.needs_maintenance}</h2>
-                                    </div>
-                                    <FaWrench size={40} className="opacity-50" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+                )}
 
-            {/* Filtros y búsqueda */}
-            <div className="card mb-4">
-                <div className="card-body">
-                    <div className="row g-3">
-                        <div className="col-md-4">
-                            <div className="input-group">
-                                <span className="input-group-text">
-                                    <FaSearch />
-                                </span>
+                {/* Panel de Filtros */}
+                {showFilters && (
+                    <div className="al-filter-card">
+                        <div className="al-filter-header">
+                            <div className="al-filter-title">
+                                <FaFilter size={11} /> Filtros avanzados
+                                {hasActiveFilters && (
+                                    <span className="al-badge" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>
+                                        activos
+                                    </span>
+                                )}
+                            </div>
+                            {hasActiveFilters && (
+                                <button className="al-clear-btn" onClick={resetFilters}>
+                                    <FaTimes size={10} /> Limpiar todo
+                                </button>
+                            )}
+                        </div>
+                        <div className="al-filter-body">
+                            <div className="al-search-wrapper">
+                                <FaSearch className="al-search-icon" />
                                 <input
                                     type="text"
-                                    className="form-control"
+                                    className="al-search-input"
                                     placeholder="Buscar por nombre, código, marca..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                             </div>
-                        </div>
 
-                        <div className="col-md-2">
                             <select
-                                className="form-select"
+                                className="al-select"
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
                             >
                                 <option value="all">Todos los estados</option>
-                                <option value="available">Disponible</option>
-                                <option value="in_use">En Uso</option>
-                                <option value="maintenance">Mantenimiento</option>
-                                <option value="damaged">Dañado</option>
-                                <option value="retired">Dado de Baja</option>
+                                <option value="available">✅ Disponible</option>
+                                <option value="in_use">👤 En Uso</option>
+                                <option value="maintenance">🔧 Mantenimiento</option>
+                                <option value="damaged">⚠️ Dañado</option>
+                                <option value="retired">📦 Dado de Baja</option>
                             </select>
-                        </div>
 
-                        <div className="col-md-3">
                             <select
-                                className="form-select"
+                                className="al-select"
                                 value={categoryFilter}
                                 onChange={(e) => setCategoryFilter(e.target.value)}
                             >
@@ -297,301 +336,314 @@ const AssetsList = () => {
                                     </option>
                                 ))}
                             </select>
-                        </div>
 
-                        <div className="col-md-3">
                             <select
-                                className="form-select"
+                                className="al-select"
                                 value={conditionFilter}
                                 onChange={(e) => setConditionFilter(e.target.value)}
                             >
                                 <option value="all">Todas las condiciones</option>
-                                <option value="excellent">Excelente</option>
-                                <option value="good">Bueno</option>
-                                <option value="fair">Regular</option>
-                                <option value="poor">Malo</option>
+                                <option value="excellent">🌟 Excelente</option>
+                                <option value="good">👍 Bueno</option>
+                                <option value="fair">👌 Regular</option>
+                                <option value="poor">👎 Malo</option>
                             </select>
                         </div>
                     </div>
+                )}
 
-                    {(searchTerm || statusFilter !== 'all' || categoryFilter !== 'all' || conditionFilter !== 'all') && (
-                        <div className="mt-3">
-                            <span className="badge bg-secondary me-2">
-                                Mostrando {filteredAssets.length} de {assets.length} activos
+                {/* Filtros rápidos cuando el panel está cerrado */}
+                {!showFilters && (
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                        <button
+                            className={`al-clear-btn ${statusFilter === 'all' ? 'al-btn-primary' : ''}`}
+                            style={statusFilter === 'all' ? { background: 'var(--primary)', color: 'white' } : {}}
+                            onClick={() => setStatusFilter('all')}
+                        >
+                            Todos
+                        </button>
+                        <button
+                            className="al-clear-btn"
+                            onClick={() => setStatusFilter('available')}
+                        >
+                            ✅ Disponibles
+                        </button>
+                        <button
+                            className="al-clear-btn"
+                            onClick={() => setStatusFilter('in_use')}
+                        >
+                            👤 En Uso
+                        </button>
+                        <button
+                            className="al-clear-btn"
+                            onClick={() => setStatusFilter('maintenance')}
+                        >
+                            🔧 Mantenimiento
+                        </button>
+                    </div>
+                )}
+
+                {/* Tabla de activos */}
+                <div className="al-table-card">
+                    <div className="al-table-header">
+                        <div className="al-table-title">
+                            <FaBox size={12} /> Listado de Activos
+                            <span className="al-badge">{filteredAssets.length} resultados</span>
+                        </div>
+                        {filteredAssets.length > 0 && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)' }}>
+                                Mostrando {filteredAssets.length} de {assets.length}
                             </span>
-                            <button
-                                className="btn btn-sm btn-link text-decoration-none"
-                                onClick={() => {
-                                    setSearchTerm('');
-                                    setStatusFilter('all');
-                                    setCategoryFilter('all');
-                                    setConditionFilter('all');
-                                }}
-                            >
-                                Limpiar filtros
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
+                        )}
+                    </div>
 
-            {/* Tabla de activos */}
-            <div className="card">
-                <div className="card-header bg-light">
-                    <h5 className="card-title mb-0">Listado de Activos</h5>
-                </div>
-                <div className="card-body p-0">
-                    {filteredAssets.length === 0 ? (
-                        <div className="text-center py-5">
-                            <FaBox size={64} className="text-muted mb-3" />
-                            <h4 className="text-muted">No se encontraron activos</h4>
-                            <p className="text-muted">
-                                {searchTerm || statusFilter !== 'all' || categoryFilter !== 'all'
-                                    ? 'Intenta ajustar los filtros de búsqueda'
-                                    : 'Comienza agregando tu primer activo'}
-                            </p>
-                            {!searchTerm && statusFilter === 'all' && categoryFilter === 'all' && (
-                                <button
-                                    className="btn btn-primary mt-3"
-                                    onClick={() => navigate('/assets/new')}
-                                >
-                                    <FaPlus className="me-2" />
-                                    Agregar Primer Activo
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="table-responsive">
-                            <table className="table table-hover table-striped mb-0">
-                                <thead className="table-primary">
+                    <div className="al-table-wrapper">
+                        <table className="al-table">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nombre</th>
+                                    <th>Categoría</th>
+                                    <th>Marca/Modelo</th>
+                                    <th className="text-center">Estado</th>
+                                    <th className="text-center">Condición</th>
+                                    <th>Ubicación</th>
+                                    <th className="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredAssets.length === 0 ? (
                                     <tr>
-                                        <th style={{ width: '10%' }}>Código</th>
-                                        <th style={{ width: '20%' }}>Nombre</th>
-                                        <th style={{ width: '12%' }}>Categoría</th>
-                                        <th style={{ width: '12%' }}>Marca/Modelo</th>
-                                        <th style={{ width: '10%' }} className="text-center">Estado</th>
-                                        <th style={{ width: '10%' }} className="text-center">Condición</th>
-                                        <th style={{ width: '13%' }}>Ubicación</th>
-                                        <th style={{ width: '13%' }} className="text-center">Acciones</th>
+                                        <td colSpan="8">
+                                            <div className="al-empty">
+                                                <FaBox size={48} />
+                                                <p>
+                                                    {hasActiveFilters
+                                                        ? "No hay resultados con los filtros actuales"
+                                                        : "No hay activos registrados"}
+                                                </p>
+                                                {hasActiveFilters && (
+                                                    <button className="al-clear-btn" onClick={resetFilters}>
+                                                        Limpiar filtros
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredAssets.map(asset => {
-                                        const statusBadge = getStatusBadge(asset.status);
-                                        const StatusIcon = statusBadge.icon;
-                                        const conditionBadge = getConditionBadge(asset.condition);
+                                ) : (
+                                    filteredAssets.map(asset => {
+                                        const statusConfig = getStatusConfig(asset.status);
+                                        const StatusIcon = statusConfig.icon;
+                                        const conditionConfig = getConditionConfig(asset.condition);
 
                                         return (
                                             <tr key={asset.id}>
                                                 <td>
-                                                    <code className="text-primary fw-bold">{asset.code}</code>
+                                                    <code className="al-info-value mono" style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                                                        {asset.code}
+                                                    </code>
                                                 </td>
                                                 <td>
-                                                    <div className="fw-bold">{asset.name}</div>
+                                                    <div style={{ fontWeight: 600 }}>{asset.name}</div>
                                                     {asset.assigned_to && (
-                                                        <small className="text-muted">
-                                                            <FaUserCheck className="me-1" />
+                                                        <small style={{ color: 'var(--text-faint)' }}>
+                                                            <FaUserCheck size={10} style={{ marginRight: '0.25rem' }} />
                                                             {asset.assigned_to}
                                                         </small>
                                                     )}
                                                 </td>
                                                 <td>
-                                                    <span className="badge bg-light text-dark border">
+                                                    <span className="al-badge">
                                                         {asset.category_name || 'Sin categoría'}
                                                     </span>
                                                 </td>
                                                 <td>
                                                     {asset.brand && (
-                                                        <div>
-                                                            <small className="d-block">{asset.brand}</small>
+                                                        <>
+                                                            <div style={{ fontSize: '0.8125rem' }}>{asset.brand}</div>
                                                             {asset.model && (
-                                                                <small className="text-muted">{asset.model}</small>
+                                                                <small style={{ color: 'var(--text-faint)' }}>{asset.model}</small>
                                                             )}
-                                                        </div>
+                                                        </>
                                                     )}
                                                 </td>
                                                 <td className="text-center">
-                                                    <span className={`badge bg-${statusBadge.color}`}>
-                                                        <StatusIcon className="me-1" size={12} />
-                                                        {statusBadge.text}
+                                                    <span className={`al-status-badge ${statusConfig.class}`}>
+                                                        <StatusIcon size={10} />
+                                                        {statusConfig.text}
                                                     </span>
                                                 </td>
                                                 <td className="text-center">
-                                                    <span className={`badge bg-${conditionBadge.color}`}>
-                                                        {conditionBadge.label}
+                                                    <span className={`al-status-badge ${conditionConfig.class}`}>
+                                                        {conditionConfig.text}
                                                     </span>
                                                 </td>
                                                 <td>
                                                     <small>{asset.location || 'No especificada'}</small>
                                                 </td>
                                                 <td className="text-center">
-                                                    <div className="btn-group btn-group-sm">
+                                                    <div className="al-actions">
                                                         <button
-                                                            className="btn btn-outline-info"
+                                                            className="al-action-btn btn-view"
                                                             onClick={() => {
                                                                 setSelectedAsset(asset);
                                                                 setShowDetailModal(true);
                                                             }}
                                                             title="Ver detalles"
                                                         >
-                                                            <FaEye />
+                                                            <FaEye size={12} />
                                                         </button>
                                                         <button
-                                                            className="btn btn-outline-secondary"
+                                                            className="al-action-btn btn-edit"
                                                             onClick={() => navigate(`/assets/edit/${asset.id}`)}
                                                             title="Editar"
                                                         >
-                                                            <FaEdit />
+                                                            <FaEdit size={12} />
                                                         </button>
                                                         {asset.status === 'available' && (
                                                             <button
-                                                                className="btn btn-outline-success"
+                                                                className="al-action-btn btn-assign"
                                                                 onClick={() => {
                                                                     setSelectedAsset(asset);
                                                                     setShowAssignModal(true);
                                                                 }}
                                                                 title="Asignar"
                                                             >
-                                                                <FaUserCheck />
+                                                                <FaUserCheck size={12} />
                                                             </button>
                                                         )}
                                                         {asset.status === 'in_use' && asset.assigned_to && (
                                                             <button
-                                                                className="btn btn-outline-warning"
-                                                                onClick={() => handleReturn(asset.id)}
+                                                                className="al-action-btn btn-return"
+                                                                onClick={() => handleReturn(asset)}
                                                                 title="Devolver"
                                                             >
-                                                                <FaUndo />
+                                                                <FaUndo size={12} />
                                                             </button>
                                                         )}
                                                         <button
-                                                            className="btn btn-outline-danger"
-                                                            onClick={() => handleDelete(asset.id)}
+                                                            className="al-action-btn btn-delete"
+                                                            onClick={() => handleDelete(asset)}
                                                             title="Eliminar"
                                                         >
-                                                            <FaTrash />
+                                                            <FaTrash size={12} />
                                                         </button>
                                                     </div>
                                                 </td>
                                             </tr>
                                         );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
             {/* Modal de Detalles */}
             {showDetailModal && selectedAsset && (
-                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog modal-lg">
-                        <div className="modal-content">
-                            <div className="modal-header bg-primary text-white">
-                                <h5 className="modal-title">
-                                    <FaEye className="me-2" />
-                                    Detalles del Activo
-                                </h5>
-                                <button
-                                    className="btn-close btn-close-white"
-                                    onClick={() => setShowDetailModal(false)}
-                                ></button>
-                            </div>
-                            <div className="modal-body">
-                                <div className="row">
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Código:</strong>
-                                        <p className="mb-0">{selectedAsset.code}</p>
-                                    </div>
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Nombre:</strong>
-                                        <p className="mb-0">{selectedAsset.name}</p>
-                                    </div>
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Categoría:</strong>
-                                        <p className="mb-0">{selectedAsset.category_name || 'N/A'}</p>
-                                    </div>
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Ubicación:</strong>
-                                        <p className="mb-0">{selectedAsset.location || 'N/A'}</p>
-                                    </div>
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Marca:</strong>
-                                        <p className="mb-0">{selectedAsset.brand || 'N/A'}</p>
-                                    </div>
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Modelo:</strong>
-                                        <p className="mb-0">{selectedAsset.model || 'N/A'}</p>
-                                    </div>
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Número de Serie:</strong>
-                                        <p className="mb-0">{selectedAsset.serial_number || 'N/A'}</p>
-                                    </div>
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Estado:</strong>
-                                        <p className="mb-0">
-                                            <span className={`badge bg-${getStatusBadge(selectedAsset.status).color}`}>
-                                                {getStatusBadge(selectedAsset.status).text}
-                                            </span>
-                                        </p>
-                                    </div>
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Condición:</strong>
-                                        <p className="mb-0">
-                                            <span className={`badge bg-${getConditionBadge(selectedAsset.condition).color}`}>
-                                                {getConditionBadge(selectedAsset.condition).label}
-                                            </span>
-                                        </p>
-                                    </div>
-                                    <div className="col-md-6 mb-3">
-                                        <strong>Asignado a:</strong>
-                                        <p className="mb-0">{selectedAsset.assigned_to || 'No asignado'}</p>
-                                    </div>
-                                    {selectedAsset.purchase_price && (
-                                        <div className="col-md-6 mb-3">
-                                            <strong>Precio de Compra:</strong>
-                                            <p className="mb-0">${selectedAsset.purchase_price}</p>
-                                        </div>
-                                    )}
-                                    {selectedAsset.purchase_date && (
-                                        <div className="col-md-6 mb-3">
-                                            <strong>Fecha de Compra:</strong>
-                                            <p className="mb-0">{new Date(selectedAsset.purchase_date).toLocaleDateString()}</p>
-                                        </div>
-                                    )}
-                                    {selectedAsset.description && (
-                                        <div className="col-12 mb-3">
-                                            <strong>Descripción:</strong>
-                                            <p className="mb-0">{selectedAsset.description}</p>
-                                        </div>
-                                    )}
-                                    {selectedAsset.notes && (
-                                        <div className="col-12 mb-3">
-                                            <strong>Notas:</strong>
-                                            <p className="mb-0">{selectedAsset.notes}</p>
-                                        </div>
-                                    )}
+                <div className="al-modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowDetailModal(false)}>
+                    <div className="al-modal">
+                        <div className="al-modal-header primary">
+                            <h5 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <FaEye size={16} /> Detalles del Activo
+                            </h5>
+                            <button 
+                                onClick={() => setShowDetailModal(false)}
+                                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.25rem' }}
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div className="al-modal-body">
+                            <div className="al-info-grid">
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaBarcode size={10} /> Código</div>
+                                    <div className="al-info-value mono">{selectedAsset.code}</div>
                                 </div>
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaTag size={10} /> Nombre</div>
+                                    <div className="al-info-value">{selectedAsset.name}</div>
+                                </div>
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaFolderOpen size={10} /> Categoría</div>
+                                    <div className="al-info-value">{selectedAsset.category_name || 'N/A'}</div>
+                                </div>
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaMapMarkerAlt size={10} /> Ubicación</div>
+                                    <div className="al-info-value">{selectedAsset.location || 'N/A'}</div>
+                                </div>
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaBuilding size={10} /> Marca</div>
+                                    <div className="al-info-value">{selectedAsset.brand || 'N/A'}</div>
+                                </div>
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaTag size={10} /> Modelo</div>
+                                    <div className="al-info-value">{selectedAsset.model || 'N/A'}</div>
+                                </div>
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaBarcode size={10} /> Número de Serie</div>
+                                    <div className="al-info-value mono">{selectedAsset.serial_number || 'N/A'}</div>
+                                </div>
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaChartLine size={10} /> Estado</div>
+                                    <div className="al-info-value">
+                                        <span className={`al-status-badge ${getStatusConfig(selectedAsset.status).class}`}>
+                                            {getStatusConfig(selectedAsset.status).text}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaCheckCircle size={10} /> Condición</div>
+                                    <div className="al-info-value">
+                                        <span className={`al-status-badge ${getConditionConfig(selectedAsset.condition).class}`}>
+                                            {getConditionConfig(selectedAsset.condition).text}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="al-info-item">
+                                    <div className="al-info-label"><FaUserCheck size={10} /> Asignado a</div>
+                                    <div className="al-info-value">{selectedAsset.assigned_to || 'No asignado'}</div>
+                                </div>
+                                {selectedAsset.purchase_price && (
+                                    <div className="al-info-item">
+                                        <div className="al-info-label"><FaMoneyBillWave size={10} /> Precio de Compra</div>
+                                        <div className="al-info-value">{formatMoney(selectedAsset.purchase_price)}</div>
+                                    </div>
+                                )}
+                                {selectedAsset.purchase_date && (
+                                    <div className="al-info-item">
+                                        <div className="al-info-label"><FaCalendarAlt size={10} /> Fecha de Compra</div>
+                                        <div className="al-info-value">{formatDate(selectedAsset.purchase_date)}</div>
+                                    </div>
+                                )}
+                                {selectedAsset.description && (
+                                    <div className="al-info-item al-full-width">
+                                        <div className="al-info-label"><FaInfoCircle size={10} /> Descripción</div>
+                                        <div className="al-info-value">{selectedAsset.description}</div>
+                                    </div>
+                                )}
+                                {selectedAsset.notes && (
+                                    <div className="al-info-item al-full-width">
+                                        <div className="al-info-label"><FaInfoCircle size={10} /> Notas</div>
+                                        <div className="al-info-value">{selectedAsset.notes}</div>
+                                    </div>
+                                )}
                             </div>
-                            <div className="modal-footer">
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={() => setShowDetailModal(false)}
-                                >
-                                    Cerrar
-                                </button>
-                                <button
-                                    className="btn btn-primary"
-                                    onClick={() => {
-                                        setShowDetailModal(false);
-                                        navigate(`/assets/edit/${selectedAsset.id}`);
-                                    }}
-                                >
-                                    <FaEdit className="me-2" />
-                                    Editar
-                                </button>
-                            </div>
+                        </div>
+                        <div className="al-modal-footer">
+                            <button className="al-btn al-btn-secondary" onClick={() => setShowDetailModal(false)}>
+                                Cerrar
+                            </button>
+                            <button 
+                                className="al-btn al-btn-primary"
+                                onClick={() => {
+                                    setShowDetailModal(false);
+                                    navigate(`/assets/edit/${selectedAsset.id}`);
+                                }}
+                            >
+                                <FaEdit size={12} /> Editar
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -599,54 +651,57 @@ const AssetsList = () => {
 
             {/* Modal de Asignación */}
             {showAssignModal && selectedAsset && (
-                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog">
-                        <div className="modal-content">
-                            <div className="modal-header bg-success text-white">
-                                <h5 className="modal-title">
-                                    <FaUserCheck className="me-2" />
-                                    Asignar Activo
-                                </h5>
-                                <button
-                                    className="btn-close btn-close-white"
-                                    onClick={() => {
-                                        setShowAssignModal(false);
-                                        setAssignTo('');
-                                    }}
-                                ></button>
+                <div className="al-modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowAssignModal(false)}>
+                    <div className="al-modal" style={{ maxWidth: '450px' }}>
+                        <div className="al-modal-header success">
+                            <h5 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <FaUserCheck size={16} /> Asignar Activo
+                            </h5>
+                            <button 
+                                onClick={() => {
+                                    setShowAssignModal(false);
+                                    setAssignTo('');
+                                }}
+                                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.25rem' }}
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div className="al-modal-body">
+                            <div style={{ marginBottom: '1rem', padding: '0.5rem', background: 'var(--surface-hover)', borderRadius: 'var(--radius-sm)' }}>
+                                <strong>Activo:</strong> {selectedAsset.code} - {selectedAsset.name}
                             </div>
-                            <div className="modal-body">
-                                <p><strong>Activo:</strong> {selectedAsset.code} - {selectedAsset.name}</p>
-                                <div className="mb-3">
-                                    <label className="form-label">Asignar a:</label>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        value={assignTo}
-                                        onChange={(e) => setAssignTo(e.target.value)}
-                                        placeholder="Nombre de la persona"
-                                        autoFocus
-                                    />
-                                </div>
+                            <div className="al-form-group">
+                                <label className="al-label">
+                                    <FaUser size={12} /> Asignar a:
+                                </label>
+                                <input
+                                    type="text"
+                                    className="al-search-input"
+                                    value={assignTo}
+                                    onChange={(e) => setAssignTo(e.target.value)}
+                                    placeholder="Nombre de la persona responsable"
+                                    autoFocus
+                                />
                             </div>
-                            <div className="modal-footer">
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={() => {
-                                        setShowAssignModal(false);
-                                        setAssignTo('');
-                                    }}
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    className="btn btn-success"
-                                    onClick={handleAssign}
-                                >
-                                    <FaUserCheck className="me-2" />
-                                    Asignar
-                                </button>
-                            </div>
+                        </div>
+                        <div className="al-modal-footer">
+                            <button 
+                                className="al-btn al-btn-secondary"
+                                onClick={() => {
+                                    setShowAssignModal(false);
+                                    setAssignTo('');
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                className="al-btn al-btn-primary"
+                                onClick={handleAssign}
+                                style={{ background: 'var(--success)' }}
+                            >
+                                <FaUserCheck size={12} /> Asignar
+                            </button>
                         </div>
                     </div>
                 </div>

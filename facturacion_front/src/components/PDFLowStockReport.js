@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
 import api from '../services/api';
+import {
+  IconFile,
+  IconX,
+  IconAlert,
+  IconCheck,
+  IconDownload,
+  IconPrint,
+  IconExcel,
+  IconClipboard,
+} from './Icons';
 
 const styles = `
   .pdf-overlay {
@@ -173,57 +183,6 @@ const styles = `
   }
 `;
 
-// Iconos SVG inline
-const IconFile = () => (
-  <svg width="16" height="16" fill="none" stroke="#A32D2D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-    <polyline points="14 2 14 8 20 8"/>
-    <line x1="9" y1="7" x2="15" y2="7"/>
-  </svg>
-);
-const IconX = () => (
-  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" viewBox="0 0 24 24">
-    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-  </svg>
-);
-const IconAlert = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-  </svg>
-);
-const IconCheck = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-);
-const IconDownload = () => (
-  <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-  </svg>
-);
-const IconPrint = () => (
-  <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <polyline points="6 9 6 2 18 2 18 9"/>
-    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-    <rect x="6" y="14" width="12" height="8"/>
-  </svg>
-);
-const IconExcel = () => (
-  <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-    <polyline points="14 2 14 8 20 8"/>
-    <line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>
-  </svg>
-);
-const IconClipboard = () => (
-  <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-    <rect x="8" y="2" width="8" height="4" rx="1"/>
-  </svg>
-);
-
 const PDFLowStockReport = ({ lowStockProducts, onClose, activeFilter = 'all' }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
@@ -355,7 +314,7 @@ const PDFLowStockReport = ({ lowStockProducts, onClose, activeFilter = 'all' }) 
 
           {/* Header */}
           <div className="pdf-header">
-            <div className="pdf-header-icon"><IconFile /></div>
+            <div className="pdf-header-icon"><IconFile stroke="#A32D2D" /></div>
             <div className="pdf-header-info">
               <div className="pdf-header-title">{getFilterTitle()}</div>
               <div className="pdf-header-desc">{getFilterDesc()}</div>

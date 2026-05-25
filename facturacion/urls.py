@@ -14,7 +14,7 @@ from .views import (
     SaleCreateView,
     SaleListView,
     SalesUpdateDeleteView,
-    LabourUpdateDeleteView,
+    ServicioManoObraUpdateDeleteView,
     DashboardView,
     generate_low_stock_pdf,
     # NUEVAS VISTAS IMPORTADAS
@@ -23,15 +23,24 @@ from .views import (
     PrintLabelDirectView,
     SearchByBarcodeView,
     ListPrintersView,  # NUEVA
+    # GESTIÓN DE USUARIOS Y ROLES
+    UserViewSet,
+    GroupViewSet,
+    PermissionListView,
 )
 
 router = DefaultRouter()
 router.register(r'clients', ClientViewSet, basename='client')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'almacens', AlmacenViewSet, basename='almacen')
-router.register(r'labours', LabourViewSet, basename='labour')
+# router.register(r'labours', LabourViewSet, basename='labour')
 router.register(r'assets/categories', AssetCategoryViewSet, basename='asset-category')
 router.register(r'assets', AssetViewSet, basename='assets')
+# GESTIÓN DE USUARIOS Y ROLES
+router.register(r'users', UserViewSet, basename='user')
+router.register(r'groups', GroupViewSet, basename='group')
+router.register(r'abonos', AbonoServicioViewSet, basename='abono')
+router.register(r'servicios-mano-obra', ServicioManoObraViewSet, basename='servicio-mano-obra')
 
 
 
@@ -75,7 +84,7 @@ urlpatterns = router.urls + [
     # ==========================================
     # LABORES
     # ==========================================
-    path('labourUpdate/<int:pk>/', LabourUpdateDeleteView.as_view(), name='labour-list'),
+    path('labourUpdate/<int:pk>/', ServicioManoObraUpdateDeleteView.as_view(), name='labour-list'),
     
     # ==========================================
     # DASHBOARD Y REPORTES
@@ -87,4 +96,6 @@ urlpatterns = router.urls + [
     path('logout/', auth_views.LogoutView.as_view(next_page='reservar_turno'), name='logout'),
     path('profile/', ProfileView.as_view()),
     path('verify-token/', VerifyTokenView.as_view(), name='verify-token'),
+    # GESTIÓN DE USUARIOS Y ROLES
+    path('permissions/', PermissionListView.as_view(), name='permissions-list'),
 ]

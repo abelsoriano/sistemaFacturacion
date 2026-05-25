@@ -1,12 +1,34 @@
 .dashboardContainer {
   padding: 24px;
+  min-height: 100%;
+  background: #f6f8fb;
 }
 
 .dashboardHeader {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 24px;
+  gap: 16px;
+}
+
+.headerLeft h1 {
+  margin: 0;
+  font-size: 32px;
+  color: #111827;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
 }
 
 .dashboardControls {
@@ -16,6 +38,55 @@
 
 .summaryCards {
   margin-bottom: 24px;
+}
+
+.overviewHeader {
+  margin-bottom: 24px;
+}
+
+.metricCard,
+.statCard {
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.metricCard:hover,
+.statCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12);
+}
+
+.metricCardTitle,
+.metricProgressLabel {
+  color: #667085;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.metricCardValue,
+.metricProgressValue {
+  color: #101828;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.metricCardSubtitle {
+  color: #475569;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.metricProgressLabel {
+  margin-top: 16px;
+}
+
+.metricProgressValue {
+  margin-top: 8px;
+  color: #334155;
+  font-size: 14px;
 }
 
 .summaryCard {
@@ -100,12 +171,21 @@
 @media (max-width: 768px) {
   .dashboardHeader {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 16px;
   }
-  
-  .dashboardControls {
+
+  .headerRight {
+    justify-content: space-between;
     width: 100%;
+  }
+  
+  .dashboardControls,
+  .overviewHeader .ant-col {
+    width: 100%;
+  }
+
+  .dashboardControls {
     flex-direction: column;
     gap: 8px;
   }

@@ -5,6 +5,7 @@ import api from "../services/api";
 import { toast, Toaster } from "react-hot-toast";
 import Swal from "sweetalert2";
 import "../css/facturaList.css";
+import { ROUTE_PERMISSIONS, SALE_TOTALS_PERMISSION, userHasPermissions } from '../utils/permissions';
 
 import {
   FaPlus,
@@ -48,6 +49,8 @@ const STATUS_CONFIG = {
 
 /* ─── Componente Principal ─────────────────────────────────────────────── */
 const InvoiceList = () => {
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const canViewSalesTotals = userHasPermissions(currentUser, [SALE_TOTALS_PERMISSION]);
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -55,6 +58,8 @@ const InvoiceList = () => {
   const [error, setError] = useState(null);
   const [clients, setClients] = useState({});
   const [showFilters, setShowFilters] = useState(false);
+  
+
   const [filters, setFilters] = useState({
     status: "all",
     dateFrom: "",
@@ -62,6 +67,7 @@ const InvoiceList = () => {
     client: "",
     search: ""
   });
+  
 
   // Cargar datos
   useEffect(() => {
@@ -258,12 +264,15 @@ const InvoiceList = () => {
             <div className="stat-value success">{paidCount}</div>
             <div className="stat-sub">{formatMoney(paidAmount)}</div>
           </div>
+           {canViewSalesTotals && (
           <div className="stat-card">
             <div className="stat-label">Monto total</div>
             <div className="stat-value primary">{formatMoney(totalAmount)}</div>
             <div className="stat-sub">todas las facturas</div>
           </div>
-        </div>
+          )}
+          </div>
+           
 
         {/* Panel de filtros avanzados */}
         {showFilters && (
@@ -406,7 +415,7 @@ const InvoiceList = () => {
                   <th><FaHashtag size={10} /> Nº factura</th>
                   <th><FaUser size={10} /> Cliente</th>
                   <th><FaCalendarAlt size={10} /> Fecha</th>
-                  <th className="text-right"><FaMoneyBillWave size={10} /> Total</th>
+                 {canViewSalesTotals &&  <th className="text-right"><FaMoneyBillWave size={10} /> Total</th>}
                   <th>Estado</th>
                   <th className="text-center">Acciones</th>
                 </tr>
@@ -448,9 +457,9 @@ const InvoiceList = () => {
                           <span className="date-text">{formatDate(invoice.date || invoice.created_at)}</span>
                           
                         </td>
-                        <td className="text-right">
+                        {canViewSalesTotals &&<td className="text-right">
                           <span className="total-amount">{formatMoney(invoice.total)}</span>
-                        </td>
+                        </td>}
                         <td>
                           <span className={`status-chip ${statusConfig.chipClass}`}>
                             {statusConfig.icon} {statusConfig.label}
@@ -467,7 +476,14 @@ const InvoiceList = () => {
                             <button
                               className="action-btn btn-print"
                               title="Imprimir"
-                              onClick={() => generatePDF({ ...invoice, clientName })}
+                              onClick={() => generatePDF(
+                                { ...invoice, clientName },
+                                {
+                                  filename: `factura_${invoice.invoice_number || invoice.id}.pdf`,
+                                  showClientName: true,
+                                  showNotes: true,
+                                }
+                              )}
                             >
                               <FaPrint size={12} />
                             </button>

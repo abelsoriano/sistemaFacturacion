@@ -9,10 +9,10 @@ import {
   Button,
   Table,
   Input,
-  Pagination,
   Tabs,
   Collapse,
   Badge,
+  Progress,
   Statistic,
   Space,
   Tooltip
@@ -73,6 +73,13 @@ const Dashboard = () => {
     inventoryStatus: {},
     salesTrend: []
   });
+
+  const totalSales = Number(dashboardData.salesSummary.total_sales || 0);
+  const totalOrders = Number(dashboardData.salesSummary.sales_count || 0);
+  const totalProducts = Number(dashboardData.salesSummary.products_sold || 0);
+  const lowStock = Number(dashboardData.inventoryStatus.low_stock_count || 0);
+  const avgOrderValue = totalOrders ? totalSales / totalOrders : 0;
+  const bestCategory = dashboardData.salesByCategory?.[0]?.name || 'N/A';
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d', '#ffc658', '#ff7c7c'];
 
@@ -240,25 +247,22 @@ const Dashboard = () => {
     <div className={styles.dashboardContainer}>
       <div className={styles.dashboardHeader}>
         <div className={styles.headerLeft}>
-          <h1>Panel de Control</h1>
-          <Button
-            type="primary"
-            icon={<HomeOutlined />}
-            onClick={goToHome}
-            className={styles.homeButton}
-          >
-            Ir al Inicio
-          </Button>
+          <div>
+            <h1>Panel de Control</h1>
+            <p className={styles.subtitle}>Visión clara de ventas, inventario y rendimiento en tiempo real.</p>
+          </div>
         </div>
-        <div className={styles.dashboardControls}>
-          <Space>
+
+        <div className={styles.headerRight}>
+          <Space size="middle" wrap>
             <RangePicker
               value={dateRange}
               onChange={handleDateChange}
+              allowClear={false}
             />
             <Select
-              defaultValue="month"
-              style={{ width: 120 }}
+              value={timeFrame}
+              style={{ width: 140 }}
               onChange={handleTimeFrameChange}
             >
               <Option value="day">Diario</Option>
@@ -266,6 +270,9 @@ const Dashboard = () => {
               <Option value="month">Mensual</Option>
               <Option value="year">Anual</Option>
             </Select>
+            <Button type="primary" icon={<HomeOutlined />} onClick={goToHome}>
+              Inicio
+            </Button>
           </Space>
         </div>
       </div>
@@ -286,13 +293,45 @@ const Dashboard = () => {
             }
             key="overview"
           >
-            {/* Summary Cards */}
+            <Row gutter={[16, 16]} className={styles.overviewHeader}>
+              <Col xs={24} lg={8}>
+                <Card className={styles.metricCard} bordered={false}>
+                  <div className={styles.metricCardTitle}>Ventas del periodo</div>
+                  <div className={styles.metricCardValue}>${totalSales.toFixed(2)}</div>
+                  <div className={styles.metricCardSubtitle}>Ingresos totales registrados en el rango seleccionado</div>
+                  <div className={styles.metricProgressLabel}>Valor promedio por venta</div>
+                  <Progress percent={Math.min(100, avgOrderValue ? (avgOrderValue / 1000) * 100 : 0)} showInfo={false} strokeColor="#1890ff" />
+                  <div className={styles.metricProgressValue}>${avgOrderValue.toFixed(2)} promedio</div>
+                </Card>
+              </Col>
+              <Col xs={24} lg={8}>
+                <Card className={styles.metricCard} bordered={false}>
+                  <div className={styles.metricCardTitle}>Ventas recientes</div>
+                  <div className={styles.metricCardValue}>{totalOrders}</div>
+                  <div className={styles.metricCardSubtitle}>Cantidad de ventas cerradas</div>
+                  <div className={styles.metricProgressLabel}>Productos vendidos</div>
+                  <Progress percent={Math.min(100, totalProducts ? (totalProducts / 500) * 100 : 0)} showInfo={false} strokeColor="#52c41a" />
+                  <div className={styles.metricProgressValue}>{totalProducts} productos</div>
+                </Card>
+              </Col>
+              <Col xs={24} lg={8}>
+                <Card className={styles.metricCard} bordered={false}>
+                  <div className={styles.metricCardTitle}>Inventario crítico</div>
+                  <div className={styles.metricCardValue}>{lowStock}</div>
+                  <div className={styles.metricCardSubtitle}>Artículos con stock bajo</div>
+                  <div className={styles.metricProgressLabel}>Mejor categoría</div>
+                  <Progress percent={100} showInfo={false} strokeColor="#fa8c16" />
+                  <div className={styles.metricProgressValue}>{bestCategory}</div>
+                </Card>
+              </Col>
+            </Row>
+
             <Row gutter={[16, 16]} className={styles.summaryCards}>
               <Col xs={24} sm={12} lg={6}>
-                <Card>
+                <Card className={styles.statCard} bordered={false}>
                   <Statistic
                     title="Ventas Totales"
-                    value={dashboardData.salesSummary.total_sales || 0}
+                    value={totalSales}
                     precision={2}
                     prefix={<DollarOutlined style={{ color: '#1890ff' }} />}
                     suffix="$"
@@ -301,30 +340,30 @@ const Dashboard = () => {
                 </Card>
               </Col>
               <Col xs={24} sm={12} lg={6}>
-                <Card>
+                <Card className={styles.statCard} bordered={false}>
                   <Statistic
                     title="Número de Ventas"
-                    value={dashboardData.salesSummary.sales_count || 0}
+                    value={totalOrders}
                     prefix={<ShoppingCartOutlined style={{ color: '#52c41a' }} />}
                     valueStyle={{ color: '#52c41a' }}
                   />
                 </Card>
               </Col>
               <Col xs={24} sm={12} lg={6}>
-                <Card>
+                <Card className={styles.statCard} bordered={false}>
                   <Statistic
                     title="Productos Vendidos"
-                    value={dashboardData.salesSummary.products_sold || 0}
+                    value={totalProducts}
                     prefix={<TagOutlined style={{ color: '#faad14' }} />}
                     valueStyle={{ color: '#faad14' }}
                   />
                 </Card>
               </Col>
               <Col xs={24} sm={12} lg={6}>
-                <Card>
+                <Card className={styles.statCard} bordered={false}>
                   <Statistic
                     title="Stock Bajo"
-                    value={dashboardData.inventoryStatus.low_stock_count || 0}
+                    value={lowStock}
                     prefix={<StockOutlined style={{ color: '#f5222d' }} />}
                     valueStyle={{ color: '#f5222d' }}
                   />

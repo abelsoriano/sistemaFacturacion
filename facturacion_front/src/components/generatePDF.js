@@ -1,113 +1,144 @@
 import jsPDF from 'jspdf';
+import { PDF_DEFAULT_CONFIG, formatMoney, getSavedPDFConfig } from '../utils/pdfConfig';
 
-export const generatePDF = (invoiceData) => {
-  // Validar que invoiceData y invoiceData.details estén definidos
-  if (!invoiceData || !invoiceData.details) {
-    console.error("Datos de la factura no válidos:", invoiceData);
-    alert("No se pudieron generar los detalles de la factura. Verifica los datos.");
+const mergeConfig = (baseConfig, overrideConfig = {}) => ({
+  ...baseConfig,
+  ...overrideConfig,
+  company: { ...baseConfig.company, ...(overrideConfig.company || {}) },
+  tableHeaders: { ...baseConfig.tableHeaders, ...(overrideConfig.tableHeaders || {}) },
+});
+ 
+export const generatePDF = (invoiceData, config = {}) => {
+  const savedConfig = getSavedPDFConfig();
+  const settings = mergeConfig(mergeConfig(PDF_DEFAULT_CONFIG, savedConfig), config);
+  const details = invoiceData?.details?.length ? invoiceData.details : invoiceData?.items || invoiceData?.products || [];
+
+  if (!invoiceData || !details || !details.length) {
+    console.error('Datos de la factura no válidos:', invoiceData);
+    alert('No se pudieron generar los detalles de la factura. Verifica los datos.');
     return;
   }
 
-  // Crear un documento PDF con dimensiones de ticket (80mm de ancho)
   const doc = new jsPDF({
-    format: [80, 297], // Ancho de 80mm (ticket estándar)
-    unit: 'mm'
+    format: settings.paperSize,
+    unit: settings.unit,
   });
 
-  // Configuración inicial
-  const pageWidth = 80;
-  const margin = 5;
-  // const contentWidth = pageWidth - (margin * 2);
+  const pageWidth = settings.pageWidth;
+  const margin = settings.margin;
   let yPos = margin;
 
-  // Función helper para centrar texto
   const centerText = (text, y) => {
     const textWidth = doc.getStringUnitWidth(text) * doc.internal.getFontSize() / doc.internal.scaleFactor;
     const textOffset = (pageWidth - textWidth) / 2;
     doc.text(text, textOffset, y);
   };
 
-  // Nombre de la empresa
-  doc.setFontSize(12);
+  const addSeparator = () => {
+    yPos += settings.lineSpacing;
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+  };
+
+  const invoiceNumber = invoiceData.invoice_number || invoiceData.id || 'N/A';
+  const invoiceDate = invoiceData.date ? new Date(invoiceData.date) : new Date();
+  const currentDate = invoiceDate.toLocaleDateString(settings.dateLocale, settings.dateOptions);
+
+  doc.setFontSize(settings.titleFontSize);
   doc.setFont(undefined, 'bold');
-  centerText("REPUESTOS BEBE", yPos + 5);
-  
-  // Dirección
-  yPos += 10;
-  doc.setFontSize(8);
+
+  if (settings.showCompanyHeader) {
+    centerText(settings.company.name, yPos + 5);
+    yPos += settings.lineSpacing * 2;
+    doc.setFontSize(settings.bodyFontSize);
+    doc.setFont(undefined, 'normal');
+    centerText(settings.company.address, yPos);
+    yPos += settings.lineSpacing;
+    centerText(settings.company.phone, yPos);
+    yPos += settings.lineSpacing;
+    centerText(settings.company.city, yPos);
+    yPos += settings.lineSpacing;
+    addSeparator();
+  }
+
+  if (settings.showInvoiceHeader) {
+    yPos += settings.lineSpacing;
+    doc.setFontSize(settings.bodyFontSize);
+    doc.setFont(undefined, 'bold');
+    doc.text(`${settings.invoiceNumberLabel}: ${invoiceNumber}`, margin, yPos);
+    yPos += settings.lineSpacing;
+
+    if (settings.showDate) {
+      doc.setFont(undefined, 'normal');
+      doc.text(`${settings.dateLabel}: ${currentDate}`, margin, yPos);
+      yPos += settings.lineSpacing;
+    }
+
+    if (settings.showClientName && invoiceData.clientName) {
+      doc.setFont(undefined, 'normal');
+      doc.text(`${settings.clientNameLabel}: ${invoiceData.clientName}`, margin, yPos);
+      yPos += settings.lineSpacing;
+    }
+
+    addSeparator();
+  }
+
+  yPos += settings.lineSpacing;
+  doc.setFont(undefined, 'bold');
+  doc.text(settings.tableHeaders.quantity, margin, yPos);
+  doc.text(settings.tableHeaders.description, margin + 12, yPos);
+  doc.text(settings.tableHeaders.price, margin + 40, yPos);
+  doc.text(settings.tableHeaders.total, margin + 60, yPos);
+
   doc.setFont(undefined, 'normal');
-  centerText("San Felipe de Villa Mella, C/Liecy No.88 ", yPos);
-  yPos += 4;
-  centerText("Tel: (809) 986-6178", yPos);
-  yPos += 4;
-  centerText("Santo Domingo Rep. Dom.", yPos);
+  details.forEach((item) => {
+    yPos += settings.lineSpacing;
+    const description = item.description || item.product_name || item.product || item.name || '';
+    const subtotal = item.subtotal ?? Number(item.quantity || 0) * Number(item.price || 0);
+    const descriptionLines = doc.splitTextToSize(description, settings.descriptionMaxWidth);
 
-  // Línea separadora
-  yPos += 5;
-  doc.line(margin, yPos, pageWidth - margin, yPos);
+    doc.text(`${item.quantity || 0}`, margin, yPos);
+    doc.text(descriptionLines, margin + 12, yPos);
+    doc.text(formatMoney(item.price, settings.currencySymbol), margin + 40, yPos);
+    doc.text(formatMoney(subtotal, settings.currencySymbol), margin + 60, yPos);
 
-  // Número de factura y fecha
-  yPos += 5;
-  doc.setFontSize(8);
-  const currentDate = new Date().toLocaleDateString('es-ES', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    yPos += settings.lineSpacing * (descriptionLines.length - 1);
   });
-  doc.text(`Factura N°: ${invoiceData.id || 'N/A'}`, margin, yPos); // Usar 'N/A' si no hay ID
-  yPos += 4;
-  doc.text(`Fecha: ${currentDate}`, margin, yPos);
 
-  // Línea separadora
-  yPos += 5;
-  doc.line(margin, yPos, pageWidth - margin, yPos);
-
-  // Encabezados de la tabla
-  yPos += 5;
+  addSeparator();
+  yPos += settings.lineSpacing;
   doc.setFont(undefined, 'bold');
-  doc.text("Cant", margin, yPos);
-  doc.text('Descripcion', margin + 10, yPos);
-  doc.text("Precio", margin + 40, yPos);
-  doc.text("Total", margin + 60, yPos);
+  doc.text(`${settings.totalLabel}:`, margin, yPos);
+  doc.text(formatMoney(invoiceData.total, settings.currencySymbol), margin + 50, yPos);
 
-  // Detalles de productos
-  doc.setFont(undefined, 'normal');
-  invoiceData.details.forEach((item) => {
-    yPos += 5;
-    doc.text(`${item.quantity}`, margin, yPos)
-    doc.text(`${item.products}`, margin + 10, yPos);
-    doc.text(`$${item.price}`, margin + 40, yPos);
-    doc.text(`$${item.subtotal}`, margin + 60, yPos);
-  });
- 
-  // Línea separadora
-  yPos += 5;
-  doc.line(margin, yPos, pageWidth - margin, yPos);
+  if (settings.showCashChange) {
+    yPos += settings.lineSpacing;
+    doc.setFont(undefined, 'normal');
+    doc.text(`${settings.cashLabel}:`, margin, yPos);
+    doc.text(formatMoney(invoiceData.cash_received, settings.currencySymbol), margin + 50, yPos);
+    yPos += settings.lineSpacing;
+    doc.text(`${settings.changeLabel}:`, margin, yPos);
+    doc.text(formatMoney(invoiceData.change, settings.currencySymbol), margin + 50, yPos);
+  }
 
-  // Totales
-  yPos += 5;
-  doc.setFont(undefined, 'bold');
-  doc.text("Total:", margin, yPos);
-  doc.text(`$${invoiceData.total}`, margin + 50, yPos);
-  
-  yPos += 5;
-  doc.setFont(undefined, 'normal');
-  doc.text("Efectivo:", margin, yPos);
-  doc.text(`$${invoiceData.cash_received}`, margin + 50, yPos);
-  
-  yPos += 5;
-  doc.text("Cambio:", margin, yPos);
-  doc.text(`$${invoiceData.change}`, margin + 50, yPos);
+  if (settings.showNotes && invoiceData.notes) {
+    yPos += settings.lineSpacing;
+    doc.setFont(undefined, 'normal');
+    const wrappedNotes = doc.splitTextToSize(invoiceData.notes, pageWidth - margin * 2);
+    doc.text(`${settings.notesLabel}:`, margin, yPos);
+    yPos += settings.lineSpacing;
+    doc.text(wrappedNotes, margin, yPos);
+    yPos += settings.lineSpacing * (wrappedNotes.length - 1);
+  }
 
-  // Mensaje final
-  yPos += 10;
-  doc.setFontSize(8);
-  centerText("¡Gracias por su compra!", yPos);
-  yPos += 5;
-  centerText("Vuelva pronto", yPos);
+  if (settings.footerLines?.length) {
+    yPos += settings.lineSpacing * 2;
+    doc.setFontSize(settings.bodyFontSize);
+    doc.setFont(undefined, 'normal');
+    settings.footerLines.forEach((line) => {
+      centerText(line, yPos);
+      yPos += settings.lineSpacing;
+    });
+  }
 
-  // Guardar el PDF
-  doc.save('ticket.pdf');
+  doc.save(settings.filename);
 };

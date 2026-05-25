@@ -3,8 +3,9 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../services/api";
 import { toast, Toaster } from "react-hot-toast";
 import Swal from "sweetalert2";
+import { getSavedPDFConfig, PDF_DEFAULT_CONFIG } from "../utils/pdfConfig";
 import "../css/detalleVenta.css";
-
+import logo from "../logo.png"; // ajusta la ruta
 import {
   FaArrowLeft,
   FaEdit,
@@ -72,6 +73,14 @@ const InvoiceDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [companyInfo, setCompanyInfo] = useState(PDF_DEFAULT_CONFIG.company);
+
+  useEffect(() => {
+    const savedConfig = getSavedPDFConfig();
+    if (savedConfig.company) {
+      setCompanyInfo({ ...PDF_DEFAULT_CONFIG.company, ...savedConfig.company });
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -222,12 +231,18 @@ const InvoiceDetail = () => {
         </div>
       </header>
 
-      {/* Print Header */}
-      <div className="print-only" style={{ textAlign: "center", padding: "1.25rem 0 0.75rem" }}>
-        <h2 style={{ fontSize: "1.25rem", fontWeight: 700 }}>FACTURA #{invoiceNumber}</h2>
-        <p style={{ fontSize: "0.75rem", color: "#666", marginTop: "0.25rem" }}>
-          RUC: 1234567890001 · Av. Principal 123 · (02) 123-4567
+      <div className="print-only" style={{  textAlign: "center",   padding: "1.25rem 0 0.75rem" }}>
+        <div style={{display: "flex", alignItems: "center", justifyContent: "center", gap: "10px"}}> 
+        <img src={logo} alt="Logo"  className="hd-logo" style={{height: "45px",  width: "auto"}}></img>
+          <h2 style={{ fontSize: "1.25rem",  fontWeight: 700,  margin: 0  }}>
+            FACTURA #{invoiceNumber}
+          </h2>
+        </div>
+
+        <p style={{fontSize: "0.75rem",  color: "#666",  marginTop: "0.25rem" }}>
+          {companyInfo.name} · {companyInfo.address} · {companyInfo.phone}
         </p>
+
         <hr style={{ margin: "0.75rem 0" }} />
       </div>
 
