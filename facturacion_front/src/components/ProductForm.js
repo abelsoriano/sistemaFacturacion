@@ -3,7 +3,8 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../services/api";
 import imgPro from "../img/product.jpg";
 import "../css/ProductForm.css";
-import { showGenericAlert, showSuccessAlert } from "../herpert";
+import { showGenericAlert } from "../herpert";
+import { notify } from "../utils/notify";
 
 function ProductForm() {
   const { id } = useParams();
@@ -14,6 +15,10 @@ function ProductForm() {
   const [filteredCategories, setFilteredCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [categoryForm, setCategoryForm] = useState({ name: "", description: "" });
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -55,10 +60,15 @@ function ProductForm() {
     }
 
     if (!formData.category) {
-      newErrors.category = "Por favor selecciona una categoría.";
+      newErrors.category = categories.length === 0
+        ? "Debes crear una categoría antes de guardar el producto."
+        : "Selecciona una categoría para este producto.";
     }
 
     setErrors(newErrors);
+    if (newErrors.category) {
+      notify.warning("Categoría requerida", newErrors.category);
+    }
     return Object.keys(newErrors).length === 0;
   };
 
@@ -89,18 +99,20 @@ function ProductForm() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const response = await api.get("categories/");
+      setCategories(response.data);
+      setFilteredCategories(response.data.slice(0, 10));
+      return response.data;
+    } catch (err) {
+      notify.error("Error al obtener las categorías.");
+      return [];
+    }
+  };
+
   // Cargar categorías
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await api.get("categories/");
-        setCategories(response.data);
-        setFilteredCategories(response.data.slice(0, 10));
-      } catch (err) {
-        showGenericAlert("Error al obtener las categorías.");
-      }
-    };
-
     fetchCategories();
   }, []);
 
@@ -184,6 +196,52 @@ function ProductForm() {
     setShowDropdown(false);
   };
 
+  const openCategoryModal = () => {
+    setCategoryForm({ name: searchTerm || "", description: "" });
+    setCategoryError("");
+    setShowCategoryModal(true);
+  };
+
+  const handleCategoryFormChange = (e) => {
+    setCategoryForm({
+      ...categoryForm,
+      [e.target.name]: e.target.value,
+    });
+    setCategoryError("");
+  };
+
+  const handleCreateCategory = async (e) => {
+    e.preventDefault();
+    const name = categoryForm.name.trim();
+
+    if (!name) {
+      setCategoryError("El nombre de la categoría es obligatorio.");
+      return;
+    }
+
+    setCategorySaving(true);
+    try {
+      const response = await api.post("categories/", {
+        name,
+        description: categoryForm.description,
+      });
+      const createdCategory = response.data;
+      await fetchCategories();
+      handleCategorySelect(createdCategory);
+      setShowCategoryModal(false);
+      notify.success("Categoría creada", "La nueva categoría quedó seleccionada.");
+    } catch (err) {
+      console.error("Error creando categoría:", err);
+      const detail = err.response?.data?.detail;
+      const nameError = Array.isArray(err.response?.data?.name)
+        ? err.response.data.name[0]
+        : null;
+      setCategoryError(detail || nameError || "No se pudo crear la categoría.");
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
   const handleSearchFocus = () => {
     setShowDropdown(true);
     if (!searchTerm) {
@@ -217,67 +275,51 @@ function ProductForm() {
         formDataToSend.append('image', '');
       }
 
-      let savedProduct;
       if (id) {
-        const response = await api.patch(`products/${id}/`, formDataToSend, {
+        await api.patch(`products/${id}/`, formDataToSend, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         });
-        savedProduct = response.data;
-        showSuccessAlert("Producto actualizado correctamente.");
+        notify.success("Producto actualizado correctamente.");
       } else {
-        const response = await api.post("products/", formDataToSend, {
+        await api.post("products/", formDataToSend, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         });
-        savedProduct = response.data;
-        showSuccessAlert("Producto creado correctamente.");
+        notify.success("Producto creado correctamente.");
 
-        // IMPORTANTE: Actualizar formData con el ID del nuevo producto
-        setFormData(prev => ({
-          ...prev,
-          id: savedProduct.id,  // ← Guardar el ID
-          barcode: savedProduct.barcode
-        }));
-
-        // Cargar imagen del código de barras
-        if (savedProduct.id && savedProduct.barcode) {
-          await loadBarcodeImage(savedProduct.id);
-        }
-
-        if (mode === 'save_and_new') {
-          showSuccessAlert("Producto guardado", "Puedes crear un nuevo producto ahora.");
-
-          if (id) {
-            navigate('/productsForm');
-            return;
-          }
-
-          setFormData({
-            name: "",
-            description: "",
-            price: "",
-            stock: "",
-            category: "",
-            categoryName: "",
-            image: null,
-            barcode: ""
-          });
-          setPreviewImage(imgPro);
-          setErrors({});
-          setSearchTerm("");
-          return;
-        }
-
-        // Navegar a la URL de edición para que el ID esté en la URL
-        navigate(`/products/${savedProduct.id}/edit`, { replace: true });
       }
+
+      if (mode === 'save_and_new') {
+        notify.success("Producto guardado", "Puedes crear un nuevo producto ahora.");
+        setFormData({
+          name: "",
+          description: "",
+          price: "",
+          stock: "",
+          category: "",
+          categoryName: "",
+          image: null,
+          barcode: ""
+        });
+        setPreviewImage(imgPro);
+        setErrors({});
+        setSearchTerm("");
+        setBarcodeImage(null);
+        setShowDropdown(false);
+        if (id) {
+          navigate('/productsForm', { replace: true });
+        }
+        return;
+      }
+
+      navigate('/productsList');
 
     } catch (err) {
       console.error("Error guardando producto:", err);
-      showGenericAlert("No se pudo guardar el producto. Intenta nuevamente.");
+      notify.error("No se pudo guardar el producto", "Intenta nuevamente.");
     } finally {
       setIsLoading(false);
     }
@@ -293,15 +335,15 @@ function ProductForm() {
         setAvailablePrinters(response.data.printers);
         // Seleccionar automáticamente la primera impresora detectada
         setSelectedPrinter(response.data.printers[0].port || 'USB001');
-        showSuccessAlert(`${response.data.printers.length} impresora(s) detectada(s)`);
+        notify.success(`${response.data.printers.length} impresora(s) detectada(s)`);
       } else {
         setAvailablePrinters([{ name: 'USB001 (Por defecto)', port: 'USB001' }]);
-        showGenericAlert('No se detectaron impresoras. Usando USB001 por defecto.');
+        notify.warning('No se detectaron impresoras', 'Usando USB001 por defecto.');
       }
     } catch (err) {
       console.error("Error cargando impresoras:", err);
       setAvailablePrinters([{ name: 'USB001 (Por defecto)', port: 'USB001' }]);
-      showGenericAlert('Error al detectar impresoras. Usando USB001 por defecto.');
+      notify.warning('Error al detectar impresoras', 'Usando USB001 por defecto.');
     } finally {
       setLoadingPrinters(false);
     }
@@ -329,7 +371,7 @@ function ProductForm() {
       });
 
       if (response.data.success) {
-        showSuccessAlert(response.data.message || "Etiqueta enviada a la impresora correctamente.");
+        notify.success(response.data.message || "Etiqueta enviada a la impresora correctamente.");
         setShowPrintModal(false);
       } else {
         showGenericAlert(response.data.error || "Error al imprimir directamente.");
@@ -391,7 +433,7 @@ function ProductForm() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      showSuccessAlert(`${printQuantity} etiqueta(s) generada(s). Envía el archivo a tu impresora Zebra.`);
+      notify.success(`${printQuantity} etiqueta(s) generada(s)`, "Envía el archivo a tu impresora Zebra.");
       setShowPrintModal(false);
     } catch (err) {
       console.error("Error completo:", err);
@@ -403,335 +445,374 @@ function ProductForm() {
   };
 
   return (
-    <div className="container mt-5">
-      <h2 className="text-center mb-4">{id ? "Editar Producto" : "Agregar Producto"}</h2>
-      <div className="row">
-        <div className="col-md-4">
-          <div className="image-upload-container">
-            <img
-              src={previewImage}
-              alt="Preview del producto"
-              className="img-fluid product-image"
-            />
-            <div className="mt-3">
-              <input
-                type="file"
-                id="image-upload"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="d-none"
-              />
-              <label htmlFor="image-upload" className="btn btn-outline-secondary">
-                {formData.image ? "Cambiar imagen" : "Seleccionar imagen"}
-              </label>
-              {formData.image && (
-                <button
-                  type="button"
-                  className="btn btn-outline-danger ms-2"
-                  onClick={() => {
-                    setFormData({ ...formData, image: null });
-                    setPreviewImage(imgPro);
-                  }}
-                >
-                  Eliminar
-                </button>
+    <div className="product-form-page">
+      <header className="pf-header">
+        <div>
+          <span className="pf-eyebrow">Inventario</span>
+          <h1>{id ? "Editar producto" : "Agregar producto"}</h1>
+          <p>Gestiona datos básicos, precio, stock, categoría, imagen y etiqueta del producto.</p>
+        </div>
+      </header>
+
+      <form className="pf-layout" onSubmit={handleSubmit}>
+        <aside className="pf-side">
+          <section className="pf-card">
+            <div className="pf-card-head">
+              <div>
+                <span>Imagen</span>
+                <h2>Vista del producto</h2>
+              </div>
+            </div>
+            <div className="pf-image-panel">
+              <img src={previewImage} alt="Preview del producto" className="pf-product-image" />
+              <input type="file" id="image-upload" accept="image/*" onChange={handleImageChange} className="pf-hidden-input" />
+              <div className="pf-image-actions">
+                <label htmlFor="image-upload" className="pf-btn secondary">
+                  {formData.image ? "Cambiar imagen" : "Seleccionar imagen"}
+                </label>
+                {formData.image && (
+                  <button
+                    type="button"
+                    className="pf-btn danger"
+                    onClick={() => {
+                      setFormData({ ...formData, image: null });
+                      setPreviewImage(imgPro);
+                    }}
+                  >
+                    Eliminar
+                  </button>
+                )}
+              </div>
+              <small>Opcional. No cambia la lógica actual de carga.</small>
+            </div>
+          </section>
+
+          <section className="pf-card">
+            <div className="pf-card-head">
+              <div>
+                <span>Barcode / etiqueta</span>
+                <h2>Código interno</h2>
+              </div>
+            </div>
+            <div className="pf-barcode-panel">
+              {barcodeImage ? (
+                <>
+                  <img src={barcodeImage} alt="Código de barras" className="pf-barcode-image" />
+                  <strong>{formData.barcode}</strong>
+                  <button type="button" className="pf-btn success full" onClick={() => setShowPrintModal(true)}>
+                    Imprimir etiqueta
+                  </button>
+                </>
+              ) : (
+                <div className="pf-empty-box">
+                  <strong>Sin etiqueta disponible</strong>
+                  <p>Guarda el producto para generar y visualizar el código de barras.</p>
+                </div>
               )}
             </div>
-            <small className="text-muted">(Opcional)</small>
+          </section>
+        </aside>
 
-            {/* Mostrar código de barras si existe */}
-            {barcodeImage && (
-              <div className="mt-4 border rounded p-3">
-                <h6 className="text-center mb-2">Código de Barras</h6>
-                <img
-                  src={barcodeImage}
-                  alt="Código de barras"
-                  className="img-fluid"
-                  style={{ maxWidth: '100%' }}
-                />
-                <p className="text-center mt-2 mb-2">
-                  <small><strong>{formData.barcode}</strong></small>
-                </p>
-                <button
-                  type="button"
-                  className="btn btn-success btn-sm w-100"
-                  onClick={() => setShowPrintModal(true)}
-                >
-                  🖨️ Imprimir Etiqueta
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="col-md-8">
-          <form onSubmit={handleSubmit}>
-            <div className="mb-3">
-              <label htmlFor="name" className="form-label">
-                Nombre del Producto *
-              </label>
-              <input
-                type="text"
-                className={`form-control ${errors.name ? 'is-invalid' : ''}`}
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-              />
-              {errors.name && <div className="invalid-feedback">{errors.name}</div>}
-            </div>
-
-            <div className="mb-3">
-              <label htmlFor="description" className="form-label">
-                Descripción
-              </label>
-              <textarea
-                className="form-control"
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                rows="3"
-              />
-            </div>
-
-            <div className="row">
-              <div className="col-md-6 mb-3">
-                <label htmlFor="price" className="form-label">
-                  Precio *
-                </label>
-                <div className="input-group">
-                  <span className="input-group-text">$</span>
-                  <input
-                    type="number"
-                    className={`form-control ${errors.price ? 'is-invalid' : ''}`}
-                    id="price"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleChange}
-                    min="0"
-                    step="0.01"
-                    required
-                  />
-                  {errors.price && <div className="invalid-feedback">{errors.price}</div>}
-                </div>
-              </div>
-              <div className="col-md-6 mb-3">
-                <label htmlFor="stock" className="form-label">
-                  Stock *
-                </label>
-                <input
-                  type="number"
-                  className={`form-control ${errors.stock ? 'is-invalid' : ''}`}
-                  id="stock"
-                  name="stock"
-                  value={formData.stock}
-                  onChange={handleChange}
-                  min="0"
-                  required
-                />
-                {errors.stock && <div className="invalid-feedback">{errors.stock}</div>}
+        <main className="pf-main">
+          <section className="pf-card">
+            <div className="pf-card-head">
+              <div>
+                <span>Datos básicos</span>
+                <h2>Identificación del producto</h2>
               </div>
             </div>
-
-            {/* Campo de categoría con búsqueda */}
-            <div className="mb-3">
-              <label htmlFor="category-search" className="form-label">
-                Categoría *
-              </label>
-              <div className="position-relative" ref={dropdownRef}>
+            <div className="pf-card-body">
+              <label className="pf-field">
+                <span>Nombre del producto *</span>
                 <input
                   type="text"
-                  className={`form-control ${errors.category ? 'is-invalid' : ''}`}
-                  id="category-search"
-                  placeholder="Buscar categoría..."
-                  value={searchTerm}
-                  onChange={handleSearchChange}
-                  onFocus={handleSearchFocus}
+                  className={errors.name ? 'is-invalid' : ''}
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
                   required
                 />
+                {errors.name && <small className="pf-error">{errors.name}</small>}
+              </label>
 
-                {errors.category && <div className="invalid-feedback d-block">{errors.category}</div>}
+              <label className="pf-field">
+                <span>Descripción</span>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  rows="4"
+                />
+              </label>
+            </div>
+          </section>
 
-                {showDropdown && filteredCategories.length > 0 && (
-                  <div
-                    className="position-absolute w-100 bg-white border mt-1 rounded shadow-sm z-3 category-dropdown"
-                    style={{ maxHeight: '200px', overflowY: 'auto' }}
-                  >
-                    {filteredCategories.map((category) => (
-                      <div
-                        key={category.id}
-                        className="dropdown-item cursor-pointer"
-                        onClick={() => handleCategorySelect(category)}
-                        style={{
-                          cursor: 'pointer',
-                          padding: '8px 12px',
-                          borderBottom: '1px solid #f8f9fa'
-                        }}
-                      >
-                        {category.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {showDropdown && filteredCategories.length === 0 && searchTerm && (
-                  <div className="position-absolute w-100 bg-white border mt-1 rounded shadow-sm z-3">
-                    <div className="dropdown-item text-muted">
-                      No se encontraron categorías
-                    </div>
-                  </div>
-                )}
+          <section className="pf-grid-two">
+            <div className="pf-card">
+              <div className="pf-card-head">
+                <div>
+                  <span>Precio / costo / impuestos</span>
+                  <h2>Precio de venta</h2>
+                </div>
               </div>
-
-              <input
-                type="hidden"
-                name="category"
-                value={formData.category}
-                required
-              />
+              <div className="pf-card-body">
+                <label className="pf-field">
+                  <span>Precio de venta *</span>
+                  <div className="pf-money-input">
+                    <b>$</b>
+                    <input
+                      type="number"
+                      className={errors.price ? 'is-invalid' : ''}
+                      id="price"
+                      name="price"
+                      value={formData.price}
+                      onChange={handleChange}
+                      min="0"
+                      step="0.01"
+                      required
+                    />
+                  </div>
+                  {errors.price && <small className="pf-error">{errors.price}</small>}
+                </label>
+                <div className="pf-note-box">
+                  Este producto usa solo precio de venta por ahora. Costo e impuestos
+                  avanzados requieren una fase funcional posterior.
+                </div>
+              </div>
             </div>
 
-            <div className="d-flex justify-content-end gap-2 mt-4">
-              <Link to="/productsList" className="btn btn-outline-secondary">
-                Cancelar
-              </Link>
+            <div className="pf-card">
+              <div className="pf-card-head">
+                <div>
+                  <span>Inventario / stock</span>
+                  <h2>Existencia inicial</h2>
+                </div>
+              </div>
+              <div className="pf-card-body">
+                <label className="pf-field">
+                  <span>Stock *</span>
+                  <input
+                    type="number"
+                    className={errors.stock ? 'is-invalid' : ''}
+                    id="stock"
+                    name="stock"
+                    value={formData.stock}
+                    onChange={handleChange}
+                    min="0"
+                    required
+                  />
+                  {errors.stock && <small className="pf-error">{errors.stock}</small>}
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section className="pf-card">
+            <div className="pf-card-head">
+              <div>
+                <span>Categoría / almacén</span>
+                <h2>Clasificación</h2>
+              </div>
+            </div>
+            <div className="pf-card-body">
+              <label className="pf-field" ref={dropdownRef}>
+                <span>Categoría *</span>
+                {categories.length === 0 ? (
+                  <div className="pf-category-empty-state">
+                    <div>
+                      <strong>Debes crear una categoría antes de guardar el producto.</strong>
+                      <span>La categoría organiza inventario, reportes y búsqueda de productos.</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="pf-btn secondary pf-compact-btn"
+                      onClick={openCategoryModal}
+                    >
+                      Nueva categoría
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pf-category-row">
+                    <div className="pf-category-wrap">
+                      <input
+                        type="text"
+                        className={errors.category ? 'is-invalid' : ''}
+                        id="category-search"
+                        placeholder="Buscar o seleccionar categoría..."
+                        value={searchTerm}
+                        onChange={handleSearchChange}
+                        onFocus={handleSearchFocus}
+                        required
+                      />
+                      {showDropdown && filteredCategories.length > 0 && (
+                        <div className="category-dropdown">
+                          {filteredCategories.map((category) => (
+                            <button
+                              type="button"
+                              key={category.id}
+                              className="category-dropdown-item"
+                              onClick={() => handleCategorySelect(category)}
+                            >
+                              {category.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {showDropdown && filteredCategories.length === 0 && searchTerm && (
+                        <div className="category-dropdown">
+                          <div className="category-dropdown-empty">No se encontraron categorías</div>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="pf-btn secondary pf-compact-btn"
+                      onClick={openCategoryModal}
+                    >
+                      Nueva categoría
+                    </button>
+                  </div>
+                )}
+                {errors.category && <small className="pf-error">{errors.category}</small>}
+              </label>
+
+              <input type="hidden" name="category" value={formData.category} required />
+              <div className="pf-note-box">
+                El producto actual no tiene campo de almacén asignado. El módulo de
+                almacén se gestiona por separado.
+              </div>
+            </div>
+          </section>
+
+          <section className="pf-card">
+            <div className="pf-card-body pf-submit-row">
+              <Link to="/productsList" className="pf-btn secondary">Cancelar</Link>
               <button
                 type="button"
-                className="btn btn-outline-primary"
+                className="pf-btn secondary"
                 onClick={(e) => handleSubmit(e, 'save_and_new')}
                 disabled={isLoading}
                 title="Guardar este producto y preparar un nuevo formulario"
               >
-                {isLoading && submitMode === 'save_and_new' ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Guardando...
-                  </>
-                ) : (
-                  'Guardar y crear otro'
-                )}
+                {isLoading && submitMode === 'save_and_new' ? 'Guardando...' : 'Guardar y crear otro'}
               </button>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={isLoading}
-              >
-                {isLoading && submitMode === 'save' ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Guardando...
-                  </>
-                ) : (
-                  'Guardar' 
-                )}
+              <button type="submit" className="pf-btn primary" disabled={isLoading}>
+                {isLoading && submitMode === 'save' ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
-          </form>
-        </div>
-      </div>
+          </section>
+        </main>
+      </form>
 
-
-      {/* Modal para imprimir etiquetas */}
       {showPrintModal && (
-        <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Imprimir Etiquetas</h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowPrintModal(false)}
-                ></button>
+        <div className="pf-modal-backdrop">
+          <div className="pf-modal">
+            <div className="pf-modal-head">
+              <div>
+                <span>Etiqueta</span>
+                <h2>Imprimir etiquetas</h2>
               </div>
-              <div className="modal-body">
-                {/* Cantidad de etiquetas */}
-                <div className="mb-3">
-                  <label className="form-label">Cantidad de etiquetas:</label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    value={printQuantity}
-                    onChange={(e) => setPrintQuantity(parseInt(e.target.value) || 1)}
-                    min="1"
-                    max="100"
-                  />
-                </div>
+              <button type="button" className="pf-icon-btn" onClick={() => setShowPrintModal(false)}>×</button>
+            </div>
+            <div className="pf-modal-body">
+              <label className="pf-field">
+                <span>Cantidad de etiquetas</span>
+                <input
+                  type="number"
+                  value={printQuantity}
+                  onChange={(e) => setPrintQuantity(parseInt(e.target.value) || 1)}
+                  min="1"
+                  max="100"
+                />
+              </label>
 
-                {/* Selector de impresora */}
-                <div className="mb-3">
-                  <label className="form-label">Impresora:</label>
-                  <div className="input-group">
-                    <select
-                      className="form-select"
-                      value={selectedPrinter}
-                      onChange={(e) => setSelectedPrinter(e.target.value)}
-                      disabled={loadingPrinters}
-                    >
-                      {availablePrinters.length > 0 ? (
-                        availablePrinters.map((printer, idx) => (
-                          <option key={idx} value={printer.port}>
-                            {printer.name} ({printer.port})
-                          </option>
-                        ))
-                      ) : (
-                        <option value="USB001">USB001 (Por defecto)</option>
-                      )}
-                    </select>
-                    <button
-                      className="btn btn-outline-secondary"
-                      onClick={loadPrinters}
-                      disabled={loadingPrinters}
-                      type="button"
-                      title="Detectar impresoras"
-                    >
-                      {loadingPrinters ? "⏳" : "🔄"}
-                    </button>
-                  </div>
-                  <small className="text-muted">
-                    Haz clic en 🔄 para detectar impresoras automáticamente
-                  </small>
+              <label className="pf-field">
+                <span>Impresora</span>
+                <div className="pf-printer-row">
+                  <select value={selectedPrinter} onChange={(e) => setSelectedPrinter(e.target.value)} disabled={loadingPrinters}>
+                    {availablePrinters.length > 0 ? (
+                      availablePrinters.map((printer, idx) => (
+                        <option key={idx} value={printer.port}>{printer.name} ({printer.port})</option>
+                      ))
+                    ) : (
+                      <option value="USB001">USB001 (Por defecto)</option>
+                    )}
+                  </select>
+                  <button className="pf-btn secondary" onClick={loadPrinters} disabled={loadingPrinters} type="button" title="Detectar impresoras">
+                    {loadingPrinters ? "Detectando..." : "Detectar"}
+                  </button>
                 </div>
+                <small>Detecta impresoras disponibles o usa USB001 por defecto.</small>
+              </label>
 
-                {/* Información */}
-                <div className="alert alert-info mb-0">
-                  <small>
-                    <strong>🖨️ Impresión Directa:</strong> Envía directamente a la impresora Zebra conectada por USB.<br />
-                    <strong>📥 Descargar ZPL:</strong> Descarga el archivo para imprimir manualmente.
-                  </small>
-                </div>
+              <div className="pf-info-box">
+                <strong>Impresión directa:</strong> envía a la impresora Zebra conectada por USB.
+                <br />
+                <strong>Descargar ZPL:</strong> genera el archivo para imprimir manualmente.
               </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowPrintModal(false)}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-primary"
-                  onClick={handlePrintLabel}
-                  title="Descargar archivo ZPL"
-                >
-                  📥 Descargar ZPL
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-success"
-                  onClick={handlePrintDirect}
-                  title="Enviar directamente a la impresora"
-                >
-                  🖨️ Imprimir Directo
-                </button>
-              </div>
+            </div>
+            <div className="pf-modal-actions">
+              <button type="button" className="pf-btn secondary" onClick={() => setShowPrintModal(false)}>Cancelar</button>
+              <button type="button" className="pf-btn secondary" onClick={handlePrintLabel} title="Descargar archivo ZPL">Descargar ZPL</button>
+              <button type="button" className="pf-btn success" onClick={handlePrintDirect} title="Enviar directamente a la impresora">Imprimir directo</button>
             </div>
           </div>
         </div>
-      )}   </div>
+      )}
+
+      {showCategoryModal && (
+        <div className="pf-modal-backdrop">
+          <div className="pf-modal pf-category-modal">
+            <div className="pf-modal-head">
+              <div>
+                <span>Inventario</span>
+                <h2>Nueva categoría</h2>
+              </div>
+              <button type="button" className="pf-icon-btn" onClick={() => setShowCategoryModal(false)}>×</button>
+            </div>
+            <form onSubmit={handleCreateCategory}>
+              <div className="pf-modal-body">
+                {categoryError && (
+                  <div className="pf-form-alert" role="alert">
+                    {categoryError}
+                  </div>
+                )}
+                <label className="pf-field">
+                  <span>Nombre *</span>
+                  <input
+                    name="name"
+                    value={categoryForm.name}
+                    onChange={handleCategoryFormChange}
+                    placeholder="Ej. Bebidas, Repuestos, Servicios"
+                    required
+                  />
+                </label>
+                <label className="pf-field">
+                  <span>Descripción</span>
+                  <textarea
+                    name="description"
+                    value={categoryForm.description}
+                    onChange={handleCategoryFormChange}
+                    rows="3"
+                    placeholder="Descripción opcional"
+                  />
+                </label>
+              </div>
+              <div className="pf-modal-actions">
+                <button type="button" className="pf-btn secondary" onClick={() => setShowCategoryModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="pf-btn primary" disabled={categorySaving}>
+                  {categorySaving ? "Creando..." : "Crear y seleccionar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

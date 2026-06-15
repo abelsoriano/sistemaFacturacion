@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import Swal from 'sweetalert2';
-import { showConfirmationAlert, showSuccessAlert, showErrorAlert } from '../herpert';
+import { showErrorAlert } from '../herpert';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { SALE_TOTALS_PERMISSION, userHasPermissions } from '../utils/permissions';
+import { FINANCIAL_TOTALS_PERMISSIONS, userHasAnyPermission } from '../utils/permissions';
 import { Printer } from 'lucide-react';
 import { generatePDF } from './generatePDF';
 import '../css/SalesList.css';
@@ -15,8 +14,6 @@ import {
   IconPlus,
   IconExcel,
   IconEye,
-  IconEdit,
-  IconTrash,
   IconChevLeft,
   IconChevRight,
   IconReceipt,
@@ -25,10 +22,15 @@ import {
 
 
 const ROWS_PER_PAGE = 10;
+const invoiceDate = (invoice) => invoice.created_at || invoice.date;
+const invoiceCustomer = (invoice) => invoice.client_name || invoice.customer || 'Consumidor Final';
+const invoiceNumber = (invoice) => invoice.invoice_number || `FAC-${invoice.id}`;
+const isPaidInvoice = (invoice) => invoice.status === 'paid';
+const isPendingInvoice = (invoice) => invoice.status === 'pending';
 
 const SalesList = () => {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const canViewSalesTotals = userHasPermissions(currentUser, [SALE_TOTALS_PERMISSION]);
+  const canViewSalesTotals = userHasAnyPermission(currentUser, FINANCIAL_TOTALS_PERMISSIONS);
   const [sales, setSales]                     = useState([]);
   const [isLoading, setIsLoading]             = useState(false);
   const [error, setError]                     = useState(null);
@@ -48,10 +50,10 @@ const SalesList = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await api.get('/sales/list/');
+      const res = await api.get('/invoices/');
       setSales(res.data);
     } catch (err) {
-      setError('Error al cargar las ventas. Por favor, intente nuevamente.');
+      setError('Error al cargar las ventas desde facturas. Por favor, intente nuevamente.');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -66,16 +68,17 @@ const SalesList = () => {
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(s => {
-        const customer = (s.customer || '').toLowerCase();
-        const date = new Date(s.date).toLocaleString().toLowerCase();
-        return customer.includes(q) || date.includes(q);
+        const customer = invoiceCustomer(s).toLowerCase();
+        const date = new Date(invoiceDate(s)).toLocaleString().toLowerCase();
+        const number = invoiceNumber(s).toLowerCase();
+        return customer.includes(q) || date.includes(q) || number.includes(q);
       });
     }
     if (dateRange.start && dateRange.end) {
       const start = normalizeDate(dateRange.start);
       const end   = normalizeDate(dateRange.end);
       result = result.filter(s => {
-        const d = normalizeDate(s.date);
+        const d = normalizeDate(invoiceDate(s));
         return d && d >= start && d <= end;
       });
     }
@@ -84,12 +87,15 @@ const SalesList = () => {
 
   // Stats derivados
   const statsData = useMemo(() => {
-    const total    = sales.length;
-    const ingresos = sales.reduce((acc, s) => acc + (parseFloat(s.total) || 0), 0);
+    const paidInvoices = sales.filter(isPaidInvoice);
+    const pendingInvoices = sales.filter(isPendingInvoice);
+    const total    = paidInvoices.length;
+    const ingresos = paidInvoices.reduce((acc, s) => acc + (parseFloat(s.total) || 0), 0);
+    const porCobrar = pendingInvoices.reduce((acc, s) => acc + (parseFloat(s.total) || 0), 0);
     const today    = new Date().toISOString().split('T')[0];
-    const hoy      = sales.filter(s => s.date?.startsWith(today)).length;
+    const hoy      = paidInvoices.filter(s => invoiceDate(s)?.startsWith(today)).length;
     const ticket   = total > 0 ? ingresos / total : 0;
-    return { total, ingresos, hoy, ticket };
+    return { total, ingresos, hoy, ticket, pendientes: pendingInvoices.length, porCobrar };
   }, [sales]);
 
   // Paginación
@@ -111,33 +117,21 @@ const SalesList = () => {
     setPage(1);
   };
 
-  const handleDelete = async (id) => {
-    const result = await showConfirmationAlert('¿Estás seguro?', 'Esta acción no se puede deshacer.');
-    if (result.isConfirmed) {
-      try {
-        await api.delete(`/salesUpdate/${id}/`);
-        setSales(prev => prev.filter(s => s.id !== id));
-        if (drawerSale?.id === id) setDrawerSale(null);
-        showSuccessAlert('Eliminado', 'La venta ha sido eliminada correctamente.');
-      } catch (err) {
-        showErrorAlert('Error', 'No se pudo eliminar la venta.');
-      }
-    }
-  };
-
   const exportToExcel = () => {
     if (filteredSales.length === 0) { showErrorAlert('Error', 'No hay datos para exportar.'); return; }
     try {
       const ws = XLSX.utils.json_to_sheet(filteredSales.map(s => ({
-        'ID':               s.id,
-        'Cliente':          s.customer || 'N/A',
-        'Fecha':            new Date(s.date).toLocaleString(),
+        'Factura':          invoiceNumber(s),
+        'Cliente':          invoiceCustomer(s),
+        'Fecha':            new Date(invoiceDate(s)).toLocaleString(),
         ...(canViewSalesTotals ? { 'Total': `$${parseFloat(s.total || 0).toFixed(2)}` } : {}),
         'Productos':        s.details?.length || 0,
+        'Estado':           s.status || '',
+        'e-CF':             s.ecf_status || '',
       })));
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Ventas');
-      XLSX.writeFile(wb, `ventas_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, 'Facturas');
+      XLSX.writeFile(wb, `facturas_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err) {
       showErrorAlert('Error', 'No se pudo generar el archivo Excel.');
     }
@@ -149,13 +143,13 @@ const SalesList = () => {
       generatePDF(
         {
           items: drawerSale.details || [],
-          clientName: drawerSale.customer || 'Consumidor Final',
-          date: drawerSale.date,
+          clientName: invoiceCustomer(drawerSale),
+          date: invoiceDate(drawerSale),
           total: drawerSale.total,
-          invoice_number: drawerSale.id,
+          invoice_number: invoiceNumber(drawerSale),
         },
         {
-          filename: `venta_${drawerSale.id || 'ticket'}.pdf`,
+          filename: `factura_${invoiceNumber(drawerSale)}.pdf`,
           showClientName: true,
         }
       );
@@ -169,7 +163,7 @@ const SalesList = () => {
   const drawerSubtotal = drawerSale
     ? drawerSale.details.reduce((a, i) => a + (parseFloat(i.subtotal) || 0), 0)
     : 0;
-  const drawerTax   = drawerSubtotal * 0.16;
+  const drawerTax   = drawerSubtotal * 0.18;
   const drawerTotal = drawerSubtotal + drawerTax;
 
   const fmt = (n) => new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -191,7 +185,7 @@ const SalesList = () => {
           >
             <IconExcel /> Exportar Excel
           </button>
-          <button className="sl-btn sl-btn-primary" onClick={() => navigate('/sales')}>
+          <button className="sl-btn sl-btn-primary" onClick={() => navigate('/Fastsales')}>
             <IconPlus /> Nueva venta
           </button>
         </nav>
@@ -202,19 +196,26 @@ const SalesList = () => {
           <div className="sl-stats">
             {canViewSalesTotals && (
             <div className="sl-stat">
-              <div className="sl-stat-lbl">Total ventas</div>
+              <div className="sl-stat-lbl">Ventas cobradas</div>
               <div className="sl-stat-val">{isLoading ? '—' : statsData.total}</div>
             </div>
             )}
             {canViewSalesTotals && (
             <div className="sl-stat">
-              <div className="sl-stat-lbl">Ingresos totales</div>
+              <div className="sl-stat-lbl">Ingresos cobrados</div>
               <div className="sl-stat-val">{isLoading ? '—' : `$${fmt(statsData.ingresos)}`}</div>
             </div>
             )}
             <div className="sl-stat">
-              <div className="sl-stat-lbl">Ventas hoy</div>
+              <div className="sl-stat-lbl">Ventas cobradas hoy</div>
               <div className="sl-stat-val">{isLoading ? '—' : statsData.hoy}</div>
+            </div>
+            <div className="sl-stat">
+              <div className="sl-stat-lbl">Cuentas por cobrar</div>
+              <div className="sl-stat-val">{isLoading ? '—' : statsData.pendientes}</div>
+              {canViewSalesTotals && (
+                <div className="sl-stat-sub">{isLoading ? '—' : `$${fmt(statsData.porCobrar)}`} pendiente de cobro</div>
+              )}
             </div>
             {canViewSalesTotals && (
             <div className="sl-stat">
@@ -278,12 +279,12 @@ const SalesList = () => {
             {isLoading ? (
               <div className="sl-loading">
                 <div className="sl-spinner" />
-                Cargando ventas...
+                Cargando facturas...
               </div>
             ) : paginated.length === 0 ? (
               <div className="sl-empty">
-                <div className="sl-empty-icon">🧾</div>
-                <p>{search || dateRange.start ? 'No hay ventas con los filtros aplicados.' : 'No hay ventas registradas.'}</p>
+                <div className="sl-empty-icon"><IconReceipt /></div>
+                <p>{search || dateRange.start ? 'No hay facturas con los filtros aplicados.' : 'No hay facturas registradas.'}</p>
                 <small>Crea una nueva venta desde el botón superior</small>
               </div>
             ) : (
@@ -302,22 +303,22 @@ const SalesList = () => {
                   <tbody>
                     {paginated.map(sale => (
                       <tr key={sale.id}>
-                        <td className="muted mono" style={{ fontSize: 12 }}>#{sale.id}</td>
-                        <td style={{ fontWeight: 500 }}>{sale.customer || 'Consumidor Final'}</td>
-                        <td className="muted" style={{ fontSize: 12 }}>
-                          {new Date(sale.date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        <td data-label="Factura" className="muted mono" style={{ fontSize: 12 }}>{invoiceNumber(sale)}</td>
+                        <td data-label="Cliente" style={{ fontWeight: 500 }}>{invoiceCustomer(sale)}</td>
+                        <td data-label="Fecha" className="muted" style={{ fontSize: 12 }}>
+                          {new Date(invoiceDate(sale)).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
                           {' '}
                           <span style={{ color: '#d1d5db' }}>
-                            {new Date(sale.date).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(invoiceDate(sale)).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </td>
-                        {canViewSalesTotals && <td className="r mono" style={{ fontWeight: 600, color: '#0F6E56' }}>
+                        {canViewSalesTotals && <td data-label="Total" className="r mono" style={{ fontWeight: 600, color: '#0F6E56' }}>
                           ${fmt(parseFloat(sale.total || 0))}
                         </td>}
-                        <td className="c">
+                        <td data-label="Productos" className="c">
                           <span className="sl-badge">{sale.details?.length || 0}</span>
                         </td>
-                        <td className="c">
+                        <td data-label="Acciones" className="c">
                           <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
                             <button
                               className="sl-act-btn sl-act-view"
@@ -325,20 +326,6 @@ const SalesList = () => {
                               onClick={() => setDrawerSale(sale)}
                             >
                               <IconEye />
-                            </button>
-                            <button
-                              className="sl-act-btn sl-act-edit"
-                              title="Editar"
-                              onClick={() => navigate(`/Fastsales/${sale.id}`)}
-                            >
-                              <IconEdit />
-                            </button>
-                            <button
-                              className="sl-act-btn sl-act-del"
-                              title="Eliminar"
-                              onClick={() => handleDelete(sale.id)}
-                            >
-                              <IconTrash />
                             </button>
                           </div>
                         </td>
@@ -350,7 +337,7 @@ const SalesList = () => {
                 {/* Paginación */}
                 <div className="sl-pagination">
                   <span>
-                    {filteredSales.length === 0 ? '0' : `${(currentPage - 1) * ROWS_PER_PAGE + 1}–${Math.min(currentPage * ROWS_PER_PAGE, filteredSales.length)}`} de {filteredSales.length} ventas
+                    {filteredSales.length === 0 ? '0' : `${(currentPage - 1) * ROWS_PER_PAGE + 1}–${Math.min(currentPage * ROWS_PER_PAGE, filteredSales.length)}`} de {filteredSales.length} facturas
                   </span>
                   <div className="sl-pg-btns">
                     <button className="sl-pg-btn" onClick={() => setPage(p => p - 1)} disabled={currentPage === 1}>
@@ -382,7 +369,7 @@ const SalesList = () => {
 
               <div className="sl-drawer-header">
                 <IconReceipt />
-                <span className="sl-drawer-title">Detalles de venta #{drawerSale.id}</span>
+                <span className="sl-drawer-title">Detalle de factura {invoiceNumber(drawerSale)}</span>
 
                 <button className="sl-drawer-close" onClick={handlePrintSale} title="Imprimir PDF">
                   <Printer />
@@ -396,11 +383,11 @@ const SalesList = () => {
               <div className="sl-drawer-meta">
                 <div className="sl-drawer-meta-row">
                   <span>Cliente</span>
-                  <span>{drawerSale.customer || 'Consumidor Final'}</span>
+                  <span>{invoiceCustomer(drawerSale)}</span>
                 </div>
                 <div className="sl-drawer-meta-row">
                   <span>Fecha</span>
-                  <span>{new Date(drawerSale.date).toLocaleString('es-MX')}</span>
+                  <span>{new Date(invoiceDate(drawerSale)).toLocaleString('es-MX')}</span>
                 </div>
                 <div className="sl-drawer-meta-row">
                   <span>Productos</span>
@@ -440,7 +427,7 @@ const SalesList = () => {
                   <span className="val">${fmt(drawerSubtotal)}</span>
                 </div>
                 <div className="sl-drawer-total-row">
-                  <span className="lbl">IVA 16%</span>
+                  <span className="lbl">ITBIS 18%</span>
                   <span className="val">${fmt(drawerTax)}</span>
                 </div>
                 <div className="sl-drawer-grand">

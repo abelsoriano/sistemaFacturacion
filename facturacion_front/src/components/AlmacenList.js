@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from "react-router-dom";
 import { 
-  Package, Plus, Search, Edit, Trash2, 
+  Package, Plus, Search,
   ChevronLeft, ChevronRight, AlertCircle,
-  X, Filter, ArrowUpDown
+  X, Filter, ArrowUpDown, Eye,
+  Layers, MapPin
 } from 'lucide-react';
 import api from "../services/api";
 import { showConfirmationAlert, showSuccessAlert, showErrorAlert } from "../herpert";
@@ -23,6 +24,7 @@ const AlmacenList = () => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedItem, setSelectedItem] = useState(null);
   const itemsPerPage = 10;
   
   const navigate = useNavigate();
@@ -45,10 +47,6 @@ const AlmacenList = () => {
         showErrorAlert("Error", "No se pudo eliminar el producto.");
       }
     }
-  };
-
-  const handleCancel = () => {
-    navigate('/home');
   };
 
   const handleEdit = (itemId) => {
@@ -136,6 +134,9 @@ const AlmacenList = () => {
     setCurrentPage(1);
   };
 
+  const totalStock = filteredItems.reduce((sum, item) => sum + Number(item.stock || 0), 0);
+  const locatedItems = filteredItems.filter(item => item.location).length;
+
   return (
     <div className="almacen-page">
       <div className="almacen-content">
@@ -149,9 +150,6 @@ const AlmacenList = () => {
             </div>
           </div>
           <div className="header-actions">
-            <button onClick={handleCancel} className="btn-secondary">
-              Volver al inicio
-            </button>
             <button onClick={newItem} className="btn-primary">
               <Plus size={16} />
               Nuevo artículo
@@ -206,6 +204,18 @@ const AlmacenList = () => {
             <span className="stat-number">{filteredItems.length}</span>
           </div>
           <div className="stat-item">
+            <span className="stat-label">Categorías</span>
+            <span className="stat-number">{categories.length}</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Unidades</span>
+            <span className="stat-number">{totalStock}</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Con ubicación</span>
+            <span className="stat-number">{locatedItems}</span>
+          </div>
+          <div className="stat-item">
             <span className="stat-label">Stock crítico</span>
             <span className="stat-number critical">
               {filteredItems.filter(i => i.stock <= 3).length}
@@ -257,25 +267,32 @@ const AlmacenList = () => {
                 <tbody>
                   {paginatedItems.map((item) => (
                     <tr key={item.id}>
-                      <td className="item-name">
+                      <td className="item-name" data-label="Nombre">
                         <Package size={16} />
                         {item.name}
                       </td>
-                      <td className="description">{item.description}</td>
-                      <td>
-                        <span className="category-badge">{item.category}</span>
+                      <td className="description" data-label="Descripción">{item.description || 'Sin descripción'}</td>
+                      <td data-label="Categoría">
+                        <span className="category-badge">{item.category || 'Sin categoría'}</span>
                       </td>
-                      <td>{item.location}</td>
-                      <td>
+                      <td data-label="Ubicación">{item.location || 'Sin ubicación'}</td>
+                      <td data-label="Stock">
                         <span className={`stock-badge ${getStockClass(item.stock)}`}>
                           {item.stock <= 3 && <AlertCircle size={12} />}
                           {item.stock}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Acciones">
                         <div className="action-buttons">
                           <button
-                          className="sl-act-btn sl-act-edit"
+                            className="sl-act-btn"
+                            onClick={() => setSelectedItem(item)}
+                            title="Ver artículo"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            className="sl-act-btn sl-act-edit"
                             onClick={() => handleEdit(item.id)}
                             title="Editar"
                           >
@@ -319,6 +336,47 @@ const AlmacenList = () => {
           </>
         )}
       </div>
+
+      {selectedItem && (
+        <div className="alm-modal-backdrop" role="presentation" onClick={() => setSelectedItem(null)}>
+          <section className="alm-modal" role="dialog" aria-modal="true" aria-labelledby="alm-modal-title" onClick={(e) => e.stopPropagation()}>
+            <div className="alm-modal-header">
+              <div>
+                <p className="alm-kicker">Detalle de artículo</p>
+                <h2 id="alm-modal-title">{selectedItem.name}</h2>
+              </div>
+              <button className="alm-modal-close" onClick={() => setSelectedItem(null)} aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="alm-detail-grid">
+              <div className="alm-detail-card">
+                <Layers size={18} />
+                <span>Categoría</span>
+                <strong>{selectedItem.category || 'Sin categoría'}</strong>
+              </div>
+              <div className="alm-detail-card">
+                <MapPin size={18} />
+                <span>Ubicación</span>
+                <strong>{selectedItem.location || 'Sin ubicación'}</strong>
+              </div>
+              <div className="alm-detail-card">
+                <Package size={18} />
+                <span>Stock disponible</span>
+                <strong>{selectedItem.stock}</strong>
+              </div>
+            </div>
+            <div className="alm-description-box">
+              <span>Descripción</span>
+              <p>{selectedItem.description || 'Este artículo no tiene descripción registrada.'}</p>
+            </div>
+            <div className="alm-modal-actions">
+              <button className="btn-secondary" onClick={() => setSelectedItem(null)}>Cerrar</button>
+              <button className="btn-primary" onClick={() => handleEdit(selectedItem.id)}>Editar artículo</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };

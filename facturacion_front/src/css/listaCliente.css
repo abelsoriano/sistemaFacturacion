@@ -9,9 +9,9 @@
     --text: #0f172a;
     --text-muted: #475569;
     --text-faint: #94a3b8;
-    --primary: #3b82f6;
-    --primary-dark: #2563eb;
-    --primary-light: #eff6ff;
+    --primary: var(--saas-primary, #6C63FF);
+    --primary-dark: #5a52df;
+    --primary-light: var(--saas-active, #EEEDFE);
     --success: #10b981;
     --success-light: #d1fae5;
     --danger: #ef4444;
@@ -32,8 +32,6 @@
     --mono: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
   }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
   .cl-root {
     font-family: var(--font);
     background: var(--bg-page);
@@ -41,43 +39,25 @@
     color: var(--text);
   }
 
-  /* Header */
   .cl-header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0.75rem 1rem;
-    display: flex;
-    flex-wrap: wrap;
+    width: min(100%, 1280px);
+    margin: 0 auto;
+    padding: 24px 24px 8px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    gap: 0.75rem;
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    backdrop-filter: blur(8px);
-    background: rgba(255,255,255,0.95);
-  }
-
-  @media (min-width: 768px) {
-    .cl-header {
-      padding: 0 1.5rem;
-      height: 64px;
-      flex-wrap: nowrap;
-    }
+    gap: 12px;
   }
 
   .cl-header-title {
-    font-size: 0.875rem;
-    font-weight: 600;
-    display: flex;
+    min-width: 0;
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    flex: 1;
-  }
-
-  @media (min-width: 640px) {
-    .cl-header-title {
-      font-size: 1rem;
-    }
+    gap: 10px;
+    color: var(--text);
+    font-size: 1.55rem;
+    font-weight: 780;
+    letter-spacing: 0;
   }
 
   .cl-header-actions {
@@ -86,17 +66,10 @@
     flex-wrap: wrap;
   }
 
-  /* Main Content */
   .cl-body {
-    padding: 1rem;
-    max-width: 1400px;
+    width: min(100%, 1280px);
     margin: 0 auto;
-  }
-
-  @media (min-width: 768px) {
-    .cl-body {
-      padding: 1.5rem;
-    }
+    padding: 24px;
   }
 
   /* Stats Grid */
@@ -110,8 +83,9 @@
   .cl-stat-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+    border-radius: 8px;
     padding: 1rem;
+    box-shadow: var(--shadow);
     transition: all 0.2s ease;
   }
 
@@ -149,7 +123,7 @@
   .cl-filter-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+    border-radius: 8px;
     margin-bottom: 1rem;
     overflow: hidden;
   }
@@ -242,7 +216,7 @@
   .cl-table-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+    border-radius: 8px;
     overflow: hidden;
     box-shadow: var(--shadow);
   }
@@ -272,8 +246,48 @@
     font-weight: 600;
     padding: 0.1875rem 0.5rem;
     border-radius: 9999px;
-    background: var(--surface-2);
+    background: var(--primary-light);
+    color: var(--primary);
+  }
+
+  .cl-client-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+  }
+
+  .cl-client-main {
+    display: grid;
+    gap: 0.18rem;
+    min-width: 0;
+  }
+
+  .cl-client-name {
+    color: var(--text);
+    font-weight: 750;
+  }
+
+  .cl-client-meta {
     color: var(--text-faint);
+    font-size: 0.72rem;
+  }
+
+  .cl-contact-stack {
+    display: grid;
+    gap: 0.24rem;
+    font-size: 0.75rem;
+  }
+
+  .cl-contact-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--text-muted);
+  }
+
+  .text-end {
+    text-align: right;
   }
 
   /* Table Responsive */
@@ -285,7 +299,7 @@
   .cl-table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 700px;
+    min-width: 860px;
   }
 
   .cl-table th {
@@ -360,12 +374,27 @@
     justify-content: flex-end;
   }
 
+  .cl-action-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding-right: 0.4rem;
+    border-right: 1px solid var(--border);
+  }
+
+  .cl-action-group:last-child {
+    border-right: 0;
+    padding-right: 0;
+  }
+
   .cl-action-btn {
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.375rem;
-    padding: 0.375rem;
+    padding: 0;
     border: none;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -611,4 +640,113 @@
 
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  @media (max-width: 760px) {
+    .cl-header {
+      grid-template-columns: 1fr;
+      padding: 18px 14px 8px;
+    }
+
+    .cl-header-title {
+      order: -1;
+      font-size: 1.35rem;
+    }
+
+    .cl-header-actions {
+      width: 100%;
+    }
+
+    .cl-header-actions > * {
+      flex: 1;
+      justify-content: center;
+    }
+
+    .cl-body {
+      padding: 14px;
+    }
+
+    .cl-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-bottom: 1rem;
+    }
+
+    .cl-filter-header,
+    .cl-table-header,
+    .cl-pagination {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .cl-table-wrapper {
+      overflow: visible;
+    }
+
+    .cl-table,
+    .cl-table thead,
+    .cl-table tbody,
+    .cl-table th,
+    .cl-table td,
+    .cl-table tr {
+      display: block;
+      min-width: 0;
+    }
+
+    .cl-table thead {
+      display: none;
+    }
+
+    .cl-table tbody {
+      display: grid;
+      gap: 10px;
+      background: #f8fafc;
+      padding: 10px;
+    }
+
+    .cl-table tbody tr {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .cl-table td {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      border-bottom: 1px solid #f1f5f9;
+      padding: 10px 2px;
+      text-align: right;
+    }
+
+    .cl-table td:last-child {
+      border-bottom: 0;
+    }
+
+    .cl-table td::before {
+      content: attr(data-label);
+      flex: 0 0 96px;
+      color: var(--text-faint);
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    .cl-client-cell {
+      justify-content: flex-end;
+      text-align: right;
+    }
+
+    .cl-contact-stack {
+      align-items: flex-end;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .cl-stats {
+      grid-template-columns: 1fr;
+    }
   }

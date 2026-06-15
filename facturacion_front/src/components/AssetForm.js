@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
-import { showSuccessAlert, showGenericAlert } from '../herpert';
 import { toast, Toaster } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import { 
@@ -10,8 +9,9 @@ import {
   FaBuilding, FaFileAlt, FaCog, FaChartLine,
   FaMoneyBillWave, FaCalendarAlt, FaShieldAlt,
   FaWrench, FaClipboardList, FaUser, FaBox,
-  FaInfoCircle, FaCheck, FaExclamationTriangle
+  FaInfoCircle, FaCheck
 } from 'react-icons/fa';
+import '../css/activo.css';
 
 /* ─── CSS Moderno y Responsive ──────────────────────────────────────────── */
 const STYLES = `
@@ -465,14 +465,7 @@ function AssetForm() {
     { value: 'poor', label: 'Malo', icon: '👎' }
   ];
 
-  useEffect(() => {
-    fetchCategories();
-    if (isEditMode) {
-      fetchAsset();
-    }
-  }, [id]);
-
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const response = await api.get('assets/categories/');
       setCategories(response.data);
@@ -480,9 +473,9 @@ function AssetForm() {
       console.error('Error al cargar categorías:', error);
       toast.error('Error al cargar las categorías');
     }
-  };
+  }, []);
 
-  const fetchAsset = async () => {
+  const fetchAsset = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get(`assets/${id}/`);
@@ -513,7 +506,14 @@ function AssetForm() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate]);
+
+  useEffect(() => {
+    fetchCategories();
+    if (isEditMode) {
+      fetchAsset();
+    }
+  }, [fetchAsset, fetchCategories, isEditMode]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -637,21 +637,13 @@ function AssetForm() {
     }
   };
 
-  const getStatusBadgeClass = (status) => {
-    return `status-${status}`;
-  };
-
-  const getConditionBadgeClass = (condition) => {
-    return `condition-${condition}`;
-  };
-
   if (loading && isEditMode) {
     return (
       <div className="af-root">
         <InjectStyles />
         <div className="af-loading">
           <div className="af-spinner-large" />
-          <span style={{ color: 'var(--text-muted)' }}>Cargando activo...</span>
+          <span className="af-loading-text">Cargando activo...</span>
         </div>
       </div>
     );
@@ -1037,17 +1029,7 @@ function AssetForm() {
         </div>
 
         {/* Información adicional */}
-        <div style={{ 
-          background: 'var(--info-light)', 
-          borderRadius: 'var(--radius-md)', 
-          padding: '0.75rem 1rem', 
-          marginTop: '1rem',
-          fontSize: '0.75rem',
-          color: 'var(--info)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem'
-        }}>
+        <div className="af-info-card">
           <FaInfoCircle size={14} />
           <span><strong>Consejo:</strong> Complete toda la información relevante para mantener un registro actualizado de sus activos. Los campos marcados con * son obligatorios.</span>
         </div>

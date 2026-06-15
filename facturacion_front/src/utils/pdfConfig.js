@@ -6,9 +6,9 @@ export const PDF_DEFAULT_CONFIG = {
   currencySymbol: '$',
   filename: 'ticket.pdf',
   company: {
-    name: 'REPUESTOS BEBE',
-    address: 'San Felipe de Villa Mella, C/Liecy No.88',
-    phone: 'Tel: (809) 986-6178',
+    name: 'Nombre de la Empresa',
+    address: 'Dirección de la Empresa',
+    phone: 'Tel: Teléfono de la Empresa ',
     city: 'Santo Domingo Rep. Dom.',
   },
   showCompanyHeader: true,

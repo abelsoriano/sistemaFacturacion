@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Package, Check, AlertCircle, Tag, MapPin, FileText, Loader } from 'lucide-react';
 import { useNavigate, useParams} from "react-router-dom";
-import {styles, showGenericAlert, showSuccessAlert} from "../herpert";
+import {showGenericAlert, showSuccessAlert} from "../herpert";
 import api from "../services/api"; // Importa la instancia de Axios
+import '../css/AlmacenList.css';
 
 const AlmacenForm = () => {
   const { id } = useParams();
@@ -19,11 +20,6 @@ const AlmacenForm = () => {
   const [categories, setCategories] = useState([]);
   const [status, setStatus] = useState({ type: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hoverStates, setHoverStates] = useState({
-    cancel: false,
-    submit: false
-  });
-
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -123,189 +119,125 @@ const AlmacenForm = () => {
   };
   
   return (
-    <div className="container mt-5">
-      <h2 style={styles.formHeader}>
-        <span style={{ marginRight: '8px' }}><Package /></span>
-        {id ? 'Editar Artículo' : 'Agregar Artículo al Almacén'}
-      </h2>
-
-      {status.message && (
-        <div style={{
-          ...styles.alertBox,
-          ...(status.type === 'success' ? styles.successAlert : styles.errorAlert)
-        }}>
-          <span style={styles.icon}>
-            {status.type === 'success' ? <Check /> : <AlertCircle />}
-          </span>
-          <span>{status.message}</span>
+    <div className="alm-form-shell">
+      <div className="alm-form-wrap">
+        <div className="alm-form-header">
+          <span className="alm-form-header-icon"><Package size={22} /></span>
+          <div>
+            <h1>{id ? 'Editar artículo' : 'Agregar artículo al almacén'}</h1>
+            <p>Registra artículos operativos sin modificar la lógica de inventario.</p>
+          </div>
         </div>
-      )}
 
-      <div>
-        <div style={styles.formGrid}>
-          <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="name">
-              Nombre del artículo
-            </label>
-            <div style={{ position: 'relative' }}>
+        {status.message && (
+          <div className={`alm-alert ${status.type === 'success' ? 'success' : 'error'}`}>
+            {status.type === 'success' ? <Check size={18} /> : <AlertCircle size={18} />}
+            <span>{status.message}</span>
+          </div>
+        )}
+
+        <form className="alm-form-card" onSubmit={handleSubmit}>
+          <div className="alm-form-grid">
+            <div className="alm-form-group">
+              <label htmlFor="name">Nombre del artículo</label>
+              <div className="alm-input-shell">
+                <Tag size={17} />
+                <input
+                  id="name"
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  className="alm-form-input"
+                  placeholder="Ej: Monitor LCD 24"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="alm-form-group">
+              <label htmlFor="location">Ubicación</label>
+              <div className="alm-input-shell">
+                <MapPin size={17} />
+                <input
+                  id="location"
+                  type="text"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleChange}
+                  className="alm-form-input"
+                  placeholder="Ej: Estante A, Bodega 2"
+                />
+              </div>
+            </div>
+
+            <div className="alm-form-group">
+              <label htmlFor="stock">Stock disponible</label>
               <input
-                id="name"
-                type="text"
-                name="name"
-                value={formData.name}
+                id="stock"
+                type="number"
+                name="stock"
+                value={formData.stock}
                 onChange={handleChange}
-                style={{
-                  ...styles.input,
-                  paddingLeft: '36px'
-                }}
-                placeholder="Ej: Monitor LCD 24"
+                className="alm-form-input"
+                min="0"
                 required
+                placeholder="0"
               />
-              <div style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#9ca3af'
-              }}>
-                <Tag />
-              </div>
             </div>
-          </div>
 
-          <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="location">
-              Ubicación
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="location"
-                type="text"
-                name="location"
-                value={formData.location}
+            <div className="alm-form-group">
+              <label htmlFor="category_id">Categoría</label>
+              <select
+                id="category_id"
+                name="category_id"
+                value={formData.category_id}
                 onChange={handleChange}
-                style={{
-                  ...styles.input,
-                  paddingLeft: '36px'
-                }}
-                placeholder="Ej: Estante A, Bodega 2"
-              />
-              <div style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#9ca3af'
-              }}>
-                <MapPin />
+                className="alm-form-select"
+                required
+              >
+                <option value="">Seleccionar categoría</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="alm-form-group alm-form-full">
+              <label htmlFor="description">Descripción</label>
+              <div className="alm-input-shell alm-textarea-shell">
+                <FileText size={17} />
+                <textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  className="alm-form-textarea"
+                  placeholder="Ingresa los detalles relevantes del artículo..."
+                />
               </div>
             </div>
           </div>
 
-          <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="stock">
-              Stock disponible
-            </label>
-            <input
-              id="stock"
-              type="number"
-              name="stock"
-              value={formData.stock}
-              onChange={handleChange}
-              style={styles.input}
-              min="0"
-              required
-              placeholder="0"
-            />
+          <div className="alm-form-actions">
+            <button type="button" onClick={handleCancel} className="btn-secondary">
+              Cancelar
+            </button>
+            <button type="submit" disabled={isSubmitting} className="btn-primary">
+              {isSubmitting ? (
+                <React.Fragment>
+                  <Loader size={17} />
+                  Guardando...
+                </React.Fragment>
+              ) : (
+                <React.Fragment>
+                  <Save size={17} />
+                  {id ? 'Actualizar artículo' : 'Guardar artículo'}
+                </React.Fragment>
+              )}
+            </button>
           </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="category_id">
-              Categoría
-            </label>
-            <select
-              id="category_id"
-              name="category_id"
-              value={formData.category_id}
-              onChange={handleChange}
-              style={styles.select}
-              required
-            >
-              <option value="">Seleccionar categoría</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div style={styles.formGroup}>
-          <label style={styles.label} htmlFor="description">
-            Descripción
-          </label>
-          <div style={{ position: 'relative' }}>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              style={{
-                ...styles.textarea,
-                paddingLeft: '36px'
-              }}
-              placeholder="Ingresa los detalles relevantes del artículo..."
-            />
-            <div style={{
-              position: 'absolute',
-              left: '12px',
-              top: '16px',
-              color: '#9ca3af'
-            }}>
-              <FileText />
-            </div>
-          </div>
-        </div>
-
-        <div style={styles.buttonContainer}>
-          <button
-            type="button"
-            onClick={handleCancel}
-            onMouseEnter={() => setHoverStates(prev => ({ ...prev, cancel: true }))}
-            onMouseLeave={() => setHoverStates(prev => ({ ...prev, cancel: false }))}
-            style={{
-              ...styles.button,
-              ...styles.cancelButton,
-              ...(hoverStates.cancel ? styles.cancelButtonHover : {})
-            }}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={handleSubmit}
-            onMouseEnter={() => setHoverStates(prev => ({ ...prev, submit: true }))}
-            onMouseLeave={() => setHoverStates(prev => ({ ...prev, submit: false }))}
-            style={{
-              ...styles.button,
-              ...styles.submitButton,
-              ...(hoverStates.submit && !isSubmitting ? styles.submitButtonHover : {}),
-              ...(isSubmitting ? styles.submitButtonDisabled : {})
-            }}
-          >
-            {isSubmitting ? (
-              <React.Fragment>
-                <span style={{ marginRight: '8px', display: 'inline-block', animation: 'spin 1s linear infinite' }}><Loader /></span>
-                Guardando...
-              </React.Fragment>
-            ) : (
-              <React.Fragment>
-                <span style={{ marginRight: '8px' }}><Save /></span>
-                {id ? 'Actualizar Artículo' : 'Guardar Artículo'}
-              </React.Fragment>
-            )}
-          </button>
-        </div>
+        </form>
       </div>
     </div>
   );

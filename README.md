@@ -41,8 +41,7 @@ for producto in productos:
 print("¡Completado!")
 
 
-para windos 
-
+# Añadido contenido descriptivo del proyecto
 from facturacion.models import Product
 
 productos = Product.objects.filter(barcode__isnull=True)
@@ -53,3 +52,4 @@ for producto in productos:
     print(f"✓ {producto.name}: {producto.barcode}")
 
 print("¡Completado!")
+

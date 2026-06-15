@@ -1,136 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
-import { FaUser, FaEnvelope, FaSave, FaTimes, FaArrowLeft } from 'react-icons/fa';
-
-const styles = {
-  container: {
-    maxWidth: 600,
-    margin: "40px auto",
-    padding: "30px",
-    border: "1px solid #e0e0e0",
-    borderRadius: "12px",
-    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-    backgroundColor: "#ffffff",
-  },
-  header: {
-    textAlign: "center",
-    color: "#333",
-    marginBottom: "10px",
-    fontSize: "28px",
-    fontWeight: "bold"
-  },
-  subtitle: {
-    textAlign: "center",
-    color: "#666",
-    marginBottom: "30px",
-    fontSize: "14px"
-  },
-  formGroup: {
-    marginBottom: "20px",
-  },
-  label: {
-    display: "block",
-    marginBottom: "8px",
-    fontWeight: "600",
-    color: "#555",
-    fontSize: "14px"
-  },
-  inputWrapper: {
-    position: "relative",
-    display: "flex",
-    alignItems: "center"
-  },
-  icon: {
-    position: "absolute",
-    left: "12px",
-    color: "#999",
-    zIndex: 1
-  },
-  input: {
-    width: "100%",
-    padding: "12px 12px 12px 40px",
-    border: "1px solid #ddd",
-    borderRadius: "6px",
-    boxSizing: "border-box",
-    fontSize: "15px",
-    transition: "border-color 0.3s",
-    outline: "none"
-  },
-  buttonGroup: {
-    display: "flex",
-    gap: "10px",
-    marginTop: "30px"
-  },
-  button: {
-    flex: 1,
-    padding: "12px",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "15px",
-    fontWeight: "600",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "8px",
-    transition: "all 0.3s"
-  },
-  buttonPrimary: {
-    backgroundColor: "#007bff",
-    color: "white",
-  },
-  buttonSecondary: {
-    backgroundColor: "#6c757d",
-    color: "white",
-  },
-  backButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "8px 16px",
-    backgroundColor: "transparent",
-    border: "1px solid #ddd",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "14px",
-    color: "#666",
-    marginBottom: "20px",
-    transition: "all 0.3s"
-  },
-  avatar: {
-    width: "80px",
-    height: "80px",
-    borderRadius: "50%",
-    backgroundColor: "#007bff",
-    color: "white",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "32px",
-    fontWeight: "bold",
-    margin: "0 auto 20px",
-    border: "4px solid #e3f2fd"
-  },
-  alert: {
-    padding: "12px 16px",
-    borderRadius: "6px",
-    marginBottom: "20px",
-    display: "flex",
-    alignItems: "center",
-    gap: "10px"
-  },
-  alertSuccess: {
-    backgroundColor: "#d4edda",
-    color: "#155724",
-    border: "1px solid #c3e6cb"
-  },
-  alertError: {
-    backgroundColor: "#f8d7da",
-    color: "#721c24",
-    border: "1px solid #f5c6cb"
-  }
-};
+import { FaArrowLeft, FaEnvelope, FaIdBadge, FaSave, FaShieldAlt, FaTimes, FaUser } from 'react-icons/fa';
+import api, { authService } from '../services/api';
+import '../css/Profile.css';
 
 export default function Profile() {
   const [formData, setFormData] = useState({
@@ -144,7 +16,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  
+
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
@@ -166,29 +38,27 @@ export default function Profile() {
       return;
     }
 
-    axios.get("http://127.0.0.1:8000/api/profile/", {
-      headers: { Authorization: `Token ${token}` }
-    })
-    .then(res => {
-      const userData = {
-        first_name: res.data.first_name || "",
-        last_name: res.data.last_name || "",
-        email: res.data.email || "",
-        username: res.data.username || ""
-      };
-      setFormData(userData);
-      setOriginalData(userData);
-    })
-    .catch(err => {
-      console.error("Error al cargar el perfil:", err);
-      setError("No se pudo cargar el perfil.");
-      if (err.response?.status === 401) {
-        navigate('/');
-      }
-    })
-    .finally(() => {
-      setLoading(false);
-    });
+    api.get("/profile/")
+      .then(res => {
+        const userData = {
+          first_name: res.data.first_name || "",
+          last_name: res.data.last_name || "",
+          email: res.data.email || "",
+          username: res.data.username || ""
+        };
+        setFormData(userData);
+        setOriginalData(userData);
+      })
+      .catch(err => {
+        console.error("Error al cargar el perfil:", err);
+        setError("No se pudo cargar el perfil.");
+        if (err.response?.status === 401) {
+          navigate('/');
+        }
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [token, navigate]);
 
   const handleChange = (e) => {
@@ -203,38 +73,35 @@ export default function Profile() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (loading || saving) return;
-    
+
     setSaving(true);
     setError(null);
-    
-    axios.put("http://127.0.0.1:8000/api/profile/", formData, {
-      headers: { Authorization: `Token ${token}` }
-    })
-    .then(res => {
-      setSuccess(true);
-      
-      // Actualizar localStorage con los nuevos datos
-      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const updatedUser = {
-        ...currentUser,
-        first_name: res.data.user.first_name,
-        last_name: res.data.user.last_name,
-        email: res.data.user.email
-      };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      
-      // Redirigir después de 1.5 segundos
-      setTimeout(() => {
-        navigate('/home');
-      }, 1500);
-    })
-    .catch(err => {
-      console.error("Error al actualizar el perfil:", err);
-      setError(err.response?.data?.message || "Error al actualizar el perfil");
-    })
-    .finally(() => {
-      setSaving(false);
-    });
+
+    api.put("/profile/", formData)
+      .then(res => {
+        setSuccess(true);
+
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const updatedUser = {
+          ...currentUser,
+          first_name: res.data.user.first_name,
+          last_name: res.data.user.last_name,
+          email: res.data.user.email
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        authService.updateUserData(updatedUser);
+
+        setTimeout(() => {
+          navigate('/home');
+        }, 1500);
+      })
+      .catch(err => {
+        console.error("Error al actualizar el perfil:", err);
+        setError(err.response?.data?.message || "Error al actualizar el perfil");
+      })
+      .finally(() => {
+        setSaving(false);
+      });
   };
 
   const handleCancel = () => {
@@ -247,137 +114,162 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div style={styles.container}>
-        <p style={styles.header}>Cargando perfil...</p>
+      <div className="profile-page">
+        <div className="profile-loading-card">
+          <span className="profile-spinner"></span>
+          <p>Cargando perfil...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <button 
-        onClick={handleCancel}
-        style={styles.backButton}
-        onMouseEnter={(e) => {
-          e.target.style.backgroundColor = "#f8f9fa";
-          e.target.style.borderColor = "#999";
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.backgroundColor = "transparent";
-          e.target.style.borderColor = "#ddd";
-        }}
-      >
-        <FaArrowLeft /> Volver al Dashboard
-      </button>
-
-      <div style={styles.avatar}>
-        {getUserInitials()}
-      </div>
-
-      <h2 style={styles.header}>Perfil de Usuario</h2>
-      <p style={styles.subtitle}>@{formData.username}</p>
-
-      {success && (
-        <div style={{...styles.alert, ...styles.alertSuccess}}>
-          <span>✓</span>
-          <span>¡Perfil actualizado correctamente! Redirigiendo...</span>
-        </div>
-      )}
-
-      {error && (
-        <div style={{...styles.alert, ...styles.alertError}}>
-          <span>✗</span>
-          <span>{error}</span>
-        </div>
-      )}
-
-      <div>
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Nombre</label>
-          <div style={styles.inputWrapper}>
-            <FaUser style={styles.icon} />
-            <input
-              type="text"
-              name="first_name"
-              value={formData.first_name}
-              onChange={handleChange}
-              style={styles.input}
-              placeholder="Ingresa tu nombre"
-              onFocus={(e) => e.target.style.borderColor = "#007bff"}
-              onBlur={(e) => e.target.style.borderColor = "#ddd"}
-            />
-          </div>
-        </div>
-
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Apellido</label>
-          <div style={styles.inputWrapper}>
-            <FaUser style={styles.icon} />
-            <input
-              type="text"
-              name="last_name"
-              value={formData.last_name}
-              onChange={handleChange}
-              style={styles.input}
-              placeholder="Ingresa tu apellido"
-              onFocus={(e) => e.target.style.borderColor = "#007bff"}
-              onBlur={(e) => e.target.style.borderColor = "#ddd"}
-            />
-          </div>
-        </div>
-
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Correo Electrónico</label>
-          <div style={styles.inputWrapper}>
-            <FaEnvelope style={styles.icon} />
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              style={styles.input}
-              placeholder="correo@ejemplo.com"
-              onFocus={(e) => e.target.style.borderColor = "#007bff"}
-              onBlur={(e) => e.target.style.borderColor = "#ddd"}
-            />
-          </div>
-        </div>
-
-        <div style={styles.buttonGroup}>
-          <button 
-            type="button"
-            onClick={handleCancel}
-            style={{...styles.button, ...styles.buttonSecondary}}
-            disabled={saving}
-            onMouseEnter={(e) => !saving && (e.target.style.backgroundColor = "#5a6268")}
-            onMouseLeave={(e) => !saving && (e.target.style.backgroundColor = "#6c757d")}
-          >
-            <FaTimes /> Cancelar
+    <div className="profile-page">
+      <div className="profile-shell">
+        <header className="profile-hero">
+          <button type="button" className="profile-back-btn" onClick={handleCancel}>
+            <FaArrowLeft /> Volver
           </button>
-          
-          <button 
-            type="button"
-            onClick={handleSubmit}
-            style={{
-              ...styles.button, 
-              ...styles.buttonPrimary,
-              opacity: (!hasChanges() || saving) ? 0.6 : 1,
-              cursor: (!hasChanges() || saving) ? "not-allowed" : "pointer"
-            }}
-            disabled={!hasChanges() || saving}
-            onMouseEnter={(e) => hasChanges() && !saving && (e.target.style.backgroundColor = "#0056b3")}
-            onMouseLeave={(e) => hasChanges() && !saving && (e.target.style.backgroundColor = "#007bff")}
-          >
-            {saving ? (
-              <>Guardando...</>
-            ) : (
-              <>
-                <FaSave /> Guardar Cambios
-              </>
-            )}
-          </button>
+          <div className="profile-title-block">
+            <span className="profile-eyebrow">Mi cuenta</span>
+            <h1>Perfil de usuario</h1>
+            <p>Administra tu información personal visible dentro del ERP.</p>
+          </div>
+        </header>
+
+        {success && (
+          <div className="profile-alert success">
+            <span>✓</span>
+            <span>Perfil actualizado correctamente. Redirigiendo...</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="profile-alert error">
+            <span>✗</span>
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div className="profile-layout">
+          <aside className="profile-summary-card">
+            <div className="profile-avatar">{getUserInitials()}</div>
+            <h2>{fullName(formData) || formData.username || 'Usuario'}</h2>
+            <p>@{formData.username || 'sin_usuario'}</p>
+
+            <div className="profile-info-list">
+              <div>
+                <FaIdBadge />
+                <span>Usuario</span>
+                <strong>{formData.username || 'No definido'}</strong>
+              </div>
+              <div>
+                <FaEnvelope />
+                <span>Correo</span>
+                <strong>{formData.email || 'No definido'}</strong>
+              </div>
+            </div>
+          </aside>
+
+          <main className="profile-main">
+            <form className="profile-card" onSubmit={handleSubmit}>
+              <div className="profile-card-header">
+                <div>
+                  <span>Información personal</span>
+                  <h2>Datos del usuario</h2>
+                </div>
+                <FaUser />
+              </div>
+
+              <div className="profile-form-grid">
+                <div className="profile-field">
+                  <label htmlFor="first_name">Nombre</label>
+                  <div className="profile-input-wrap">
+                    <FaUser />
+                    <input
+                      id="first_name"
+                      type="text"
+                      name="first_name"
+                      value={formData.first_name}
+                      onChange={handleChange}
+                      placeholder="Ingresa tu nombre"
+                    />
+                  </div>
+                </div>
+
+                <div className="profile-field">
+                  <label htmlFor="last_name">Apellido</label>
+                  <div className="profile-input-wrap">
+                    <FaUser />
+                    <input
+                      id="last_name"
+                      type="text"
+                      name="last_name"
+                      value={formData.last_name}
+                      onChange={handleChange}
+                      placeholder="Ingresa tu apellido"
+                    />
+                  </div>
+                </div>
+
+                <div className="profile-field full-width">
+                  <label htmlFor="email">Correo electrónico</label>
+                  <div className="profile-input-wrap">
+                    <FaEnvelope />
+                    <input
+                      id="email"
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="correo@ejemplo.com"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="profile-actions">
+                <button type="button" className="profile-btn secondary" onClick={handleCancel} disabled={saving}>
+                  <FaTimes /> Cancelar
+                </button>
+                <button type="submit" className="profile-btn primary" disabled={!hasChanges() || saving}>
+                  {saving ? (
+                    <>Guardando...</>
+                  ) : (
+                    <>
+                      <FaSave /> Guardar cambios
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+            <section className="profile-card profile-security-card">
+              <div className="profile-card-header">
+                <div>
+                  <span>Seguridad</span>
+                  <h2>Cuenta y acceso</h2>
+                </div>
+                <FaShieldAlt />
+              </div>
+              <div className="profile-security-grid">
+                <div>
+                  <strong>Sesión activa</strong>
+                  <p>Tu acceso usa el token de autenticación actual.</p>
+                </div>
+                <div>
+                  <strong>Cambio de contraseña</strong>
+                  <p>Disponible en una próxima fase de seguridad de cuenta.</p>
+                </div>
+              </div>
+            </section>
+          </main>
         </div>
       </div>
     </div>
   );
+}
+
+function fullName(user) {
+  return [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
 }

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Users, UserPlus, Edit, Trash2, Shield, User, Mail, Calendar, CheckCircle, XCircle, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Users, UserPlus, Edit, Trash2, Shield, User, CheckCircle, XCircle, ChevronLeft, ChevronRight, Search, Eye } from 'lucide-react';
 import api from '../services/api';
 import { authService } from '../services/api';
 import UserForm from './UserForm';
@@ -12,15 +11,13 @@ const UserList = () => {
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
-
-  const navigate = useNavigate();
-
   useEffect(() => {
     loadUsers();
     setCurrentUser(authService.getCurrentUser());
@@ -69,10 +66,6 @@ const UserList = () => {
     handleFormClose();
   };
 
-  const handleCancel = () => {
-    navigate('/home');
-  };
-
   const getRoleDisplay = (user) => {
     if (user.is_superuser) return { text: 'Superusuario', type: 'super' };
     if (user.is_staff) return { text: 'Administrador', type: 'admin' };
@@ -91,7 +84,6 @@ const UserList = () => {
       (statusFilter === 'active' && user.is_active) ||
       (statusFilter === 'inactive' && !user.is_active);
     
-    const role = getRoleDisplay(user);
     const matchesRole = roleFilter === 'all' ||
       (roleFilter === 'super' && user.is_superuser) ||
       (roleFilter === 'admin' && user.is_staff && !user.is_superuser) ||
@@ -149,9 +141,6 @@ const UserList = () => {
             </div>
           </div>
           <div className="header-actions">
-            <button onClick={handleCancel} className="btn-secondary">
-              Volver al inicio
-            </button>
             <button onClick={() => setShowForm(true)} className="btn-primary">
               <UserPlus size={16} />
               Nuevo Usuario
@@ -283,7 +272,7 @@ const UserList = () => {
                     const role = getRoleDisplay(user);
                     return (
                       <tr key={user.id}>
-                        <td className="username-cell">
+                        <td className="username-cell" data-label="Usuario">
                           <div className="username-wrapper">
                             <div className="user-avatar">
                               <User size={16} />
@@ -291,19 +280,19 @@ const UserList = () => {
                             <span className="username">{user.username}</span>
                           </div>
                         </td>
-                        <td className="email-cell">{user.email || '-'}</td>
-                        <td>
+                        <td className="email-cell" data-label="Email">{user.email || '-'}</td>
+                        <td data-label="Nombre Completo">
                           {user.first_name || user.last_name
                             ? `${user.first_name} ${user.last_name}`.trim()
                             : '-'}
                         </td>
-                        <td>
+                        <td data-label="Rol">
                           <span className={`role-badge ${role.type}`}>
                             <Shield size={12} />
                             {role.text}
                           </span>
                         </td>
-                        <td>
+                        <td data-label="Estado">
                           <span className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}>
                             {user.is_active ? (
                               <>
@@ -318,7 +307,7 @@ const UserList = () => {
                             )}
                           </span>
                         </td>
-                        <td className="last-login">
+                        <td className="last-login" data-label="Último Login">
                           {user.last_login
                             ? new Date(user.last_login).toLocaleDateString('es-ES', {
                                 day: '2-digit',
@@ -327,8 +316,15 @@ const UserList = () => {
                               })
                             : 'Nunca'}
                         </td>
-                        <td>
+                        <td data-label="Acciones">
                           <div className="action-buttons">
+                            <button
+                              onClick={() => setSelectedUser(user)}
+                              className="icon-btn view"
+                              title="Ver usuario"
+                            >
+                              <Eye size={16} />
+                            </button>
                             <button
                               onClick={() => handleEdit(user)}
                               className="icon-btn edit"
@@ -385,6 +381,47 @@ const UserList = () => {
           onClose={handleFormClose}
           onSave={handleFormSave}
         />
+      )}
+
+      {selectedUser && (
+        <div className="user-detail-overlay" onClick={(e) => e.target === e.currentTarget && setSelectedUser(null)}>
+          <section className="user-detail-modal" role="dialog" aria-modal="true" aria-labelledby="user-detail-title">
+            <div className="user-detail-header">
+              <div className="username-wrapper">
+                <div className="user-avatar detail">
+                  <User size={18} />
+                </div>
+                <div>
+                  <h2 id="user-detail-title">{selectedUser.username}</h2>
+                  <p>{selectedUser.email || 'Sin email registrado'}</p>
+                </div>
+              </div>
+              <button className="user-detail-close" onClick={() => setSelectedUser(null)}>×</button>
+            </div>
+            <div className="user-detail-grid">
+              <div>
+                <span>Nombre</span>
+                <strong>{`${selectedUser.first_name || ''} ${selectedUser.last_name || ''}`.trim() || '-'}</strong>
+              </div>
+              <div>
+                <span>Rol</span>
+                <strong>{getRoleDisplay(selectedUser).text}</strong>
+              </div>
+              <div>
+                <span>Estado</span>
+                <strong>{selectedUser.is_active ? 'Activo' : 'Inactivo'}</strong>
+              </div>
+              <div>
+                <span>Último login</span>
+                <strong>{selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString('es-ES') : 'Nunca'}</strong>
+              </div>
+            </div>
+            <div className="user-detail-actions">
+              <button className="btn-secondary" onClick={() => setSelectedUser(null)}>Cerrar</button>
+              <button className="btn-primary" onClick={() => { setSelectedUser(null); handleEdit(selectedUser); }}>Editar usuario</button>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Package, Check, AlertCircle, Tag, FileText, Loader, CreditCard, DollarSign } from 'lucide-react';
 import { useNavigate, useParams } from "react-router-dom";
-import { styles, showSuccessAlert } from "../herpert";
+import { showSuccessAlert } from "../herpert";
 import api from "../services/api";
+import '../css/Labour.css';
 
 const ServicioForm = () => {
   const { id } = useParams();
@@ -18,7 +19,6 @@ const ServicioForm = () => {
 
   const [status, setStatus] = useState({ type: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hoverStates, setHoverStates] = useState({ cancel: false, submit: false });
 
   // Cargar datos si se está editando
   useEffect(() => {
@@ -101,32 +101,36 @@ const ServicioForm = () => {
   };
 
   return (
-    <div className="container mt-5">
-      <h2 style={styles.formHeader}>
-        <span style={{ marginRight: '8px' }}><Package /></span>
-        {id ? 'Editar Servicio de Mano de Obra' : 'Nuevo Servicio de Mano de Obra'}
-      </h2>
+    <div className="lab-root">
+      <div className="lab-form-page">
+        <div className="lab-header">
+          <div>
+            <h2>
+              <Package size={22} />
+              {id ? 'Editar mano de obra' : 'Nueva mano de obra'}
+            </h2>
+            <p>Registra servicios, modalidad de pago y factura asociada sin alterar la lógica financiera.</p>
+          </div>
+          <button type="button" className="lab-btn lab-btn-outline" onClick={() => navigate('/labour-list')}>
+            Volver
+          </button>
+        </div>
 
       {status.message && (
-        <div style={{
-          ...styles.alertBox,
-          ...(status.type === 'success' ? styles.successAlert : styles.errorAlert)
-        }}>
-          <span style={styles.icon}>
+        <div className={status.type === 'success' ? 'lab-alert' : 'lab-error'} style={{ marginBottom: 16 }}>
+          <span>
             {status.type === 'success' ? <Check /> : <AlertCircle />}
           </span>
           <span>{status.message}</span>
         </div>
       )}
 
-      <div>
-        <div style={styles.formGrid}>
+      <div className="lab-card lab-form-card">
+        <div className="lab-form lab-form-grid">
 
           {/* Nombre */}
-          <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="nombre_persona">
+          <label htmlFor="nombre_persona">
               Nombre de la persona
-            </label>
             <div style={{ position: 'relative' }}>
               <input
                 id="nombre_persona"
@@ -134,7 +138,6 @@ const ServicioForm = () => {
                 name="nombre_persona"
                 value={formData.nombre_persona}
                 onChange={handleChange}
-                style={{ ...styles.input, paddingLeft: '36px' }}
                 placeholder="Ingrese el nombre"
                 required
               />
@@ -142,13 +145,11 @@ const ServicioForm = () => {
                 <Tag />
               </div>
             </div>
-          </div>
+          </label>
 
           {/* Precio */}
-          <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="precio_total">
+          <label htmlFor="precio_total">
               Precio del servicio
-            </label>
             <div style={{ position: 'relative' }}>
               <input
                 id="precio_total"
@@ -156,7 +157,6 @@ const ServicioForm = () => {
                 name="precio_total"
                 value={formData.precio_total}
                 onChange={handleChange}
-                style={{ ...styles.input, paddingLeft: '36px' }}
                 min="0"
                 step="0.01"
                 placeholder="0.00"
@@ -166,36 +166,31 @@ const ServicioForm = () => {
                 <DollarSign size={16} />
               </div>
             </div>
-          </div>
+          </label>
 
           {/* Factura */}
-          <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="factura_asociada">
+          <label htmlFor="factura_asociada">
               Factura asociada
-            </label>
             <input
               id="factura_asociada"
               type="text"
               name="factura_asociada"
               value={formData.factura_asociada}
               onChange={handleChange}
-              style={styles.input}
               placeholder="Número de factura (opcional)"
             />
-          </div>
+          </label>
 
           {/* Modalidad de pago */}
-          <div style={styles.formGroup}>
-            <label style={styles.label} htmlFor="modalidad_pago">
+          <label htmlFor="modalidad_pago">
               Modalidad de pago
-            </label>
             <div style={{ position: 'relative' }}>
               <select
                 id="modalidad_pago"
                 name="modalidad_pago"
                 value={formData.modalidad_pago}
                 onChange={handleChange}
-                style={{ ...styles.input, paddingLeft: '36px', appearance: 'none', cursor: 'pointer' }}
+                style={{ appearance: 'none', cursor: 'pointer' }}
               >
                 <option value="contado">Contado (pago inmediato)</option>
                 <option value="credito">Crédito (abonos)</option>
@@ -204,24 +199,13 @@ const ServicioForm = () => {
                 <CreditCard size={16} />
               </div>
             </div>
-          </div>
+          </label>
 
         </div>
 
         {/* Indicador visual si es crédito */}
         {formData.modalidad_pago === 'credito' && (
-          <div style={{
-            backgroundColor: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: '8px',
-            padding: '12px 16px',
-            marginBottom: '16px',
-            color: '#1d4ed8',
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
+          <div className="lab-alert">
             <CreditCard size={16} />
             <span>
               Este servicio se registrará a crédito. Podrás registrar abonos desde la lista de servicios una vez guardado.
@@ -230,37 +214,30 @@ const ServicioForm = () => {
         )}
 
         {/* Descripción */}
-        <div style={styles.formGroup}>
-          <label style={styles.label} htmlFor="descripcion">
+        <div className="lab-form" style={{ marginTop: 14 }}>
+          <label htmlFor="descripcion">
             Descripción
-          </label>
           <div style={{ position: 'relative' }}>
             <textarea
               id="descripcion"
               name="descripcion"
               value={formData.descripcion}
               onChange={handleChange}
-              style={{ ...styles.textarea, paddingLeft: '36px' }}
               placeholder="Ingresa los detalles del servicio..."
             />
             <div style={{ position: 'absolute', left: '12px', top: '16px', color: '#9ca3af' }}>
               <FileText />
             </div>
           </div>
+          </label>
         </div>
 
         {/* Botones */}
-        <div style={styles.buttonContainer}>
+        <div className="lab-actions-row" style={{ justifyContent: 'flex-end', marginTop: 18 }}>
           <button
             type="button"
             onClick={() => navigate('/labour-list')}
-            onMouseEnter={() => setHoverStates(prev => ({ ...prev, cancel: true }))}
-            onMouseLeave={() => setHoverStates(prev => ({ ...prev, cancel: false }))}
-            style={{
-              ...styles.button,
-              ...styles.cancelButton,
-              ...(hoverStates.cancel ? styles.cancelButtonHover : {})
-            }}
+            className="lab-btn lab-btn-outline"
           >
             Cancelar
           </button>
@@ -269,14 +246,7 @@ const ServicioForm = () => {
             type="button"
             disabled={isSubmitting}
             onClick={handleSubmit}
-            onMouseEnter={() => setHoverStates(prev => ({ ...prev, submit: true }))}
-            onMouseLeave={() => setHoverStates(prev => ({ ...prev, submit: false }))}
-            style={{
-              ...styles.button,
-              ...styles.submitButton,
-              ...(hoverStates.submit && !isSubmitting ? styles.submitButtonHover : {}),
-              ...(isSubmitting ? styles.submitButtonDisabled : {})
-            }}
+            className="lab-btn lab-btn-primary"
           >
             {isSubmitting ? (
               <React.Fragment>
@@ -291,6 +261,7 @@ const ServicioForm = () => {
             )}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

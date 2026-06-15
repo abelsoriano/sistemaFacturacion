@@ -9,9 +9,9 @@
     --text: #0f172a;
     --text-muted: #475569;
     --text-faint: #94a3b8;
-    --primary: #3b82f6;
-    --primary-dark: #2563eb;
-    --primary-light: #eff6ff;
+    --primary: var(--saas-primary, #6C63FF);
+    --primary-dark: #5a52df;
+    --primary-light: var(--saas-active, #EEEDFE);
     --success: #10b981;
     --success-light: #d1fae5;
     --danger: #ef4444;
@@ -88,6 +88,42 @@
     padding: 0.25rem 0.5rem;
     border-radius: var(--radius-sm);
     color: var(--text-muted);
+  }
+
+  .det-status-cluster {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .det-status-pill,
+  .det-muted-pill {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    border-radius: 999px;
+    padding: 0.28rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .det-muted-pill {
+    background: var(--surface-hover);
+    color: var(--text-faint);
+  }
+
+  .det-section-note {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: #fbfcfe;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    line-height: 1.45;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
   }
 
   .det-header-actions {
@@ -678,6 +714,27 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+  }
+
+  .action-section-label {
+    color: var(--text-faint);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .det-action-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: #fbfcfe;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+    padding: 0.7rem 0.75rem;
   }
 
   .divider {

@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { normalizeRncInput, validatePhone, validateRnc } from '../utils/validators';
 import { toast, Toaster } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import { 
-  FaUser, FaSave, FaArrowLeft, FaPlus, FaTrash, 
+  FaUser, FaSave, FaArrowLeft,
   FaEnvelope, FaPhone, FaMapMarkerAlt, FaIdCard, 
-  FaStar, FaUserPlus, FaEdit, FaTimes, FaCheck,
+  FaStar, FaUserPlus, FaEdit, FaTimes,
   FaInfoCircle
 } from 'react-icons/fa';
 
@@ -23,9 +24,9 @@ const STYLES = `
     --text: #0f172a;
     --text-muted: #475569;
     --text-faint: #94a3b8;
-    --primary: #3b82f6;
-    --primary-dark: #2563eb;
-    --primary-light: #eff6ff;
+    --primary: var(--saas-primary, #6C63FF);
+    --primary-dark: #5a52df;
+    --primary-light: var(--saas-active, #EEEDFE);
     --success: #10b981;
     --success-light: #d1fae5;
     --danger: #ef4444;
@@ -42,8 +43,6 @@ const STYLES = `
     --font: 'Inter', system-ui, -apple-system, sans-serif;
     --mono: 'SF Mono', 'Monaco', monospace;
   }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
 
   .cf-root {
     font-family: var(--font);
@@ -94,7 +93,7 @@ const STYLES = `
   /* Main Content */
   .cf-body {
     padding: 1rem;
-    max-width: 900px;
+    max-width: 980px;
     margin: 0 auto;
   }
 
@@ -121,8 +120,8 @@ const STYLES = `
   .cf-card-header {
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-    color: white;
+    background: var(--surface);
+    color: var(--text);
   }
 
   @media (min-width: 640px) {
@@ -143,7 +142,7 @@ const STYLES = `
   .cf-card-header p {
     font-size: 0.75rem;
     margin-top: 0.25rem;
-    opacity: 0.8;
+    color: var(--text-muted);
   }
 
   .cf-card-body {
@@ -159,6 +158,34 @@ const STYLES = `
   /* Form */
   .cf-form-group {
     margin-bottom: 1.25rem;
+  }
+
+  .cf-form-section {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .cf-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+  }
+
+  .cf-section-title svg {
+    color: var(--primary);
+  }
+
+  .cf-form-section .cf-form-group:last-child {
+    margin-bottom: 0;
   }
 
   .cf-label {
@@ -278,6 +305,7 @@ const STYLES = `
   .cf-type-option.selected {
     border-color: var(--primary);
     background: var(--primary-light);
+    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.12);
   }
 
   .cf-type-icon {
@@ -417,7 +445,7 @@ const ClientForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const isEditMode = Boolean(id);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -430,14 +458,7 @@ const ClientForm = () => {
   
   const [errors, setErrors] = useState({});
 
-  useEffect(() => {
-    if (id) {
-      setIsEditMode(true);
-      loadClient();
-    }
-  }, [id]);
-
-  const loadClient = async () => {
+  const loadClient = useCallback(async () => {
     setLoading(true);
     try {
       const response = await api.get(`clients/${id}/`);
@@ -452,11 +473,17 @@ const ClientForm = () => {
     } catch (error) {
       console.error('Error cargando cliente:', error);
       toast.error('Error al cargar los datos del cliente');
-      navigate('/sales');
+      navigate('/clients');
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate]);
+
+  useEffect(() => {
+    if (isEditMode) {
+      loadClient();
+    }
+  }, [isEditMode, loadClient]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -486,8 +513,14 @@ const ClientForm = () => {
       newErrors.email = 'Ingrese un email válido';
     }
     
-    if (formData.ruc_ci && formData.ruc_ci.length < 5) {
-      newErrors.ruc_ci = 'El RUC/CI debe tener al menos 5 caracteres';
+    const rncError = validateRnc(formData.ruc_ci, { label: 'RNC/Cedula' });
+    if (rncError) {
+      newErrors.ruc_ci = rncError;
+    }
+
+    const phoneError = validatePhone(formData.phone, { label: 'Telefono' });
+    if (phoneError) {
+      newErrors.phone = phoneError;
     }
     
     setErrors(newErrors);
@@ -521,7 +554,7 @@ const ClientForm = () => {
           showCancelButton: true,
           confirmButtonText: 'Sí, crear otro',
           cancelButtonText: 'Volver al listado',
-          confirmButtonColor: '#3b82f6',
+          confirmButtonColor: '#6C63FF',
           cancelButtonColor: '#6b7280'
         });
         
@@ -539,7 +572,7 @@ const ClientForm = () => {
         }
       }
       
-      navigate('/sales');
+      navigate('/clients');
     } catch (error) {
       console.error('Error guardando cliente:', error);
       if (error.response?.status === 400) {
@@ -606,7 +639,7 @@ const ClientForm = () => {
 
       {/* Header */}
       <header className="cf-header">
-        <button className="cf-btn cf-btn-outline" onClick={() => navigate('/sales')}>
+        <button className="cf-btn cf-btn-outline" onClick={() => navigate('/clients')}>
           <FaArrowLeft size={12} /> Volver
         </button>
 
@@ -632,112 +665,36 @@ const ClientForm = () => {
 
           <div className="cf-card-body">
             <form onSubmit={handleSubmit}>
-              {/* Nombre */}
-              <div className="cf-form-group">
-                <label className="cf-label">
-                  <FaUser size={14} />
-                  Nombre completo
-                  <span className="required">*</span>
-                </label>
-                <input
-                  type="text"
-                  className={`cf-input ${errors.name ? 'is-invalid' : ''}`}
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Ej: Juan Pérez González"
-                  disabled={loading}
-                />
-                {errors.name && (
-                  <div className="cf-error">
-                    <FaTimes size={10} /> {errors.name}
-                  </div>
-                )}
-              </div>
-
-              <div className="cf-row">
-                {/* Email */}
-                <div className="cf-form-group">
-                  <label className="cf-label">
-                    <FaEnvelope size={14} />
-                    Correo electrónico
-                  </label>
-                  <input
-                    type="email"
-                    className={`cf-input ${errors.email ? 'is-invalid' : ''}`}
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="cliente@ejemplo.com"
-                    disabled={loading}
-                  />
-                  {errors.email && (
-                    <div className="cf-error">
-                      <FaTimes size={10} /> {errors.email}
-                    </div>
-                  )}
-                  <div className="cf-hint">
-                    <FaInfoCircle size={10} /> Opcional pero recomendado
-                  </div>
+              <section className="cf-form-section">
+                <div className="cf-section-title">
+                  <FaUser size={13} /> Datos generales
                 </div>
-                
-                {/* Teléfono */}
                 <div className="cf-form-group">
                   <label className="cf-label">
-                    <FaPhone size={14} />
-                    Teléfono
-                  </label>
-                  <input
-                    type="tel"
-                    className={`cf-input ${errors.phone ? 'is-invalid' : ''}`}
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    placeholder="0999 123 456"
-                    disabled={loading}
-                  />
-                  {errors.phone && (
-                    <div className="cf-error">
-                      <FaTimes size={10} /> {errors.phone}
-                    </div>
-                  )}
-                  <div className="cf-hint">
-                    <FaInfoCircle size={10} /> Número de contacto
-                  </div>
-                </div>
-              </div>
-
-              <div className="cf-row">
-                {/* RUC/CI */}
-                <div className="cf-form-group">
-                  <label className="cf-label">
-                    <FaIdCard size={14} />
-                    RUC / CI
+                    <FaUser size={14} />
+                    Nombre completo
+                    <span className="required">*</span>
                   </label>
                   <input
                     type="text"
-                    className={`cf-input ${errors.ruc_ci ? 'is-invalid' : ''}`}
-                    name="ruc_ci"
-                    value={formData.ruc_ci}
+                    className={`cf-input ${errors.name ? 'is-invalid' : ''}`}
+                    name="name"
+                    value={formData.name}
                     onChange={handleChange}
-                    placeholder="1712345678001"
+                    placeholder="Ej: Juan Pérez González"
                     disabled={loading}
                   />
-                  {errors.ruc_ci && (
+                  {errors.name && (
                     <div className="cf-error">
-                      <FaTimes size={10} /> {errors.ruc_ci}
+                      <FaTimes size={10} /> {errors.name}
                     </div>
                   )}
-                  <div className="cf-hint">
-                    <FaInfoCircle size={10} /> Opcional para facturación
-                  </div>
                 </div>
-                
-                {/* Tipo de Cliente */}
+
                 <div className="cf-form-group">
                   <label className="cf-label">
                     <FaStar size={14} />
-                    Tipo de Cliente
+                    Tipo de cliente
                   </label>
                   <div className="cf-type-options">
                     {clientTypes.map(type => (
@@ -753,29 +710,120 @@ const ClientForm = () => {
                     ))}
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Dirección */}
-              <div className="cf-form-group">
-                <label className="cf-label">
-                  <FaMapMarkerAlt size={14} />
-                  Dirección
-                </label>
-                <textarea
-                  className={`cf-textarea ${errors.address ? 'is-invalid' : ''}`}
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  rows="3"
-                  placeholder="Dirección completa del cliente"
-                  disabled={loading}
-                />
-                {errors.address && (
-                  <div className="cf-error">
-                    <FaTimes size={10} /> {errors.address}
+              <section className="cf-form-section">
+                <div className="cf-section-title">
+                  <FaPhone size={13} /> Contacto
+                </div>
+                <div className="cf-row">
+                  <div className="cf-form-group">
+                    <label className="cf-label">
+                      <FaEnvelope size={14} />
+                      Correo electrónico
+                    </label>
+                    <input
+                      type="email"
+                      className={`cf-input ${errors.email ? 'is-invalid' : ''}`}
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="cliente@ejemplo.com"
+                      disabled={loading}
+                    />
+                    {errors.email && (
+                      <div className="cf-error">
+                        <FaTimes size={10} /> {errors.email}
+                      </div>
+                    )}
+                    <div className="cf-hint">
+                      <FaInfoCircle size={10} /> Opcional pero recomendado
+                    </div>
                   </div>
-                )}
-              </div>
+                  
+                  <div className="cf-form-group">
+                    <label className="cf-label">
+                      <FaPhone size={14} />
+                      Teléfono
+                    </label>
+                    <input
+                      type="tel"
+                      className={`cf-input ${errors.phone ? 'is-invalid' : ''}`}
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    placeholder="+1 (809) 123-4567"
+                    maxLength={20}
+                    disabled={loading}
+                  />
+                    {errors.phone && (
+                      <div className="cf-error">
+                        <FaTimes size={10} /> {errors.phone}
+                      </div>
+                    )}
+                    <div className="cf-hint">
+                      <FaInfoCircle size={10} /> Número de contacto
+                    </div>
+                  </div>
+                </div>
+
+                <div className="cf-form-group">
+                  <label className="cf-label">
+                    <FaMapMarkerAlt size={14} />
+                    Dirección
+                  </label>
+                  <textarea
+                    className={`cf-textarea ${errors.address ? 'is-invalid' : ''}`}
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    rows="3"
+                    placeholder="Dirección completa del cliente"
+                    disabled={loading}
+                  />
+                  {errors.address && (
+                    <div className="cf-error">
+                      <FaTimes size={10} /> {errors.address}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="cf-form-section">
+                <div className="cf-section-title">
+                  <FaIdCard size={13} /> Datos fiscales
+                </div>
+                <div className="cf-form-group">
+                  <label className="cf-label">
+                    <FaIdCard size={14} />
+                    RNC / Cédula
+                  </label>
+                  <input
+                    type="text"
+                    className={`cf-input ${errors.ruc_ci ? 'is-invalid' : ''}`}
+                    name="ruc_ci"
+                    value={formData.ruc_ci}
+                    onChange={(event) => {
+                      setFormData(prev => ({ ...prev, ruc_ci: normalizeRncInput(event.target.value) }));
+                      if (errors.ruc_ci) {
+                        setErrors(prev => ({ ...prev, ruc_ci: null }));
+                      }
+                    }}
+                    placeholder="RNC o cédula"
+                    inputMode="numeric"
+                    maxLength={11}
+                    disabled={loading}
+                  />
+                  {errors.ruc_ci && (
+                    <div className="cf-error">
+                      <FaTimes size={10} /> {errors.ruc_ci}
+                    </div>
+                  )}
+                  <div className="cf-hint">
+                    <FaInfoCircle size={10} /> Solo números, 9 u 11 dígitos. Si se registra, el POS podrá inferir comprobante fiscal E31.
+                  </div>
+                </div>
+              </section>
 
               {/* Botones */}
               <div className="cf-actions">

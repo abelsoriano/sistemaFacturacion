@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     FaTools, FaPlus, FaEdit, FaTrash, FaSearch,
     FaBox, FaExclamationTriangle, FaCheckCircle, FaWrench,
-    FaEye, FaUserCheck, FaUndo, FaChartBar, FaArrowLeft,
+    FaEye, FaUserCheck, FaUndo,
     FaTimes, FaFilter, FaBuilding, FaTag, FaMapMarkerAlt,
     FaInfoCircle, FaCalendarAlt, FaMoneyBillWave, FaBarcode, FaFolderOpen, FaChartLine, FaUser
 } from 'react-icons/fa';
@@ -32,11 +32,7 @@ const AssetsList = () => {
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [conditionFilter, setConditionFilter] = useState('all');
 
-    useEffect(() => {
-        loadData();
-    }, [statusFilter, categoryFilter, conditionFilter]);
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true);
         try {
             const params = {};
@@ -59,7 +55,11 @@ const AssetsList = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [statusFilter, categoryFilter, conditionFilter]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     const handleDelete = async (asset) => {
         const result = await Swal.fire({
@@ -129,10 +129,6 @@ const AssetsList = () => {
         }
     };
 
-    const handleCancel = () => {
-        navigate('/home');
-    };
-
     const resetFilters = () => {
         setSearchTerm('');
         setStatusFilter('all');
@@ -187,13 +183,19 @@ const AssetsList = () => {
                              statusFilter !== 'all' || 
                              categoryFilter !== 'all' || 
                              conditionFilter !== 'all';
+    const totalValue = assets.reduce((sum, asset) => sum + Number(asset.purchase_price || 0), 0);
+
+    const formatTotalValue = (value) => {
+        if (!value) return 'N/A';
+        return `$${value.toFixed(2)}`;
+    };
 
     if (loading) {
         return (
             <div className="al-root">
                 <div className="al-loading">
                     <div className="al-spinner" />
-                    <span style={{ color: 'var(--text-muted)' }}>Cargando activos...</span>
+                    <span className="al-loading-text">Cargando activos...</span>
                 </div>
             </div>
         );
@@ -204,14 +206,13 @@ const AssetsList = () => {
             <Toaster position="top-right" />
 
             {/* Header */}
-            <header className="al-header">
-                <button className="al-btn al-btn-secondary al-btn-sm" onClick={handleCancel}>
-                    <FaArrowLeft size={12} /> Volver
-                </button>
-
+            <header className="al-header al-page-header">
                 <div className="al-header-title">
-                    <FaTools size={14} style={{ color: 'var(--primary)' }} />
-                    Gestión de Activos y Herramientas
+                    <span className="al-title-icon"><FaTools size={16} /></span>
+                    <span>
+                        <strong>Gestión de activos</strong>
+                        <small>Control operativo de herramientas, equipos y asignaciones.</small>
+                    </span>
                     <span className="al-badge">{assets.length}</span>
                 </div>
 
@@ -222,7 +223,7 @@ const AssetsList = () => {
                     >
                         <FaFilter size={11} /> Filtros
                         {hasActiveFilters && (
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)', display: 'inline-block' }} />
+                            <span className="al-filter-dot" />
                         )}
                     </button>
                     <button 
@@ -278,6 +279,24 @@ const AssetsList = () => {
                                 <FaWrench className="al-stat-icon" />
                             </div>
                         </div>
+                        <div className="al-stat-card purple">
+                            <div className="al-stat-content">
+                                <div className="al-stat-info">
+                                    <h6>Categorías</h6>
+                                    <h2 className="purple">{categories.length}</h2>
+                                </div>
+                                <FaFolderOpen className="al-stat-icon" />
+                            </div>
+                        </div>
+                        <div className="al-stat-card neutral">
+                            <div className="al-stat-content">
+                                <div className="al-stat-info">
+                                    <h6>Valor Total</h6>
+                                    <h2 className="neutral">{formatTotalValue(totalValue)}</h2>
+                                </div>
+                                <FaMoneyBillWave className="al-stat-icon" />
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -288,7 +307,7 @@ const AssetsList = () => {
                             <div className="al-filter-title">
                                 <FaFilter size={11} /> Filtros avanzados
                                 {hasActiveFilters && (
-                                    <span className="al-badge" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>
+                                    <span className="al-badge al-badge-active">
                                         activos
                                     </span>
                                 )}
@@ -354,10 +373,9 @@ const AssetsList = () => {
 
                 {/* Filtros rápidos cuando el panel está cerrado */}
                 {!showFilters && (
-                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    <div className="al-quick-filters">
                         <button
                             className={`al-clear-btn ${statusFilter === 'all' ? 'al-btn-primary' : ''}`}
-                            style={statusFilter === 'all' ? { background: 'var(--primary)', color: 'white' } : {}}
                             onClick={() => setStatusFilter('all')}
                         >
                             Todos
@@ -391,7 +409,7 @@ const AssetsList = () => {
                             <span className="al-badge">{filteredAssets.length} resultados</span>
                         </div>
                         {filteredAssets.length > 0 && (
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)' }}>
+                            <span className="al-table-count">
                                 Mostrando {filteredAssets.length} de {assets.length}
                             </span>
                         )}
@@ -438,50 +456,50 @@ const AssetsList = () => {
 
                                         return (
                                             <tr key={asset.id}>
-                                                <td>
-                                                    <code className="al-info-value mono" style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                                                <td data-label="Código">
+                                                    <code className="al-code">
                                                         {asset.code}
                                                     </code>
                                                 </td>
-                                                <td>
-                                                    <div style={{ fontWeight: 600 }}>{asset.name}</div>
+                                                <td data-label="Nombre">
+                                                    <div className="al-asset-name">{asset.name}</div>
                                                     {asset.assigned_to && (
-                                                        <small style={{ color: 'var(--text-faint)' }}>
-                                                            <FaUserCheck size={10} style={{ marginRight: '0.25rem' }} />
+                                                        <small className="al-muted-line">
+                                                            <FaUserCheck size={10} />
                                                             {asset.assigned_to}
                                                         </small>
                                                     )}
                                                 </td>
-                                                <td>
+                                                <td data-label="Categoría">
                                                     <span className="al-badge">
                                                         {asset.category_name || 'Sin categoría'}
                                                     </span>
                                                 </td>
-                                                <td>
+                                                <td data-label="Marca/Modelo">
                                                     {asset.brand && (
                                                         <>
-                                                            <div style={{ fontSize: '0.8125rem' }}>{asset.brand}</div>
+                                                            <div className="al-brand">{asset.brand}</div>
                                                             {asset.model && (
-                                                                <small style={{ color: 'var(--text-faint)' }}>{asset.model}</small>
+                                                                <small className="al-muted-line">{asset.model}</small>
                                                             )}
                                                         </>
                                                     )}
                                                 </td>
-                                                <td className="text-center">
+                                                <td className="text-center" data-label="Estado">
                                                     <span className={`al-status-badge ${statusConfig.class}`}>
                                                         <StatusIcon size={10} />
                                                         {statusConfig.text}
                                                     </span>
                                                 </td>
-                                                <td className="text-center">
+                                                <td className="text-center" data-label="Condición">
                                                     <span className={`al-status-badge ${conditionConfig.class}`}>
                                                         {conditionConfig.text}
                                                     </span>
                                                 </td>
-                                                <td>
+                                                <td data-label="Ubicación">
                                                     <small>{asset.location || 'No especificada'}</small>
                                                 </td>
-                                                <td className="text-center">
+                                                <td className="text-center" data-label="Acciones">
                                                     <div className="al-actions">
                                                         <button
                                                             className="al-action-btn btn-view"
@@ -545,12 +563,13 @@ const AssetsList = () => {
                 <div className="al-modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowDetailModal(false)}>
                     <div className="al-modal">
                         <div className="al-modal-header primary">
-                            <h5 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <h5 className="al-modal-title">
                                 <FaEye size={16} /> Detalles del Activo
                             </h5>
                             <button 
                                 onClick={() => setShowDetailModal(false)}
-                                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.25rem' }}
+                                className="al-modal-close"
+                                aria-label="Cerrar"
                             >
                                 ×
                             </button>
@@ -652,9 +671,9 @@ const AssetsList = () => {
             {/* Modal de Asignación */}
             {showAssignModal && selectedAsset && (
                 <div className="al-modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowAssignModal(false)}>
-                    <div className="al-modal" style={{ maxWidth: '450px' }}>
+                    <div className="al-modal al-modal-sm">
                         <div className="al-modal-header success">
-                            <h5 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <h5 className="al-modal-title">
                                 <FaUserCheck size={16} /> Asignar Activo
                             </h5>
                             <button 
@@ -662,13 +681,14 @@ const AssetsList = () => {
                                     setShowAssignModal(false);
                                     setAssignTo('');
                                 }}
-                                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.25rem' }}
+                                className="al-modal-close"
+                                aria-label="Cerrar"
                             >
                                 ×
                             </button>
                         </div>
                         <div className="al-modal-body">
-                            <div style={{ marginBottom: '1rem', padding: '0.5rem', background: 'var(--surface-hover)', borderRadius: 'var(--radius-sm)' }}>
+                            <div className="al-selected-summary">
                                 <strong>Activo:</strong> {selectedAsset.code} - {selectedAsset.name}
                             </div>
                             <div className="al-form-group">
@@ -696,9 +716,8 @@ const AssetsList = () => {
                                 Cancelar
                             </button>
                             <button 
-                                className="al-btn al-btn-primary"
+                                className="al-btn al-btn-primary al-btn-success"
                                 onClick={handleAssign}
-                                style={{ background: 'var(--success)' }}
                             >
                                 <FaUserCheck size={12} /> Asignar
                             </button>

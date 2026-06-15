@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from '../services/api';
 import { showGenericAlert, showSuccessAlert } from "../herpert";
+import { FaFolder, FaSave } from 'react-icons/fa';
+import '../css/Category.css';
 
 function CategoryForm() {
   const [name, setName] = useState('');
@@ -46,24 +48,39 @@ function CategoryForm() {
   };
 
   return (
-    <div className="container mt-5">
-      <h2 className="text-center mb-4">{id ? 'Editar Categoría' : 'Agregar Categoría'}</h2>
-      <form onSubmit={handleSubmit}>
-        <div className="mb-3">
-          <label className="form-label">Nombre de la Categoría</label>
-          <input 
-            type="text" 
-            className="form-control" 
-            placeholder="Ingrese el nombre" 
-            value={name} 
-            onChange={(e) => setName(e.target.value)} 
-            required 
-          />
+    <div className="cat-form-shell">
+      <div className="cat-form-wrap">
+        <div className="cat-form-header">
+          <span className="cat-form-header-icon"><FaFolder size={18} /></span>
+          <div>
+            <h1>{id ? 'Editar categoría' : 'Agregar categoría'}</h1>
+            <p>Organiza inventario y productos sin cambiar reglas operativas.</p>
+          </div>
         </div>
-        {error && <p className="text-danger">{error}</p>}
-        <button type="submit" className="btn btn-primary">{id ? 'Actualizar' : 'Guardar'}</button>
-        <Link to="/categoriaList" className="btn btn-danger m-2">Cancelar</Link>
-      </form>
+
+        <form className="cat-form-card" onSubmit={handleSubmit}>
+          <div className="cat-form-group">
+            <label htmlFor="category-name">Nombre de la categoría</label>
+            <input
+              id="category-name"
+              type="text"
+              className="cat-form-input"
+              placeholder="Ej: Repuestos, Servicios, Accesorios"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          {error && <p className="cat-form-error">{error}</p>}
+          <div className="cat-form-actions">
+            <Link to="/categoriaList" className="cat-form-button secondary">Cancelar</Link>
+            <button type="submit" className="cat-form-button primary">
+              <FaSave size={14} />
+              {id ? 'Actualizar' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

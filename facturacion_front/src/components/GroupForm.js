@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSave, FaTimes, FaUsers, FaShieldAlt } from 'react-icons/fa';
 import api from '../services/api';
+import '../css/group.css';
 
 const GroupForm = ({ group, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -97,9 +98,9 @@ const GroupForm = ({ group, onClose, onSave }) => {
   }, {});
 
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+    <div className="modal show d-block group-modal-shell">
       <div className="modal-dialog modal-xl">
-        <div className="modal-content">
+        <div className="modal-content group-modal-content">
           <div className="modal-header">
             <h5 className="modal-title">
               <FaUsers className="me-2" />
@@ -141,7 +142,7 @@ const GroupForm = ({ group, onClose, onSave }) => {
                   <FaShieldAlt className="me-1" />
                   Permisos
                 </label>
-                <div className="border rounded p-3" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <div className="group-permissions-picker">
                   {Object.keys(groupedPermissions).map(app => (
                     <div key={app} className="mb-3">
                       <h6 className="text-primary mb-2">{app}</h6>

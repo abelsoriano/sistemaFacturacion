@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Row,
@@ -23,14 +23,12 @@ import {
   StockOutlined,
   TagOutlined,
   HomeOutlined,
-  SearchOutlined,
   EyeOutlined,
   BarChartOutlined,
-  PieChartOutlined,
   LineChartOutlined,
   TableOutlined
 } from '@ant-design/icons';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import {
   BarChart,
@@ -83,7 +81,7 @@ const Dashboard = () => {
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d', '#ffc658', '#ff7c7c'];
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       const [startDate, endDate] = dateRange;
@@ -100,11 +98,11 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange, timeFrame]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, [dateRange, timeFrame]);
+  }, [fetchDashboardData]);
 
   const handleDateChange = (dates) => {
     if (dates) {
@@ -237,12 +235,6 @@ const Dashboard = () => {
     }
   ];
 
-  // Datos paginados para ventas recientes
-  const paginatedSales = dashboardData.recentSales.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
   return (
     <div className={styles.dashboardContainer}>
       <div className={styles.dashboardHeader}>
@@ -296,9 +288,9 @@ const Dashboard = () => {
             <Row gutter={[16, 16]} className={styles.overviewHeader}>
               <Col xs={24} lg={8}>
                 <Card className={styles.metricCard} bordered={false}>
-                  <div className={styles.metricCardTitle}>Ventas del periodo</div>
+                  <div className={styles.metricCardTitle}>Ventas cobradas del periodo</div>
                   <div className={styles.metricCardValue}>${totalSales.toFixed(2)}</div>
-                  <div className={styles.metricCardSubtitle}>Ingresos totales registrados en el rango seleccionado</div>
+                  <div className={styles.metricCardSubtitle}>Ingresos cobrados en el rango seleccionado</div>
                   <div className={styles.metricProgressLabel}>Valor promedio por venta</div>
                   <Progress percent={Math.min(100, avgOrderValue ? (avgOrderValue / 1000) * 100 : 0)} showInfo={false} strokeColor="#1890ff" />
                   <div className={styles.metricProgressValue}>${avgOrderValue.toFixed(2)} promedio</div>
@@ -306,9 +298,9 @@ const Dashboard = () => {
               </Col>
               <Col xs={24} lg={8}>
                 <Card className={styles.metricCard} bordered={false}>
-                  <div className={styles.metricCardTitle}>Ventas recientes</div>
+                  <div className={styles.metricCardTitle}>Cobros recientes</div>
                   <div className={styles.metricCardValue}>{totalOrders}</div>
-                  <div className={styles.metricCardSubtitle}>Cantidad de ventas cerradas</div>
+                  <div className={styles.metricCardSubtitle}>Cantidad de facturas pagadas</div>
                   <div className={styles.metricProgressLabel}>Productos vendidos</div>
                   <Progress percent={Math.min(100, totalProducts ? (totalProducts / 500) * 100 : 0)} showInfo={false} strokeColor="#52c41a" />
                   <div className={styles.metricProgressValue}>{totalProducts} productos</div>
@@ -330,7 +322,7 @@ const Dashboard = () => {
               <Col xs={24} sm={12} lg={6}>
                 <Card className={styles.statCard} bordered={false}>
                   <Statistic
-                    title="Ventas Totales"
+                    title="Ventas cobradas"
                     value={totalSales}
                     precision={2}
                     prefix={<DollarOutlined style={{ color: '#1890ff' }} />}
@@ -342,7 +334,7 @@ const Dashboard = () => {
               <Col xs={24} sm={12} lg={6}>
                 <Card className={styles.statCard} bordered={false}>
                   <Statistic
-                    title="Número de Ventas"
+                    title="Facturas pagadas"
                     value={totalOrders}
                     prefix={<ShoppingCartOutlined style={{ color: '#52c41a' }} />}
                     valueStyle={{ color: '#52c41a' }}
@@ -374,7 +366,7 @@ const Dashboard = () => {
             {/* Gráficos Principales */}
             <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
               <Col xs={24} lg={12}>
-                <Card title="Tendencia de Ventas" className={styles.chartCard}>
+                <Card title="Tendencia de ventas cobradas" className={styles.chartCard}>
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={dashboardData.salesTrend}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -387,14 +379,14 @@ const Dashboard = () => {
                         dataKey="sales"
                         stroke="#8884d8"
                         activeDot={{ r: 8 }}
-                        name="Ventas"
+                        name="Ventas cobradas"
                       />
                     </LineChart>
                   </ResponsiveContainer>
                 </Card>
               </Col>
               <Col xs={24} lg={12}>
-                <Card title="Ventas por Categoría" className={styles.chartCard}>
+                <Card title="Ventas cobradas por categoría" className={styles.chartCard}>
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
@@ -480,12 +472,12 @@ const Dashboard = () => {
             tab={
               <span>
                 <TableOutlined />
-                Ventas Recientes
+                Cobros recientes
               </span>
             }
             key="sales"
           >
-            <Card title="Historial de Ventas">
+            <Card title="Historial de facturas pagadas">
               <Table
                 columns={recentSalesColumns}
                 dataSource={dashboardData.recentSales.map((item, index) => ({
@@ -522,7 +514,7 @@ const Dashboard = () => {
             key="analytics"
           >
             <Collapse defaultActiveKey={['1']} size="large">
-              <Panel header="Análisis de Ventas por Tiempo" key="1">
+              <Panel header="Análisis de ventas cobradas por tiempo" key="1">
                 <Card>
                   <ResponsiveContainer width="100%" height={400}>
                     <LineChart data={dashboardData.salesTrend}>
@@ -536,7 +528,7 @@ const Dashboard = () => {
                         dataKey="sales"
                         stroke="#8884d8"
                         activeDot={{ r: 8 }}
-                        name="Ventas ($)"
+                        name="Ventas cobradas ($)"
                         strokeWidth={3}
                       />
                     </LineChart>

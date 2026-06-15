@@ -629,3 +629,452 @@
     width: 100%;
   }
 }
+
+/* SaaS inventory/almacen refinements */
+.almacen-page {
+  background: #f6f7fb;
+  padding: 1.5rem;
+}
+
+.almacen-content {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  max-width: 1280px;
+}
+
+.almacen-page .page-header {
+  background: #ffffff;
+  border: 1px solid #e6e8f0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: 0 12px 28px rgba(27, 26, 46, 0.06);
+}
+
+.almacen-page .header-title {
+  align-items: center;
+}
+
+.almacen-page .header-icon {
+  color: #6c63ff;
+  background: #eeedfe;
+  border-radius: 8px;
+  padding: 0.45rem;
+  width: 42px;
+  height: 42px;
+}
+
+.almacen-page .header-title h1 {
+  color: #1b1a2e;
+  font-size: 1.45rem;
+}
+
+.almacen-page .btn-primary {
+  background: #6c63ff;
+  border-radius: 8px;
+  box-shadow: 0 10px 18px rgba(108, 99, 255, 0.22);
+}
+
+.almacen-page .btn-primary:hover:not(:disabled) {
+  background: #5b54df;
+}
+
+.almacen-page .btn-secondary {
+  background: #ffffff;
+  border: 1px solid #dfe3ee;
+  color: #303044;
+  border-radius: 8px;
+}
+
+.almacen-page .search-section,
+.alm-form-card {
+  background: #ffffff;
+  border: 1px solid #e6e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 8px 20px rgba(27, 26, 46, 0.04);
+}
+
+.almacen-page .search-bar input,
+.almacen-page .filter-bar select,
+.alm-form-input,
+.alm-form-select,
+.alm-form-textarea {
+  border-radius: 8px;
+  border-color: #dfe3ee;
+  background: #ffffff;
+}
+
+.almacen-page .search-bar input:focus,
+.almacen-page .filter-bar select:focus,
+.alm-form-input:focus,
+.alm-form-select:focus,
+.alm-form-textarea:focus {
+  border-color: #6c63ff;
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.14);
+}
+
+.almacen-page .stats-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  background: transparent;
+  padding: 0;
+  gap: 0.75rem;
+}
+
+.almacen-page .stat-item {
+  background: #ffffff;
+  border: 1px solid #e6e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 8px 20px rgba(27, 26, 46, 0.04);
+}
+
+.almacen-page .stat-number {
+  color: #1b1a2e;
+}
+
+.almacen-page .table-container {
+  background: #ffffff;
+  border: 1px solid #e6e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(27, 26, 46, 0.05);
+}
+
+.almacen-page .data-table thead th {
+  background: #fafafa;
+  color: #57576d;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+}
+
+.almacen-page .data-table tbody tr:hover {
+  background: #fbfbff;
+}
+
+.almacen-page .category-badge,
+.almacen-page .stock-badge {
+  border-radius: 999px;
+}
+
+.almacen-page .action-buttons {
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.almacen-page .sl-act-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #e6e8f0;
+  background: #ffffff;
+  color: #494963;
+}
+
+.almacen-page .sl-act-btn:hover {
+  background: #eeedfe;
+  color: #6c63ff;
+}
+
+.almacen-page .sl-act-del:hover {
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+.almacen-page .loading-state,
+.almacen-page .empty-state {
+  background: #ffffff;
+  border: 1px solid #e6e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(27, 26, 46, 0.04);
+}
+
+.almacen-page .spinner {
+  border-top-color: #6c63ff;
+}
+
+.alm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(27, 26, 46, 0.42);
+}
+
+.alm-modal {
+  width: min(620px, 100%);
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e6e8f0;
+  box-shadow: 0 24px 70px rgba(27, 26, 46, 0.22);
+  padding: 1.25rem;
+}
+
+.alm-modal-header,
+.alm-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.alm-modal-header h2 {
+  margin: 0;
+  color: #1b1a2e;
+  font-size: 1.2rem;
+}
+
+.alm-kicker,
+.alm-description-box span,
+.alm-detail-card span {
+  margin: 0 0 0.25rem;
+  color: #717184;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.alm-modal-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e6e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #57576d;
+}
+
+.alm-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.alm-detail-card,
+.alm-description-box {
+  border: 1px solid #e6e8f0;
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+
+.alm-detail-card svg {
+  color: #6c63ff;
+  margin-bottom: 0.4rem;
+}
+
+.alm-detail-card strong {
+  display: block;
+  color: #1b1a2e;
+  font-size: 0.95rem;
+}
+
+.alm-description-box p {
+  margin: 0.35rem 0 0;
+  color: #303044;
+}
+
+.alm-form-shell {
+  min-height: 100vh;
+  background: #f6f7fb;
+  padding: 1.5rem;
+}
+
+.alm-form-wrap {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.alm-form-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.alm-form-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  color: #6c63ff;
+  background: #eeedfe;
+}
+
+.alm-form-header h1 {
+  margin: 0;
+  color: #1b1a2e;
+  font-size: 1.45rem;
+}
+
+.alm-form-header p {
+  margin: 0.2rem 0 0;
+  color: #6f7082;
+}
+
+.alm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.alm-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.alm-form-group label {
+  color: #303044;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.alm-input-shell {
+  position: relative;
+}
+
+.alm-input-shell svg {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9a9aad;
+}
+
+.alm-textarea-shell svg {
+  top: 1rem;
+  transform: none;
+}
+
+.alm-form-input,
+.alm-form-select,
+.alm-form-textarea {
+  width: 100%;
+  padding: 0.72rem 0.9rem;
+  font: inherit;
+}
+
+.alm-input-shell .alm-form-input,
+.alm-textarea-shell .alm-form-textarea {
+  padding-left: 2.4rem;
+}
+
+.alm-form-textarea {
+  min-height: 130px;
+  resize: vertical;
+}
+
+.alm-form-full {
+  grid-column: 1 / -1;
+}
+
+.alm-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.alm-alert.error {
+  background: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+}
+
+.alm-alert.success {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.alm-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  margin-top: 1rem;
+  border-top: 1px solid #e6e8f0;
+}
+
+@media (max-width: 1024px) {
+  .almacen-page .stats-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .almacen-page,
+  .alm-form-shell {
+    padding: 1rem;
+  }
+
+  .almacen-page .page-header,
+  .almacen-page .header-actions,
+  .alm-form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .almacen-page .stats-row,
+  .alm-detail-grid,
+  .alm-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .almacen-page .table-container {
+    overflow: visible;
+  }
+
+  .almacen-page .data-table,
+  .almacen-page .data-table thead,
+  .almacen-page .data-table tbody,
+  .almacen-page .data-table tr,
+  .almacen-page .data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .almacen-page .data-table thead {
+    display: none;
+  }
+
+  .almacen-page .data-table tr {
+    padding: 0.85rem;
+    border-bottom: 1px solid #e6e8f0;
+  }
+
+  .almacen-page .data-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 0;
+    white-space: normal;
+  }
+
+  .almacen-page .data-table tbody td::before {
+    content: attr(data-label);
+    color: #717184;
+    font-weight: 700;
+    font-size: 0.75rem;
+  }
+
+  .almacen-page .item-name {
+    justify-content: space-between;
+  }
+
+  .almacen-page .action-buttons {
+    justify-content: flex-end;
+  }
+}

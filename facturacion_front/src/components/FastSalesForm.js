@@ -3,447 +3,8 @@ import api from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { toast, Toaster } from 'react-hot-toast';
 import Swal from 'sweetalert2';
-
-const styles = `
-  .pos-shell {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    height: calc(100vh - 32px);
-    border: 0.5px solid #e0e0e0;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #f4f5f7;
-  }
-  .pos-left {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px;
-    overflow: hidden;
-  }
-  .pos-topbar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: #fff;
-    border-radius: 10px;
-    padding: 10px 16px;
-    border: 0.5px solid #e5e7eb;
-    flex-shrink: 0;
-  }
-  .pos-topbar-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: #111827;
-    flex: 1;
-  }
-  .pos-user-chip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: #6b7280;
-    background: #f3f4f6;
-    border-radius: 20px;
-    padding: 4px 12px;
-  }
-  .pos-back-top {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    color: #6b7280;
-    background: transparent;
-    border: 0.5px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 5px 12px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .pos-back-top:hover { background: #f3f4f6; }
-
-  .pos-search-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    flex-shrink: 0;
-    position: relative;
-  }
-  .pos-search-box {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #fff;
-    border: 0.5px solid #d1d5db;
-    border-radius: 8px;
-    padding: 9px 12px;
-    transition: border-color 0.15s;
-  }
-  .pos-search-box:focus-within { border-color: #1D9E75; }
-  .pos-search-box svg { color: #9ca3af; flex-shrink: 0; }
-  .pos-search-box input {
-    border: none;
-    background: transparent;
-    font-size: 13px;
-    color: #111827;
-    outline: none;
-    width: 100%;
-  }
-  .pos-barcode-box {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #fff;
-    border: 0.5px solid #d1d5db;
-    border-radius: 8px;
-    padding: 9px 12px;
-    transition: border-color 0.15s;
-  }
-  .pos-barcode-box:focus-within { border-color: #1D9E75; }
-  .pos-barcode-box svg { color: #1D9E75; flex-shrink: 0; }
-  .pos-barcode-box input {
-    border: none;
-    background: transparent;
-    font-size: 13px;
-    color: #111827;
-    outline: none;
-    width: 100%;
-  }
-  .pos-search-results {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    right: 50%;
-    background: #fff;
-    border: 0.5px solid #e5e7eb;
-    border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.10);
-    z-index: 100;
-    max-height: 280px;
-    overflow-y: auto;
-  }
-  .pos-result-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 14px;
-    cursor: pointer;
-    border-bottom: 0.5px solid #f3f4f6;
-    transition: background 0.1s;
-    width: 100%;
-    text-align: left;
-    background: transparent;
-    border-left: none;
-    border-right: none;
-    border-top: none;
-  }
-  .pos-result-item:last-child { border-bottom: none; }
-  .pos-result-item:hover { background: #f0fdf8; }
-  .pos-result-name { font-size: 13px; font-weight: 500; color: #111827; }
-  .pos-result-code { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-  .pos-result-price { font-size: 14px; font-weight: 600; color: #1D9E75; }
-  .pos-result-stock-ok { background: #dcfce7; color: #166534; font-size: 10px; padding: 2px 7px; border-radius: 10px; display: inline-block; margin-top: 3px; }
-  .pos-result-stock-low { background: #fef9c3; color: #854d0e; font-size: 10px; padding: 2px 7px; border-radius: 10px; display: inline-block; margin-top: 3px; }
-  .pos-result-stock-none { background: #fee2e2; color: #991b1b; font-size: 10px; padding: 2px 7px; border-radius: 10px; display: inline-block; margin-top: 3px; }
-  .pos-search-loading {
-    padding: 20px;
-    text-align: center;
-    color: #6b7280;
-    font-size: 13px;
-  }
-  .pos-search-empty {
-    padding: 24px;
-    text-align: center;
-    color: #9ca3af;
-    font-size: 13px;
-  }
-
-  .pos-cart-card {
-    flex: 1;
-    background: #fff;
-    border-radius: 10px;
-    border: 0.5px solid #e5e7eb;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
-  }
-  .pos-cart-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 0.5px solid #f3f4f6;
-    flex-shrink: 0;
-  }
-  .pos-cart-header-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #111827;
-  }
-  .pos-cart-badge {
-    background: #1D9E75;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 500;
-    border-radius: 20px;
-    padding: 2px 9px;
-  }
-  .pos-clear-btn {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    color: #991b1b;
-    background: #fee2e2;
-    border: none;
-    border-radius: 7px;
-    padding: 5px 10px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .pos-clear-btn:hover { background: #fecaca; }
-  .pos-cart-table-wrap {
-    flex: 1;
-    overflow-y: auto;
-  }
-  .pos-cart-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-  .pos-cart-table thead th {
-    padding: 8px 16px;
-    text-align: left;
-    font-size: 10px;
-    font-weight: 600;
-    color: #9ca3af;
-    background: #f9fafb;
-    border-bottom: 0.5px solid #f3f4f6;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-  }
-  .pos-cart-table thead th.right { text-align: right; }
-  .pos-cart-table tbody tr { border-bottom: 0.5px solid #f9fafb; }
-  .pos-cart-table tbody tr:last-child { border-bottom: none; }
-  .pos-cart-table tbody tr:hover { background: #f9fafb; }
-  .pos-cart-table tbody td { padding: 10px 16px; vertical-align: middle; color: #111827; }
-  .pos-prod-name { font-weight: 500; font-size: 13px; color: #111827; }
-  .pos-prod-code { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-  .pos-qty-ctrl {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .pos-qty-btn {
-    width: 26px; height: 26px;
-    border-radius: 6px;
-    border: 0.5px solid #e5e7eb;
-    background: #f9fafb;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    color: #374151;
-    font-size: 14px;
-    transition: background 0.1s, border-color 0.1s;
-    flex-shrink: 0;
-  }
-  .pos-qty-btn:hover { background: #e0fdf4; border-color: #6ee7b7; color: #065f46; }
-  .pos-qty-input {
-    width: 38px;
-    text-align: center;
-    font-size: 13px;
-    font-weight: 600;
-    color: #111827;
-    border: 0.5px solid #e5e7eb;
-    border-radius: 6px;
-    padding: 3px 0;
-    background: #fff;
-    outline: none;
-  }
-  .pos-qty-input:focus { border-color: #1D9E75; }
-  .pos-price-col { text-align: right; color: #6b7280; }
-  .pos-subtotal-col { text-align: right; font-weight: 600; color: #111827; }
-  .pos-del-btn {
-    display: flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px;
-    border-radius: 7px;
-    border: 0.5px solid #f3f4f6;
-    background: transparent;
-    color: #d1d5db;
-    cursor: pointer;
-    margin-left: auto;
-    transition: background 0.1s, color 0.1s, border-color 0.1s;
-  }
-  .pos-del-btn:hover { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
-
-  .pos-cart-empty {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    color: #d1d5db;
-    padding: 40px;
-  }
-  .pos-cart-empty-icon { font-size: 48px; opacity: 0.3; }
-  .pos-cart-empty p { font-size: 14px; color: #9ca3af; margin: 0; }
-  .pos-cart-empty small { font-size: 12px; color: #d1d5db; }
-
-  .pos-right {
-    background: #fff;
-    border-left: 0.5px solid #e5e7eb;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .pos-summary-header {
-    padding: 14px 20px 12px;
-    border-bottom: 0.5px solid #f3f4f6;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .pos-summary-icon { font-size: 18px; color: #1D9E75; }
-  .pos-summary-title { font-size: 14px; font-weight: 600; color: #111827; }
-  .pos-totals-section {
-    padding: 16px 20px;
-    border-bottom: 0.5px solid #f3f4f6;
-    flex-shrink: 0;
-  }
-  .pos-total-row {
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: 13px;
-    padding: 4px 0;
-  }
-  .pos-total-row .lbl { color: #6b7280; }
-  .pos-total-row .val { color: #111827; font-weight: 500; }
-  .pos-total-main {
-    display: flex; justify-content: space-between; align-items: center;
-    padding-top: 12px;
-    margin-top: 8px;
-    border-top: 0.5px solid #f3f4f6;
-  }
-  .pos-total-main .lbl { font-size: 15px; font-weight: 600; color: #111827; }
-  .pos-total-main .val { font-size: 24px; font-weight: 700; color: #0F6E56; }
-  .pos-payment-section {
-    padding: 16px 20px;
-    border-bottom: 0.5px solid #f3f4f6;
-    flex-shrink: 0;
-  }
-  .pos-section-label {
-    font-size: 10px;
-    font-weight: 600;
-    color: #9ca3af;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 10px;
-  }
-  .pos-amount-wrap {
-    display: flex;
-    align-items: center;
-    background: #f9fafb;
-    border: 0.5px solid #d1d5db;
-    border-radius: 8px;
-    padding: 10px 14px;
-    gap: 6px;
-    margin-bottom: 12px;
-    transition: border-color 0.15s;
-  }
-  .pos-amount-wrap:focus-within { border-color: #1D9E75; background: #fff; }
-  .pos-currency { font-size: 17px; font-weight: 600; color: #9ca3af; }
-  .pos-amount-input {
-    border: none; background: transparent;
-    font-size: 22px; font-weight: 600;
-    color: #111827; outline: none; width: 100%;
-  }
-  .pos-quick-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
-  .pos-quick-btn {
-    background: #f9fafb;
-    border: 0.5px solid #e5e7eb;
-    border-radius: 7px;
-    padding: 7px 4px;
-    font-size: 12px;
-    font-weight: 500;
-    color: #374151;
-    cursor: pointer;
-    text-align: center;
-    transition: all 0.12s;
-  }
-  .pos-quick-btn:hover { background: #e0fdf4; border-color: #6ee7b7; color: #065f46; }
-  .pos-change-section { padding: 14px 20px; flex-shrink: 0; }
-  .pos-change-box {
-    background: #f0fdf8;
-    border: 0.5px solid #6ee7b7;
-    border-radius: 8px;
-    padding: 12px 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .pos-change-insufficient {
-    background: #fff7ed;
-    border: 0.5px solid #fdba74;
-    border-radius: 8px;
-    padding: 12px 16px;
-  }
-  .pos-change-lbl { font-size: 12px; color: #065f46; font-weight: 500; }
-  .pos-change-val { font-size: 20px; font-weight: 700; color: #0F6E56; }
-  .pos-change-missing { font-size: 13px; color: #c2410c; font-weight: 500; }
-  .pos-action-section { padding: 16px 20px; margin-top: auto; flex-shrink: 0; }
-  .pos-process-btn {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    background: #1D9E75;
-    color: #fff;
-    border: none;
-    border-radius: 9px;
-    padding: 14px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
-    letter-spacing: 0.01em;
-  }
-  .pos-process-btn:hover:not(:disabled) { background: #0F6E56; }
-  .pos-process-btn:active:not(:disabled) { transform: scale(0.99); }
-  .pos-process-btn:disabled { background: #9ca3af; cursor: not-allowed; }
-  .pos-spinner {
-    width: 16px; height: 16px;
-    border: 2px solid rgba(255,255,255,0.4);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: pos-spin 0.6s linear infinite;
-    flex-shrink: 0;
-  }
-  @keyframes pos-spin { to { transform: rotate(360deg); } }
-
-  @media (max-width: 900px) {
-    .pos-shell {
-      grid-template-columns: 1fr;
-      height: auto;
-      min-height: 100vh;
-    }
-    .pos-right {
-      border-left: none;
-      border-top: 0.5px solid #e5e7eb;
-    }
-  }
-`;
+import '../css/FastSalesForm.css';
+import { normalizeRncInput, validateRnc } from '../utils/validators';
 
 const CartIcon = () => (
   <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -472,7 +33,7 @@ const XIcon = () => (
   </svg>
 );
 const ReceiptIcon = () => (
-  <svg width="17" height="17" fill="none" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+  <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
     <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/>
     <line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="13" y2="15"/>
   </svg>
@@ -493,7 +54,7 @@ const UserIcon = () => (
   </svg>
 );
 
-function SalesForm() {
+function FastSalesForm() {
   const [cartItems, setCartItems] = useState([]);
   const [amountPaid, setAmountPaid] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -502,6 +63,14 @@ function SalesForm() {
   const [showResults, setShowResults] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [clients, setClients] = useState([]);
+  const [clientSearch, setClientSearch] = useState('');
+  const [showClientResults, setShowClientResults] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [customerName, setCustomerName] = useState('');
+  const [quickRnc, setQuickRnc] = useState('');
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const [applyItbis, setApplyItbis] = useState(true);
 
   const navigate = useNavigate();
   const searchContainerRef = useRef(null);
@@ -511,6 +80,12 @@ function SalesForm() {
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     setCurrentUser(user);
+  }, []);
+
+  useEffect(() => {
+    api.get('clients/')
+      .then(response => setClients(Array.isArray(response.data) ? response.data : []))
+      .catch(() => setClients([]));
   }, []);
 
   useEffect(() => {
@@ -609,36 +184,163 @@ function SalesForm() {
   };
 
   const subtotal = cartItems.reduce((s, i) => s + i.price * i.quantity, 0);
-  const tax = subtotal * 0.16;
+  const tax = applyItbis ? subtotal * 0.18 : 0;
   const total = subtotal + tax;
   const paid = parseFloat(amountPaid) || 0;
   const change = paid - total;
 
   const quickAmounts = [500, 1000, 2000, Math.ceil(total / 100) * 100, 5000, 10000].filter((v, i, a) => a.indexOf(v) === i);
+  const filteredClients = clientSearch.trim()
+    ? clients.filter(client => {
+        const q = clientSearch.toLowerCase();
+        return (
+          (client.name || '').toLowerCase().includes(q) ||
+          (client.ruc_ci || '').toLowerCase().includes(q) ||
+          (client.phone || '').toLowerCase().includes(q)
+        );
+      }).slice(0, 8)
+    : [];
+  const effectiveRnc = selectedClient?.ruc_ci || (customerName.trim() ? quickRnc.trim() : '');
+  const effectiveEcfType = effectiveRnc ? '31' : '32';
+
+  const clearClient = () => {
+    setSelectedClient(null);
+    setClientSearch('');
+    setCustomerName('');
+    setQuickRnc('');
+  };
+
+  const createQuickClient = async () => {
+    const name = customerName.trim();
+    const rnc = quickRnc.trim();
+    if (!name || !rnc) {
+      toast.error('Nombre y RNC son requeridos para crear cliente fiscal rápido');
+      return null;
+    }
+    const rncError = validateRnc(rnc, { required: true, label: 'RNC del cliente' });
+    if (rncError) {
+      toast.error(rncError);
+      return null;
+    }
+    setIsCreatingClient(true);
+    try {
+      const response = await api.post('clients/', {
+        name,
+        ruc_ci: rnc,
+        client_type: 'occasional',
+      });
+      const client = response.data;
+      setClients(prev => [client, ...prev.filter(item => item.id !== client.id)]);
+      setSelectedClient(client);
+      setClientSearch(client.name);
+      toast.success('Cliente fiscal creado');
+      return client;
+    } catch (error) {
+      toast.error(error.response?.data?.ruc_ci || error.response?.data?.name || 'No se pudo crear el cliente fiscal');
+      return null;
+    } finally {
+      setIsCreatingClient(false);
+    }
+  };
+
+  const showSaleSuccessModal = async ({ response, invoicePayload }) => {
+    return new Promise((resolve) => {
+      Swal.fire({
+        icon: 'success',
+        title: 'Venta pagada registrada',
+        html: `
+          <div class="pos-sale-success">
+            <p><b>Total:</b> $${total.toFixed(2)}</p>
+            ${change > 0 ? `<p><b>Cambio:</b> $${change.toFixed(2)}</p>` : ''}
+            <p><b>Cliente:</b> ${invoicePayload.customer_name}</p>
+            <p><b>Tipo e-CF:</b> E${response.data.ecf_type || invoicePayload.ecf_type}</p>
+            <p><b>Factura:</b> ${response.data.invoice_number || 'N/A'}</p>
+            <p><b>e-CF:</b> ${response.data.encf || 'pendiente de configuración'}</p>
+            <p><b>DGII:</b> ${response.data.ecf_status || 'sin e-CF'}</p>
+            <div class="pos-sale-actions">
+              <button type="button" class="pos-sale-action primary" data-action="print">Imprimir ticket</button>
+              <button type="button" class="pos-sale-action" data-action="view">Ver factura</button>
+              <button type="button" class="pos-sale-action" data-action="new">Nueva venta</button>
+              <button type="button" class="pos-sale-action ghost" data-action="close">Cerrar</button>
+            </div>
+          </div>
+        `,
+        showConfirmButton: false,
+        allowOutsideClick: false,
+        didOpen: () => {
+          document.querySelectorAll('.pos-sale-action').forEach((button) => {
+            button.addEventListener('click', () => {
+              const action = button.getAttribute('data-action');
+              Swal.close();
+              resolve(action);
+            });
+          });
+        },
+      });
+    });
+  };
 
   const handleSubmitSale = async () => {
     if (cartItems.length === 0) { toast.error('El carrito está vacío'); return; }
     if (paid < total) { toast.error(`Faltan $${(total - paid).toFixed(2)} para completar el pago`); return; }
+    if (!selectedClient && quickRnc.trim() && !customerName.trim()) {
+      toast.error('Ingrese el nombre del cliente fiscal para usar RNC');
+      return;
+    }
+    if (!selectedClient && quickRnc.trim()) {
+      const rncError = validateRnc(quickRnc.trim(), { required: true, label: 'RNC del cliente' });
+      if (rncError) {
+        toast.error(rncError);
+        return;
+      }
+    }
     setIsSubmitting(true);
     try {
-      const saleData = {
-        customer: currentUser?.username || 'Consumidor Final',
+      const customerRnc = selectedClient?.ruc_ci || quickRnc.trim();
+      const invoicePayload = {
+        source: 'pos',
+        customer_name: selectedClient?.name || customerName.trim() || 'Consumidor Final',
+        ecf_type: effectiveEcfType,
+        payment_method: 'cash',
+        receipt_type: 'invoice',
+        status: 'paid',
+        subtotal: Number(subtotal.toFixed(2)),
+        tax: Number(tax.toFixed(2)),
+        apply_itbis: applyItbis,
+        discount: 0,
+        total: Number(total.toFixed(2)),
+        cash_received: Number(paid.toFixed(2)),
+        change: Number(Math.max(change, 0).toFixed(2)),
         details: cartItems.map(item => ({ product_id: item.id, quantity: item.quantity, price: item.price }))
       };
-      const response = await api.post('sales/', saleData);
-      await Swal.fire({
-        icon: 'success', title: '¡Venta registrada!',
-        html: `<p><b>Total:</b> $${total.toFixed(2)}</p>${change > 0 ? `<p><b>Cambio:</b> $${change.toFixed(2)}</p>` : ''}<p><b>Folio #:</b> ${response.data.id || 'N/A'}</p>`,
-        confirmButtonColor: '#1D9E75'
-      });
-      if (window.confirm('¿Deseas imprimir el ticket?')) console.log('Imprimiendo...');
-      setCartItems([]); setAmountPaid(''); setSearchTerm(''); setSearchResults([]); setShowResults(false);
+      if (selectedClient?.id) {
+        invoicePayload.client_id = selectedClient.id;
+      }
+      if (customerRnc) {
+        invoicePayload.customer_rnc = customerRnc;
+      }
+      const response = await api.post('invoices/', invoicePayload);
+      const action = await showSaleSuccessModal({ response, invoicePayload });
+      setCartItems([]); setAmountPaid(''); setSearchTerm(''); setSearchResults([]); setShowResults(false); clearClient();
+      if (action === 'print') {
+        Swal.fire({
+          icon: 'info',
+          title: 'Impresión no configurada',
+          text: 'La impresión de ticket directo todavía no está conectada en este POS. Puedes ver la factura y usar el flujo de impresión disponible allí.',
+          confirmButtonColor: '#6C63FF',
+        });
+      }
+      if (action === 'view' && response.data?.id) {
+        navigate(`/invoices/${response.data.id}`);
+        return;
+      }
       if (barcodeInputRef.current) setTimeout(() => barcodeInputRef.current.focus(), 100);
     } catch (error) {
       let msg = 'Error al registrar la venta';
       if (error.response?.data) {
         const d = error.response.data;
         if (d.details) msg = d.details.map(x => Object.values(x).join(', ')).join('\n');
+        else if (d.detail) msg = d.detail;
         else if (d.error) msg = d.error;
         else if (d.non_field_errors) msg = d.non_field_errors.join(', ');
       }
@@ -650,9 +352,8 @@ function SalesForm() {
 
   return (
     <>
-      <style>{styles}</style>
       <Toaster position="top-right" toastOptions={{ style: { fontSize: '13px', borderRadius: '8px' } }} />
-      <div style={{ padding: '16px', minHeight: '100vh', background: '#f4f5f7' }}>
+      <div className="pos-page">
         <div className="pos-shell">
 
           {/* ── Panel izquierdo ── */}
@@ -660,8 +361,11 @@ function SalesForm() {
 
             {/* Topbar */}
             <div className="pos-topbar">
-              <CartIcon />
-              <span className="pos-topbar-title">Nueva venta</span>
+              <span className="pos-topbar-icon"><CartIcon /></span>
+              <span className="pos-topbar-copy">
+                <span className="pos-topbar-title">Nueva venta</span>
+                <span className="pos-topbar-subtitle">POS de mostrador con emisión E31/E32 según cliente y RNC.</span>
+              </span>
               <div className="pos-user-chip">
                 <UserIcon />
                 <span>{currentUser?.username || 'Usuario'}</span>
@@ -708,7 +412,7 @@ function SalesForm() {
                             product.stock > 0 ? 'pos-result-stock-low' : 'pos-result-stock-none'
                           }>Stock: {product.stock}</span>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
+                        <div className="pos-result-price-wrap">
                           <div className="pos-result-price">${parseFloat(product.price).toFixed(2)}</div>
                         </div>
                       </button>
@@ -797,15 +501,101 @@ function SalesForm() {
               <span className="pos-summary-title">Resumen de venta</span>
             </div>
 
+            <div className="pos-client-section">
+              <div className="pos-client-title-row">
+                <div className="pos-section-label is-compact">Cliente</div>
+                <span className="pos-client-mode">E{effectiveEcfType}</span>
+              </div>
+
+              {selectedClient ? (
+                <div className="pos-selected-client">
+                  <strong>{selectedClient.name}</strong>
+                  <div>{selectedClient.ruc_ci ? `RNC/CI: ${selectedClient.ruc_ci}` : 'Sin RNC - Consumidor Final'}</div>
+                </div>
+              ) : (
+                <>
+                  <div className="pos-client-field">
+                    <input
+                      className="pos-client-input"
+                      placeholder="Buscar cliente existente..."
+                      value={clientSearch}
+                      onChange={e => { setClientSearch(e.target.value); setShowClientResults(true); }}
+                      onFocus={() => setShowClientResults(true)}
+                    />
+                    {showClientResults && filteredClients.length > 0 && (
+                      <div className="pos-client-results">
+                        {filteredClients.map(client => (
+                          <button
+                            key={client.id}
+                            className="pos-client-result"
+                            onClick={() => {
+                              setSelectedClient(client);
+                              setClientSearch(client.name);
+                              setCustomerName(client.name);
+                              setQuickRnc(client.ruc_ci || '');
+                              setShowClientResults(false);
+                            }}
+                          >
+                            <div className="pos-client-result-name">{client.name}</div>
+                            <div className="pos-client-result-meta">
+                              {client.ruc_ci ? `RNC/CI ${client.ruc_ci}` : 'Sin RNC'}{client.phone ? ` · ${client.phone}` : ''}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <input
+                    className="pos-client-input"
+                    placeholder="Nombre opcional / Consumidor Final"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                  />
+                  <div className="pos-client-grid is-spaced">
+                    <input
+                      className="pos-client-input"
+                      placeholder="RNC opcional"
+                      value={quickRnc}
+                      onChange={e => setQuickRnc(normalizeRncInput(e.target.value))}
+                      inputMode="numeric"
+                      maxLength={11}
+                    />
+                    <button
+                      className="pos-client-btn primary"
+                      disabled={isCreatingClient || !customerName.trim() || !quickRnc.trim()}
+                      onClick={createQuickClient}
+                    >
+                      {isCreatingClient ? 'Creando...' : 'Crear cliente rápido'}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <div className="pos-client-actions">
+                <button className="pos-client-btn" onClick={clearClient}>
+                  Consumidor Final
+                </button>
+              </div>
+            </div>
+
             <div className="pos-totals-section">
               <div className="pos-total-row">
                 <span className="lbl">Subtotal</span>
                 <span className="val">${subtotal.toFixed(2)}</span>
               </div>
               <div className="pos-total-row">
-                <span className="lbl">IVA 16%</span>
+                <span className="lbl">ITBIS {applyItbis ? '18%' : '0%'}</span>
                 <span className="val">${tax.toFixed(2)}</span>
               </div>
+              <label className="pos-tax-toggle">
+                <input
+                  type="checkbox"
+                  checked={applyItbis}
+                  onChange={(event) => setApplyItbis(event.target.checked)}
+                />
+                <span>Aplicar ITBIS</span>
+              </label>
               <div className="pos-total-main">
                 <span className="lbl">Total</span>
                 <span className="val">${total.toFixed(2)}</span>
@@ -847,8 +637,8 @@ function SalesForm() {
                       </div>
                     ) : (
                       <div className="pos-change-insufficient">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '12px', color: '#92400e', fontWeight: 500 }}>Falta por cubrir</span>
+                        <div className="pos-insufficient-row">
+                          <span className="pos-insufficient-label">Falta por cubrir</span>
                           <span className="pos-change-missing">${Math.abs(change).toFixed(2)}</span>
                         </div>
                       </div>
@@ -879,4 +669,4 @@ function SalesForm() {
   );
 }
 
-export default SalesForm;
+export default FastSalesForm;

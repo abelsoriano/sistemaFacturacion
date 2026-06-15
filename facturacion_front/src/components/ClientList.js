@@ -11,9 +11,8 @@ import {
   FaChevronLeft, FaChevronRight, FaTimes  
 } from 'react-icons/fa';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import '../css/listaCliente.css';
-import { SALE_TOTALS_PERMISSION, userHasPermissions } from '../utils/permissions';
+import { FINANCIAL_TOTALS_PERMISSIONS, userHasAnyPermission } from '../utils/permissions';
 
 
 /* ─── Helper Functions ─────────────────────────────────────────────────── */
@@ -36,7 +35,7 @@ const getTypeBadge = (type) => {
 /* ─── Main Component ───────────────────────────────────────────────────── */
 const ClientList = () => {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const canViewSalesTotals = userHasPermissions(currentUser, [SALE_TOTALS_PERMISSION]);
+  const canViewSalesTotals = userHasAnyPermission(currentUser, FINANCIAL_TOTALS_PERMISSIONS);
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +45,6 @@ const ClientList = () => {
   const [pageSize] = useState(10);
   const [selectedClient, setSelectedClient] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
 
   // Cargar clientes
   const loadClients = async () => {
@@ -133,7 +131,17 @@ const ClientList = () => {
 
   // Exportar a CSV
   const exportToCSV = () => {
-    const headers = ['ID', 'Nombre', 'Email', 'Teléfono', 'Dirección', 'RUC/CI', 'Tipo', 'Facturas', 'Gastado'];
+    const headers = [
+      'ID',
+      'Nombre',
+      'Email',
+      'Teléfono',
+      'Dirección',
+      'RUC/CI',
+      'Tipo',
+      'Facturas',
+      ...(canViewSalesTotals ? ['Gastado'] : []),
+    ];
     const data = filteredClients.map(client => [
       client.id,
       client.name,
@@ -143,7 +151,7 @@ const ClientList = () => {
       client.ruc_ci || '',
       client.client_type === 'frequent' ? 'Frecuente' : client.client_type === 'regular' ? 'Regular' : 'Ocasional',
       client.total_invoices || 0,
-      client.total_spent ? formatMoney(client.total_spent) : '$0.00'
+      ...(canViewSalesTotals ? [client.total_spent ? formatMoney(client.total_spent) : '$0.00'] : []),
     ]);
 
     const csvContent = [headers, ...data].map(row => row.join(',')).join('\n');
@@ -244,7 +252,7 @@ const ClientList = () => {
                 className="cl-btn cl-btn-primary cl-btn-sm"
                 onClick={() => {
                   setShowDetailsModal(false);
-                  navigate(`/edit-client/${selectedClient.id}`);
+                  navigate(`/clients/${selectedClient.id}/edit`);
                 }}
               >
                 <FaEdit size={12} /> Editar
@@ -262,7 +270,7 @@ const ClientList = () => {
 
         <div className="cl-header-title">
           <FaUsers size={14} style={{ color: 'var(--primary)' }} />
-          Gestión de Clientes
+          Clientes
           <span className="cl-badge">{totalClients}</span>
         </div>
 
@@ -274,7 +282,7 @@ const ClientList = () => {
             className="cl-btn cl-btn-primary cl-btn-sm"
             onClick={() => navigate('/clients/new')}
           >
-            <FaPlus size={11} /> Nuevo Cliente
+            <FaPlus size={11} /> Nuevo cliente
           </button>
         </div>
       </header>
@@ -297,11 +305,13 @@ const ClientList = () => {
             <div className="cl-stat-value">{regularCount}</div>
             <div className="cl-stat-sub">clientes regulares</div>
           </div>
+          {canViewSalesTotals && (
           <div className="cl-stat-card">
             <div className="cl-stat-label">Total Gastado</div>
             <div className="cl-stat-value success">{formatMoney(totalSpent)}</div>
             <div className="cl-stat-sub">en todas las facturas</div>
           </div>
+          )}
         </div>
 
         {/* Filter Panel */}
@@ -353,7 +363,7 @@ const ClientList = () => {
               <FaUsers size={12} /> Clientes
               <span className="cl-badge">{filteredClients.length} resultados</span>
             </div>
-            {filteredClients.length > 0 && (
+            {canViewSalesTotals && filteredClients.length > 0 && (
               <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)' }}>
                 Total: {formatMoney(filteredClients.reduce((sum, c) => sum + (c.total_spent || 0), 0))}
               </span>
@@ -370,14 +380,14 @@ const ClientList = () => {
                   <th><FaIdCard size={10} /> RUC/CI</th>
                   <th>Tipo</th>
                   <th className="text-end"><FaFileInvoice size={10} /> Facturas</th>
-                  <th className="text-end"><FaMoneyBillWave size={10} /> Gastado</th>
+                  {canViewSalesTotals && <th className="text-end"><FaMoneyBillWave size={10} /> Gastado</th>}
                   <th className="text-end">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedClients.length === 0 ? (
                   <tr>
-                    <td colSpan="8">
+                    <td colSpan={canViewSalesTotals ? "8" : "7"}>
                       <div className="cl-empty">
                         <FaUsers size={48} />
                         <p>
@@ -396,41 +406,50 @@ const ClientList = () => {
                 ) : (
                   paginatedClients.map((client, idx) => (
                     <tr key={client.id}>
-                      <td>{(currentPage - 1) * pageSize + idx + 1}</td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <td data-label="#">{(currentPage - 1) * pageSize + idx + 1}</td>
+                      <td data-label="Cliente">
+                        <div className="cl-client-cell">
                           <div className="cl-avatar">{getInitials(client.name)}</div>
-                          <strong>{client.name}</strong>
+                          <div className="cl-client-main">
+                            <strong className="cl-client-name">{client.name}</strong>
+                            <span className="cl-client-meta">{client.email || client.phone || 'Sin contacto registrado'}</span>
+                          </div>
                         </div>
                       </td>
-                      <td>
-                        <div style={{ fontSize: '0.75rem' }}>
-                          {client.email && <div><FaEnvelope size={10} style={{ marginRight: '0.25rem', color: 'var(--text-faint)' }} />{client.email}</div>}
-                          {client.phone && <div><FaPhone size={10} style={{ marginRight: '0.25rem', color: 'var(--text-faint)' }} />{client.phone}</div>}
+                      <td data-label="Contacto">
+                        <div className="cl-contact-stack">
+                          {client.email && <div className="cl-contact-line"><FaEnvelope size={10} />{client.email}</div>}
+                          {client.phone && <div className="cl-contact-line"><FaPhone size={10} />{client.phone}</div>}
                           {!client.email && !client.phone && <span style={{ color: 'var(--text-faint)' }}>—</span>}
                         </div>
                       </td>
-                      <td style={{ fontFamily: 'var(--mono)', fontSize: '0.75rem' }}>{client.ruc_ci || '—'}</td>
-                      <td>{getTypeBadge(client.client_type)}</td>
-                      <td className="text-end">
+                      <td data-label="RUC/CI" style={{ fontFamily: 'var(--mono)', fontSize: '0.75rem' }}>{client.ruc_ci || '—'}</td>
+                      <td data-label="Tipo">{getTypeBadge(client.client_type)}</td>
+                      <td data-label="Facturas" className="text-end">
                         <span className="cl-badge" style={{ background: 'var(--info-light)', color: 'var(--info)' }}>
                           {client.total_invoices || 0}
                         </span>
                       </td>
-                      <td className="text-end">
+                      {canViewSalesTotals && (
+                      <td data-label="Gastado" className="text-end">
                         <strong style={{ color: 'var(--success)' }}>{formatMoney(client.total_spent)}</strong>
                       </td>
-                      <td className="text-end">
+                      )}
+                      <td data-label="Acciones" className="text-end">
                         <div className="cl-actions">
-                          <button className="cl-action-btn btn-view" onClick={() => handleViewDetails(client)} title="Ver detalles">
-                            <FaEye size={12} />
-                          </button>
-                          <button className="cl-action-btn btn-edit" onClick={() => navigate(`/edit-client/${client.id}`)} title="Editar">
-                            <FaEdit size={12} />
-                          </button>
-                          <button className="cl-action-btn btn-delete" onClick={() => handleDelete(client)} title="Eliminar">
-                            <FaTrash size={12} />
-                          </button>
+                          <div className="cl-action-group">
+                            <button className="cl-action-btn btn-view" onClick={() => handleViewDetails(client)} title="Ver detalles">
+                              <FaEye size={12} />
+                            </button>
+                            <button className="cl-action-btn btn-edit" onClick={() => navigate(`/clients/${client.id}/edit`)} title="Editar">
+                              <FaEdit size={12} />
+                            </button>
+                          </div>
+                          <div className="cl-action-group">
+                            <button className="cl-action-btn btn-delete" onClick={() => handleDelete(client)} title="Eliminar">
+                              <FaTrash size={12} />
+                            </button>
+                          </div>
                         </div>
                       </td>
                     </tr>

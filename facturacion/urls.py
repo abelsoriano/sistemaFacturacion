@@ -2,36 +2,56 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 from django.conf.urls.static import static
 from django.conf import settings
-from .views import *
-from . import views
 from django.contrib.auth import views as auth_views
-from .views import (
+
+from facturacion.api.views.assets import AssetCategoryViewSet, AssetViewSet
+from facturacion.api.views.auth import (
+    GroupViewSet,
+    LoginView,
+    PermissionListView,
+    ProfileView,
+    RegisterView,
+    UserViewSet,
+    VerifyTokenView,
+)
+from facturacion.api.views.clients import ClientViewSet
+from facturacion.api.views.companies import CompanyViewSet
+from facturacion.api.views.credit_notes import CreditNoteViewSet
+from facturacion.api.views.ecf_config import ECFEventLogViewSet, ECFIssuerConfigViewSet, ECFSequenceViewSet
+from facturacion.api.views.ecf_runtime import ElectronicFiscalDocumentViewSet
+from facturacion.api.views.inventory import (
     CategoryListCreateView,
     CategoryRetrieveUpdateDeleteView,
+    LowStockProductsView,
     ProductListCreateView,
-    ProductRetrieveUpdateDeleteView,
     ProductHistoryListView,
-    SaleCreateView,
-    SaleListView,
-    SalesUpdateDeleteView,
-    ServicioManoObraUpdateDeleteView,
-    DashboardView,
-    generate_low_stock_pdf,
-    # NUEVAS VISTAS IMPORTADAS
+    ProductRetrieveUpdateDeleteView,
+)
+from facturacion.api.views.inventory_utils import (
     GenerateBarcodeImageView,
     GenerateZPLLabelView,
+    ListPrintersView,
     PrintLabelDirectView,
     SearchByBarcodeView,
-    ListPrintersView,  # NUEVA
-    # GESTIÓN DE USUARIOS Y ROLES
-    UserViewSet,
-    GroupViewSet,
-    PermissionListView,
+    generate_low_stock_pdf,
 )
+from facturacion.api.views.invoices import InvoiceViewSet
+from facturacion.api.views.operations import (
+    AbonoServicioViewSet,
+    AlmacenViewSet,
+    ServicioManoObraUpdateDeleteView,
+    ServicioManoObraViewSet,
+)
+from facturacion.api.views.quotations import QuotationViewSet
+from facturacion.api.views.reports import DashboardView
+from facturacion.api.views.sales_legacy import SaleCreateView, SaleListView, SalesUpdateDeleteView
 
 router = DefaultRouter()
+router.register(r'companies', CompanyViewSet, basename='company')
 router.register(r'clients', ClientViewSet, basename='client')
+router.register(r'quotations', QuotationViewSet, basename='quotation')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
+router.register(r'credit-notes', CreditNoteViewSet, basename='credit-note')
 router.register(r'almacens', AlmacenViewSet, basename='almacen')
 # router.register(r'labours', LabourViewSet, basename='labour')
 router.register(r'assets/categories', AssetCategoryViewSet, basename='asset-category')
@@ -41,6 +61,10 @@ router.register(r'users', UserViewSet, basename='user')
 router.register(r'groups', GroupViewSet, basename='group')
 router.register(r'abonos', AbonoServicioViewSet, basename='abono')
 router.register(r'servicios-mano-obra', ServicioManoObraViewSet, basename='servicio-mano-obra')
+router.register(r'ecf/issuers', ECFIssuerConfigViewSet, basename='ecf-issuer')
+router.register(r'ecf/sequences', ECFSequenceViewSet, basename='ecf-sequence')
+router.register(r'ecf/documents', ElectronicFiscalDocumentViewSet, basename='ecf-document')
+router.register(r'ecf/events', ECFEventLogViewSet, basename='ecf-event')
 
 
 
@@ -50,7 +74,9 @@ urlpatterns = router.urls + [
     # ==========================================
     # AUTENTICACIÓN - ¡AGREGAR ESTO!
     # ==========================================
-    path('login/', LoginView.as_view(), name='login'),  # ← ESTA LÍNEA FALTA
+    path('login/', LoginView.as_view(), name='login'),
+    path('auth/login/', LoginView.as_view(), name='auth-login'),
+    path('auth/register/', RegisterView.as_view(), name='auth-register'),
     # ==========================================
     # CATEGORÍAS
     # ==========================================
@@ -63,7 +89,7 @@ urlpatterns = router.urls + [
     # ==========================================
     path('products/<int:pk>/', ProductRetrieveUpdateDeleteView.as_view(), name='product-detail'),
     path('products/<int:pk>/history/', ProductHistoryListView.as_view(), name='product-history'),
-    path('products/low-stock/', views.LowStockProductsView.as_view(), name='low-stock-products'),
+    path('products/low-stock/', LowStockProductsView.as_view(), name='low-stock-products'),
     
     # ==========================================
     # CÓDIGOS DE BARRAS - NUEVAS RUTAS

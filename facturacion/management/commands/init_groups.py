@@ -1,12 +1,16 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.contenttypes.models import ContentType
-from facturacion.models import Category, Product, Sale, Invoice, Client, Almacen, Labour, Asset, AssetCategory
+from facturacion.models import Category, Product, Sale, Invoice, Client, Almacen, ServicioManoObra, Asset, AssetCategory, CreditNote
 
 
 EXTRA_PERMISSIONS = {
     'sale': {
         'view_totals': 'view_sale_totals',
+    },
+    'invoice': {
+        'reverse': 'reverse_invoice',
+        'view_financial_totals': 'view_financial_totals',
     },
 }
 
@@ -24,6 +28,7 @@ class Command(BaseCommand):
                 'products': ['add', 'change', 'delete', 'view'],
                 'sales': ['add', 'change', 'delete', 'view'],
                 'invoices': ['add', 'change', 'delete', 'view'],
+                'credit_notes': ['add', 'change', 'delete', 'view'],
                 'clients': ['add', 'change', 'delete', 'view'],
                 'almacens': ['add', 'change', 'delete', 'view'],
                 'labours': ['add', 'change', 'delete', 'view'],
@@ -33,12 +38,15 @@ class Command(BaseCommand):
                 'groups': ['add', 'change', 'delete', 'view'],
                 'permissions': ['view'],
                 'sales_extra': ['view_totals'],
+                'invoices_extra': ['reverse', 'view_financial_totals'],
             },
             'Vendedor': {
                 'categories': ['view'],
                 'products': ['add', 'change', 'view'],
                 'sales': ['add', 'change', 'view'],
                 'invoices': ['add', 'change', 'view'],
+                'credit_notes': ['add', 'view'],
+                'invoices_extra': ['reverse'],
                 'clients': ['add', 'change', 'delete', 'view'],
             },
             'Almacenista': {
@@ -61,13 +69,15 @@ class Command(BaseCommand):
             'invoices': Invoice,
             'clients': Client,
             'almacens': Almacen,
-            'labours': Labour,
+            'labours': ServicioManoObra,
+            'credit_notes': CreditNote,
             'assets': Asset,
             'asset_categories': AssetCategory,
             'users': User,
             'groups': Group,
             'permissions': Permission,
             'sales_extra': Sale,
+            'invoices_extra': Invoice,
         }
 
         # Crear grupos y asignar permisos

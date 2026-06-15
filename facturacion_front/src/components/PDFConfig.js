@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PDF_DEFAULT_CONFIG, getSavedPDFConfig, savePDFConfig, resetPDFConfig } from '../utils/pdfConfig';
-import '../css/PDFConfig.css'; // Archivo CSS separado para estilos más limpios
+import '../css/PDFConfig.css';
+
+const STYLE_TOKENS = [
+  { label: 'Primario', value: '#6C63FF' },
+  { label: 'Navbar', value: '#1B1A2E' },
+  { label: 'Activo', value: '#EEEDFE' },
+];
 
 function PDFConfig() {
   const navigate = useNavigate();
@@ -22,7 +28,7 @@ function PDFConfig() {
   }, []);
 
   const handleCompanyChange = (field) => (event) => {
-    setCompany(prev => ({ ...prev, [field]: event.target.value }));
+    setCompany((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
   const handleFooterLineChange = (index) => (event) => {
@@ -34,14 +40,12 @@ function PDFConfig() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setIsSaving(true);
-    
-    // Simular pequeño retraso para mostrar el estado de guardado
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     savePDFConfig({ company, footerLines });
     setMessage('✅ Configuración guardada correctamente.');
-    
-    // Redirigir al home después de 1.5 segundos
+
     setTimeout(() => {
       navigate('/home');
     }, 1500);
@@ -49,14 +53,14 @@ function PDFConfig() {
 
   const handleReset = async () => {
     setIsResetting(true);
-    
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
     resetPDFConfig();
     setCompany(PDF_DEFAULT_CONFIG.company);
     setFooterLines(PDF_DEFAULT_CONFIG.footerLines);
     setMessage('🔄 Valores por defecto restaurados.');
-    
+
     setTimeout(() => setMessage(''), 3000);
     setIsResetting(false);
   };
@@ -66,181 +70,209 @@ function PDFConfig() {
   };
 
   return (
-    <div className="pdf-config-container">
-      <div className="pdf-config-card">
-        {/* Header */}
-        <div className="config-header">
-          <div className="header-content">
-            <div className="header-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6C2 4.9 2.9 4 4 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M22 6L12 13L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <div className="header-text">
-              <h1>Configuración del Ticket PDF</h1>
-              <p>Personaliza la información de tu empresa y el pie de página de los tickets</p>
-            </div>
+    <div className="pdf-config-page">
+      <div className="pdf-config-shell">
+        <header className="pdf-config-hero">
+          <div>
+            <span className="pdf-config-eyebrow">Configuración</span>
+            <h1>Configuración PDF y tickets</h1>
+            <p>
+              Ajusta los datos visibles en comprobantes impresos y tickets locales.
+              Esta configuración se guarda en el navegador.
+            </p>
           </div>
-        </div>
+          <div className="pdf-config-hero-badge">
+            <span>LocalStorage</span>
+            <strong>Vista local</strong>
+          </div>
+        </header>
 
-        {/* Message Toast */}
         {message && (
-          <div className={`message-toast ${message.includes('✅') ? 'success' : 'info'}`}>
+          <div className={`pdf-config-message ${message.includes('✅') ? 'success' : 'info'}`}>
             {message}
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          {/* Company Section */}
-          <div className="config-section">
-            <div className="section-header">
-              <div className="section-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="currentColor" strokeWidth="2"/>
-                  <path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <h2>Información de la Empresa</h2>
-            </div>
-            
-            <div className="form-grid">
-              <div className="form-group">
-                <label htmlFor="companyName">
-                  <span className="label-text">Nombre de la empresa</span>
-                </label>
-                <input
-                  id="companyName"
-                  type="text"
-                  value={company.name}
-                  onChange={handleCompanyChange('name')}
-                  className="form-input"
-                  placeholder="Ej: Mi Empresa S.A."
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="companyPhone">
-                  <span className="label-text">Teléfono</span>
-                </label>
-                <input
-                  id="companyPhone"
-                  type="text"
-                  value={company.phone}
-                  onChange={handleCompanyChange('phone')}
-                  className="form-input"
-                  placeholder="Ej: +123 456 7890"
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="companyAddress">
-                  <span className="label-text">Dirección</span>
-                </label>
-                <input
-                  id="companyAddress"
-                  type="text"
-                  value={company.address}
-                  onChange={handleCompanyChange('address')}
-                  className="form-input"
-                  placeholder="Ej: Calle Principal 123"
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="companyCity">
-                  <span className="label-text">Ciudad</span>
-                </label>
-                <input
-                  id="companyCity"
-                  type="text"
-                  value={company.city}
-                  onChange={handleCompanyChange('city')}
-                  className="form-input"
-                  placeholder="Ej: Ciudad, País"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Footer Section */}
-          <div className="config-section">
-            <div className="section-header">
-              <div className="section-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 3h18v18H3V3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  <path d="M7 7h10M7 12h10M7 17h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <h2>Pie de Página</h2>
-              <span className="section-badge">Máximo 3 líneas</span>
-            </div>
-            
-            <div className="footer-lines">
-              {footerLines.map((line, index) => (
-                <div key={index} className="form-group">
-                  <label htmlFor={`footerLine${index}`}>
-                    <span className="label-text">Línea {index + 1}</span>
-                  </label>
-                  <input
-                    id={`footerLine${index}`}
-                    type="text"
-                    value={line}
-                    onChange={handleFooterLineChange(index)}
-                    className="form-input"
-                    placeholder={`Texto de la línea ${index + 1}`}
-                    maxLength="100"
-                  />
-                  <span className="input-hint">{line.length}/100 caracteres</span>
+        <form onSubmit={handleSubmit} className="pdf-config-form">
+          <section className="pdf-config-layout">
+            <div className="pdf-config-main">
+              <div className="pdf-config-section">
+                <div className="pdf-config-section-head">
+                  <div>
+                    <span className="section-kicker">Empresa</span>
+                    <h2>Datos visibles</h2>
+                  </div>
+                  <span className="section-status">Ticket / factura</span>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Preview Section */}
-          <div className="config-section preview-section">
-            <div className="section-header">
-              <div className="section-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2"/>
-                  <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
-                </svg>
-              </div>
-              <h2>Vista Previa</h2>
-            </div>
-            <div className="preview-card">
-              <div className="preview-content">
-                <div className="preview-company">
-                  <strong>{company.name || "Nombre de empresa"}</strong>
-                  {company.phone && <span>{company.phone}</span>}
-                  {company.address && <span>{company.address}</span>}
-                  {company.city && <span>{company.city}</span>}
+                <div className="pdf-config-grid">
+                  <div className="pdf-config-field">
+                    <label htmlFor="companyName">Nombre comercial</label>
+                    <input
+                      id="companyName"
+                      type="text"
+                      value={company.name}
+                      onChange={handleCompanyChange('name')}
+                      placeholder="Ej: PERCY TECHNOLOGY"
+                      maxLength={60}
+                    />
+                    <small>{company.name.length}/60 caracteres</small>
+                  </div>
+
+                  <div className="pdf-config-field">
+                    <label htmlFor="companyPhone">Teléfono</label>
+                    <input
+                      id="companyPhone"
+                      type="text"
+                      value={company.phone}
+                      onChange={handleCompanyChange('phone')}
+                      placeholder="Ej: (809) 986-6178"
+                      maxLength={30}
+                    />
+                    <small>{company.phone.length}/30 caracteres</small>
+                  </div>
+
+                  <div className="pdf-config-field full-width">
+                    <label htmlFor="companyAddress">Dirección</label>
+                    <input
+                      id="companyAddress"
+                      type="text"
+                      value={company.address}
+                      onChange={handleCompanyChange('address')}
+                      placeholder="Dirección completa"
+                      maxLength={100}
+                    />
+                    <small>{company.address.length}/100 caracteres</small>
+                  </div>
+
+                  <div className="pdf-config-field full-width">
+                    <label htmlFor="companyCity">Ciudad / país</label>
+                    <input
+                      id="companyCity"
+                      type="text"
+                      value={company.city}
+                      onChange={handleCompanyChange('city')}
+                      placeholder="Ciudad, país"
+                      maxLength={60}
+                    />
+                    <small>{company.city.length}/60 caracteres</small>
+                  </div>
                 </div>
-                <div className="preview-divider"></div>
-                <div className="preview-footer">
-                  {footerLines.map((line, idx) => (
-                    line && <span key={idx}>{line}</span>
+              </div>
+
+              <div className="pdf-config-section">
+                <div className="pdf-config-section-head">
+                  <div>
+                    <span className="section-kicker">Ticket / factura</span>
+                    <h2>Mensajes de cierre</h2>
+                  </div>
+                  <span className="section-status">Máximo 3 líneas</span>
+                </div>
+
+                <div className="pdf-config-footer-lines">
+                  {footerLines.map((line, index) => (
+                    <div key={index} className="pdf-config-field">
+                      <label htmlFor={`footer-${index}`}>Línea {index + 1}</label>
+                      <input
+                        id={`footer-${index}`}
+                        type="text"
+                        value={line}
+                        onChange={handleFooterLineChange(index)}
+                        placeholder={`Texto de la línea ${index + 1}`}
+                        maxLength={100}
+                      />
+                      <small>{line.length}/100 caracteres</small>
+                    </div>
                   ))}
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="action-buttons">
-            <button 
-              type="button" 
+            <aside className="pdf-config-side">
+              <div className="pdf-config-section compact">
+                <div className="pdf-config-section-head">
+                  <div>
+                    <span className="section-kicker">Logo</span>
+                    <h2>Branding local</h2>
+                  </div>
+                </div>
+                <div className="pdf-logo-preview">
+                  <span>{getInitials(company.name)}</span>
+                </div>
+                <p className="pdf-config-help">
+                  La carga de logo por empresa se conectará en una fase posterior.
+                </p>
+              </div>
+
+              <div className="pdf-config-section compact">
+                <div className="pdf-config-section-head">
+                  <div>
+                    <span className="section-kicker">Estilo</span>
+                    <h2>Paleta SaaS</h2>
+                  </div>
+                </div>
+                <div className="pdf-token-list">
+                  {STYLE_TOKENS.map((token) => (
+                    <div className="pdf-token-row" key={token.label}>
+                      <span style={{ backgroundColor: token.value }}></span>
+                      <div>
+                        <strong>{token.label}</strong>
+                        <small>{token.value}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pdf-config-section compact">
+                <div className="pdf-config-section-head">
+                  <div>
+                    <span className="section-kicker">Previsualización</span>
+                    <h2>Ticket ejemplo</h2>
+                  </div>
+                </div>
+                <div className="pdf-preview-ticket">
+                  <div className="pdf-preview-header">
+                    <h3>{company.name || 'Nombre de la empresa'}</h3>
+                    <p>{company.address || 'Dirección'}</p>
+                    <p>{company.phone || 'Teléfono'}</p>
+                    <p>{company.city || 'Ciudad'}</p>
+                  </div>
+                  <div className="pdf-preview-divider"></div>
+                  <div className="pdf-preview-content">
+                    <p><strong>Factura No.</strong> 001234</p>
+                    <p><strong>Fecha</strong> {new Date().toLocaleDateString('es-ES')}</p>
+                    <p><strong>Cliente</strong> Cliente de ejemplo</p>
+                  </div>
+                  <div className="pdf-preview-divider"></div>
+                  <div className="pdf-preview-footer">
+                    {footerLines.map((line, index) => (
+                      line.trim() ? <p key={index}>{line}</p> : null
+                    ))}
+                    {footerLines.every((line) => !line.trim()) && (
+                      <p className="pdf-preview-muted">Sin mensaje</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </section>
+
+          <div className="pdf-config-actions">
+            <button
+              type="button"
               onClick={handleCancel}
-              className="btn btn-secondary"
+              className="pdf-config-btn secondary"
+              disabled={isSaving || isResetting}
             >
               Cancelar
             </button>
-            
-            <button 
-              type="button" 
+
+            <button
+              type="button"
               onClick={handleReset}
-              className="btn btn-outline"
-              disabled={isResetting}
+              className="pdf-config-btn warning"
+              disabled={isResetting || isSaving}
             >
               {isResetting ? (
                 <>
@@ -251,11 +283,11 @@ function PDFConfig() {
                 'Restaurar valores'
               )}
             </button>
-            
-            <button 
-              type="submit" 
-              className="btn btn-primary"
-              disabled={isSaving}
+
+            <button
+              type="submit"
+              className="pdf-config-btn primary"
+              disabled={isSaving || isResetting}
             >
               {isSaving ? (
                 <>
@@ -271,6 +303,17 @@ function PDFConfig() {
       </div>
     </div>
   );
+}
+
+function getInitials(name) {
+  const cleanName = String(name || '').trim();
+  if (!cleanName) return 'PDF';
+  return cleanName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 }
 
 export default PDFConfig;

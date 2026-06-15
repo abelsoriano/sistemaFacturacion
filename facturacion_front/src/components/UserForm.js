@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSave, FaTimes, FaUser, FaEnvelope, FaLock, FaShieldAlt } from 'react-icons/fa';
 import api from '../services/api';
+import '../css/UserList.css';
 
 const UserForm = ({ user, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -110,9 +111,9 @@ const UserForm = ({ user, onClose, onSave }) => {
   };
 
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+    <div className="modal show d-block user-modal-shell">
       <div className="modal-dialog modal-lg">
-        <div className="modal-content">
+        <div className="modal-content user-modal-content">
           <div className="modal-header">
             <h5 className="modal-title">
               <FaUser className="me-2" />

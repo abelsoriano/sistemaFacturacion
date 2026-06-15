@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  ArrowUp, ArrowDown, Edit, Trash, ChevronsLeft, ChevronLeft,
+  ArrowUp, ArrowDown, ChevronsLeft, ChevronLeft,
   ChevronRight, ChevronsRight, FileX, Package, Plus, Search,
   CreditCard, DollarSign, X, CheckCircle, Clock, AlertCircle, Wallet
 } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
-import { stylesAlmacens, styles, showConfirmationAlert, showSuccessAlert, showErrorAlert } from "../herpert";
+import { showConfirmationAlert, showSuccessAlert, showErrorAlert } from "../herpert";
 import '../css/SalesList.css';
+import '../css/Labour.css';
 import {
   IconEdit,
   IconTrash
@@ -16,17 +17,13 @@ import {
 // ── Badge de estado de pago ──────────────────────────────────────────
 const BadgeEstado = ({ estado }) => {
   const config = {
-    pagado: { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0', label: 'Pagado', Icon: CheckCircle },
-    parcial: { bg: '#fffbeb', color: '#b45309', border: '#fde68a', label: 'Parcial', Icon: Clock },
-    pendiente: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca', label: 'Pendiente', Icon: AlertCircle },
+    pagado: { cls: 'lab-badge-success', label: 'Pagado', Icon: CheckCircle },
+    parcial: { cls: 'lab-badge-warning', label: 'Parcial', Icon: Clock },
+    pendiente: { cls: 'lab-badge-danger', label: 'Pendiente', Icon: AlertCircle },
   };
   const c = config[estado] || config.pendiente;
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: '4px',
-      padding: '3px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: 500,
-      background: c.bg, color: c.color, border: `1px solid ${c.border}`
-    }}>
+    <span className={`lab-badge ${c.cls}`}>
       <c.Icon size={11} />
       {c.label}
     </span>
@@ -36,13 +33,7 @@ const BadgeEstado = ({ estado }) => {
 
 // ── Badge modalidad ──────────────────────────────────────────────────
 const BadgeModalidad = ({ modalidad }) => (
-  <span style={{
-    display: 'inline-flex', alignItems: 'center', gap: '4px',
-    padding: '3px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: 500,
-    background: modalidad === 'credito' ? '#eff6ff' : '#f0fdf4',
-    color: modalidad === 'credito' ? '#1d4ed8' : '#15803d',
-    border: `1px solid ${modalidad === 'credito' ? '#bfdbfe' : '#bbf7d0'}`
-  }}>
+  <span className={`lab-badge ${modalidad === 'credito' ? 'lab-badge-info' : 'lab-badge-success'}`}>
     {modalidad === 'credito' ? <CreditCard size={11} /> : <DollarSign size={11} />}
     {modalidad === 'credito' ? 'Crédito' : 'Contado'}
   </span>
@@ -107,84 +98,55 @@ const ModalAbonos = ({ servicio, onClose, onAbonoRegistrado }) => {
   };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-    }}>
-      <div style={{
-        background: 'var(--color-background-primary, #fff)',
-        borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '460px',
-        border: '0.5px solid var(--color-border-tertiary)', boxShadow: '0 8px 32px rgba(0,0,0,0.12)'
-      }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+    <div className="lab-modal-overlay">
+      <div className="lab-modal">
+        <div className="lab-modal-header">
           <div>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 500 }}>Registrar abono</h3>
-            <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-              {servicio.nombre_persona}
-            </p>
+            <h3>Registrar abono</h3>
+            <p>{servicio.nombre_persona}</p>
           </div>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--color-text-secondary)', padding: '4px'
-          }}>
+          <button onClick={onClose} className="lab-modal-close">
             <X size={18} />
           </button>
         </div>
 
-        {/* Resumen financiero */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '20px'
-        }}>
-          {[
-            { label: 'Total', value: `$${parseFloat(servicio.precio_total).toFixed(2)}`, color: '#374151' },
-            { label: 'Abonado', value: `$${parseFloat(servicio.total_abonado || 0).toFixed(2)}`, color: '#15803d' },
-            { label: 'Pendiente', value: `$${saldo.toFixed(2)}`, color: '#dc2626' },
-          ].map(({ label, value, color }) => (
-            <div key={label} style={{
-              background: 'var(--color-background-secondary, #f9fafb)',
-              borderRadius: '10px', padding: '10px 12px', textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>{label}</div>
-              <div style={{ fontSize: '15px', fontWeight: 500, color }}>{value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Historial abonos */}
-        {servicio.abonos && servicio.abonos.length > 0 && (
-          <div style={{ marginBottom: '20px' }}>
-            <p style={{ fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Historial
-            </p>
-            <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {servicio.abonos.map((abono) => (
-                <div key={abono.id} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '8px 12px', borderRadius: '8px',
-                  background: 'var(--color-background-secondary, #f9fafb)',
-                  fontSize: '13px'
-                }}>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>
-                    {new Date(abono.fecha_abono).toLocaleDateString('es-CO')}
-                    {abono.notas && ` · ${abono.notas}`}
-                  </span>
-                  <span style={{ fontWeight: 500, color: '#15803d' }}>
-                    +${parseFloat(abono.monto).toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
+        <div className="lab-modal-body">
+          <div className="lab-summary-grid">
+            {[
+              { label: 'Total', value: `$${parseFloat(servicio.precio_total).toFixed(2)}` },
+              { label: 'Abonado', value: `$${parseFloat(servicio.total_abonado || 0).toFixed(2)}` },
+              { label: 'Pendiente', value: `$${saldo.toFixed(2)}` },
+            ].map(({ label, value }) => (
+              <div key={label} className="lab-summary-tile">
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
           </div>
-        )}
 
-        {/* Formulario */}
-        {saldo > 0 ? (
-          <>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 500, display: 'block', marginBottom: '6px' }}>
+          {servicio.abonos && servicio.abonos.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <p className="lab-section-title" style={{ marginBottom: 8 }}>Historial</p>
+              <div className="lab-history">
+                {servicio.abonos.map((abono) => (
+                  <div key={abono.id} className="lab-history-row">
+                    <span>
+                      {new Date(abono.fecha_abono).toLocaleDateString('es-CO')}
+                      {abono.notas && ` · ${abono.notas}`}
+                    </span>
+                    <strong style={{ color: 'var(--lab-success)' }}>
+                      +${parseFloat(abono.monto).toFixed(2)}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {saldo > 0 ? (
+            <div className="lab-form">
+              <label>
                 Monto del abono
-              </label>
               <input
                 type="number"
                 value={monto}
@@ -192,67 +154,48 @@ const ModalAbonos = ({ servicio, onClose, onAbonoRegistrado }) => {
                 placeholder={`Máximo $${saldo.toFixed(2)}`}
                 min="0.01"
                 step="0.01"
-                style={{ ...styles.input, width: '100%' }}
               />
-            </div>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 500, display: 'block', marginBottom: '6px' }}>
-                Notas (opcional)
               </label>
+              <label>
+                Notas (opcional)
               <input
                 type="text"
                 value={notas}
                 onChange={(e) => setNotas(e.target.value)}
                 placeholder="Ej: Pago en efectivo"
-                style={{ ...styles.input, width: '100%' }}
               />
-            </div>
+              </label>
 
-            {error && (
-              <div style={{
-                background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px',
-                padding: '10px 12px', fontSize: '13px', color: '#dc2626', marginBottom: '14px',
-                display: 'flex', alignItems: 'center', gap: '6px'
-              }}>
-                <AlertCircle size={14} /> {error}
-              </div>
-            )}
+              {error && (
+                <div className="lab-error">
+                  <AlertCircle size={14} /> {error}
+                </div>
+              )}
 
-            <div style={{ display: 'flex', gap: '10px' }}>
+              <div className="lab-actions-row">
               <button
                 onClick={handleAbono}
                 disabled={guardando}
-                style={{
-                  flex: 1, padding: '10px', borderRadius: '10px', border: 'none',
-                  background: '#1d4ed8', color: '#fff', fontWeight: 500, fontSize: '14px',
-                  cursor: guardando ? 'not-allowed' : 'pointer', opacity: guardando ? 0.7 : 1
-                }}
+                className="lab-btn lab-btn-primary"
               >
                 {guardando ? 'Guardando...' : 'Registrar abono'}
               </button>
               <button
                 onClick={handlePagarCompleto}
                 disabled={guardando}
-                style={{
-                  flex: 1, padding: '10px', borderRadius: '10px',
-                  border: '1px solid #bbf7d0', background: '#f0fdf4',
-                  color: '#15803d', fontWeight: 500, fontSize: '14px',
-                  cursor: guardando ? 'not-allowed' : 'pointer', opacity: guardando ? 0.7 : 1
-                }}
+                className="lab-btn lab-btn-success"
               >
                 Pagar todo (${saldo.toFixed(2)})
               </button>
             </div>
-          </>
-        ) : (
-          <div style={{
-            textAlign: 'center', padding: '16px',
-            background: '#f0fdf4', borderRadius: '10px', color: '#15803d'
-          }}>
+            </div>
+          ) : (
+          <div className="lab-paid-state">
             <CheckCircle size={24} style={{ marginBottom: '6px' }} />
             <p style={{ margin: 0, fontWeight: 500 }}>Servicio completamente pagado</p>
           </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -266,8 +209,6 @@ const LabourList = () => {
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [sortConfig, setSortConfig] = useState({ key: 'nombre_persona', direction: 'asc' });
   const [pagination, setPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
-  const [hoveredRow, setHoveredRow] = useState(null);
-  const [buttonHoverStates, setButtonHoverStates] = useState({});
   const [servicioAbono, setServicioAbono] = useState(null); // modal
 
   const navigate = useNavigate();
@@ -306,10 +247,6 @@ const LabourList = () => {
     }));
   };
 
-  const handleButtonHover = (id, isHovered) => {
-    setButtonHoverStates(prev => ({ ...prev, [id]: isHovered }));
-  };
-
   // Filtrado + búsqueda + sort + paginación
   const filteredItems = useMemo(() => {
     return items.filter(item => {
@@ -344,7 +281,9 @@ const LabourList = () => {
     const cobrado = items.reduce((s, i) => s + parseFloat(i.total_abonado || 0), 0);
     const pendiente = total - cobrado;
     const credito = items.filter(i => i.modalidad_pago === 'credito').length;
-    return { total, cobrado, pendiente, credito };
+    const pendientes = items.filter(i => i.estado_pago === 'pendiente').length;
+    const pagados = items.filter(i => i.estado_pago === 'pagado').length;
+    return { total, cobrado, pendiente, credito, pendientes, pagados };
   }, [items]);
 
   const renderSortIcon = (key) => {
@@ -352,15 +291,9 @@ const LabourList = () => {
     return sortConfig.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
   };
 
-  const thStyle = (key) => ({
-    ...stylesAlmacens.tableHeader,
-    cursor: 'pointer',
-    userSelect: 'none',
-    whiteSpace: 'nowrap'
-  });
-
   return (
-    <div style={{ ...stylesAlmacens.container, maxWidth: '1100px' }}>
+    <div className="lab-root">
+      <div className="lab-shell">
 
       {/* Modal abonos */}
       {servicioAbono && (
@@ -372,33 +305,24 @@ const LabourList = () => {
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div className="lab-header">
         <div>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Package size={20} /> Servicios de Mano de Obra
+          <h2>
+            <Package size={22} /> Mano de obra
           </h2>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-            {items.length} servicios registrados
-          </p>
+          <p>{items.length} servicios registrados con control de abonos y saldos.</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="lab-actions-row">
           <button
             onClick={() => navigate('/home')}
-            style={{ ...styles.button, ...styles.cancelButton }}
+            className="lab-btn lab-btn-outline"
           >
-            Cancelar
+            Volver
           </button>
 
           <button
             onClick={() => navigate('/register-labour')}
-            onMouseEnter={() => handleButtonHover('addNew', true)}
-            onMouseLeave={() => handleButtonHover('addNew', false)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '9px 18px', borderRadius: '10px', border: 'none',
-              background: '#1d4ed8', color: '#fff', fontWeight: 500,
-              fontSize: '14px', cursor: 'pointer'
-            }}
+            className="lab-btn lab-btn-primary"
           >
             <Plus size={16} /> Nuevo servicio
           </button>
@@ -406,197 +330,169 @@ const LabourList = () => {
       </div>
 
       {/* Tarjetas métricas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '24px' }}>
+      <div className="lab-stats">
         {[
-          { label: 'Total facturado', value: `$${metricas.total.toFixed(2)}`, icon: Package, color: '#374151' },
-          { label: 'Total cobrado', value: `$${metricas.cobrado.toFixed(2)}`, icon: CheckCircle, color: '#15803d' },
-          { label: 'Por cobrar', value: `$${metricas.pendiente.toFixed(2)}`, icon: AlertCircle, color: '#dc2626' },
-          { label: 'En crédito', value: `${metricas.credito} servicios`, icon: CreditCard, color: '#1d4ed8' },
+          { label: 'Total servicios', value: items.length, icon: Package, color: 'var(--lab-text)' },
+          { label: 'Pendientes', value: metricas.pendientes, icon: AlertCircle, color: 'var(--lab-danger)' },
+          { label: 'Pagados', value: metricas.pagados, icon: CheckCircle, color: 'var(--lab-success)' },
+          { label: 'Monto pendiente', value: `$${metricas.pendiente.toFixed(2)}`, icon: CreditCard, color: 'var(--lab-primary)' },
         ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} style={{
-            background: 'var(--color-background-secondary, #f9fafb)',
-            borderRadius: '12px', padding: '14px 16px',
-            border: '0.5px solid var(--color-border-tertiary)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{label}</span>
+          <div key={label} className="lab-stat-card">
+            <div className="lab-stat-top">
+              <span>{label}</span>
               <Icon size={15} style={{ color }} />
             </div>
-            <div style={{ fontSize: '18px', fontWeight: 500, color, marginTop: '6px' }}>{value}</div>
+            <strong style={{ color }}>{value}</strong>
           </div>
         ))}
       </div>
 
       {/* Búsqueda y filtros */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+      <div className="lab-card lab-filter-card">
+        <div className="lab-search">
           <input
             type="text"
             placeholder="Buscar por nombre, descripción o factura..."
             value={searchTerm}
             onChange={(e) => { setSearchTerm(e.target.value); setPagination(p => ({ ...p, currentPage: 1 })); }}
-            style={{ ...stylesAlmacens.searchInput, paddingLeft: '36px', width: '100%' }}
           />
-          <div style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }}>
-            <Search size={15} />
-          </div>
+          <Search size={15} />
         </div>
-        {['todos', 'pendiente', 'parcial', 'pagado'].map(estado => (
-          <button
-            key={estado}
-            onClick={() => { setFiltroEstado(estado); setPagination(p => ({ ...p, currentPage: 1 })); }}
-            style={{
-              padding: '8px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 500,
-              cursor: 'pointer', border: '1px solid',
-              background: filtroEstado === estado ? '#1d4ed8' : 'transparent',
-              color: filtroEstado === estado ? '#fff' : 'var(--color-text-secondary)',
-              borderColor: filtroEstado === estado ? '#1d4ed8' : 'var(--color-border-tertiary)'
-            }}
-          >
-            {{ todos: 'Todos', pendiente: 'Pendientes', parcial: 'Parciales', pagado: 'Pagados' }[estado]}
-          </button>
-        ))}
+        <div className="lab-filter-pills">
+          {['todos', 'pendiente', 'parcial', 'pagado'].map(estado => (
+            <button
+              key={estado}
+              onClick={() => { setFiltroEstado(estado); setPagination(p => ({ ...p, currentPage: 1 })); }}
+              className={`lab-pill ${filtroEstado === estado ? 'active' : ''}`}
+            >
+              {{ todos: 'Todos', pendiente: 'Pendientes', parcial: 'Parciales', pagado: 'Pagados' }[estado]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tabla */}
       {loading ? (
-        <div style={stylesAlmacens.loadingContainer}>
-          <div style={stylesAlmacens.spinner}></div>
+        <div className="lab-card lab-loading">
+          <div className="lab-spinner"></div>
           <p>Cargando servicios...</p>
         </div>
       ) : filteredItems.length === 0 ? (
-        <div style={stylesAlmacens.emptyState}>
+        <div className="lab-card lab-empty">
           <FileX size={48} />
           <h3>No se encontraron servicios</h3>
           <p>Intenta cambiar los filtros o añade un nuevo servicio.</p>
         </div>
       ) : (
         <>
-          <div style={{ ...stylesAlmacens.tableContainer, borderRadius: '12px', border: '0.5px solid var(--color-border-tertiary)', overflow: 'hidden' }}>
-            <table style={{ ...stylesAlmacens.table, borderCollapse: 'collapse', width: '100%' }}>
+          <div className="lab-card lab-table-card">
+            <div className="lab-table-wrap">
+            <table className="lab-table">
               <thead>
-                <tr style={{ background: 'var(--color-background-secondary, #f9fafb)' }}>
-                  <th style={thStyle('nombre_persona')} onClick={() => handleSort('nombre_persona')}>
+                <tr>
+                  <th onClick={() => handleSort('nombre_persona')}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>Nombre {renderSortIcon('nombre_persona')}</span>
                   </th>
-                  <th style={stylesAlmacens.tableHeader}>Descripción</th>
-                  <th style={thStyle('precio_total')} onClick={() => handleSort('precio_total')}>
+                  <th>Descripción</th>
+                  <th onClick={() => handleSort('precio_total')}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>Precio {renderSortIcon('precio_total')}</span>
                   </th>
-                  <th style={stylesAlmacens.tableHeader}>Abonado</th>
-                  <th style={stylesAlmacens.tableHeader}>Pendiente</th>
-                  <th style={stylesAlmacens.tableHeader}>Modalidad</th>
-                  <th style={stylesAlmacens.tableHeader}>Estado</th>
-                  <th style={stylesAlmacens.tableHeader}>Factura</th>
-                  <th style={stylesAlmacens.tableHeader}>Acciones</th>
+                  <th>Abonado</th>
+                  <th>Pendiente</th>
+                  <th>Modalidad</th>
+                  <th>Estado</th>
+                  <th>Factura</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedItems.map((item) => (
-                  <tr
-                    key={item.id}
-                    style={{
-                      ...stylesAlmacens.tableRow,
-                      ...(hoveredRow === item.id ? stylesAlmacens.tableRowHover : {}),
-                      borderBottom: '0.5px solid var(--color-border-tertiary)'
-                    }}
-                    onMouseEnter={() => setHoveredRow(item.id)}
-                    onMouseLeave={() => setHoveredRow(null)}
-                  >
-                    <td style={{ ...stylesAlmacens.tableCell, fontWeight: 500 }}>
+                  <tr key={item.id}>
+                    <td data-label="Nombre" style={{ fontWeight: 750 }}>
                       {item.nombre_persona}
                     </td>
-                    <td style={{ ...stylesAlmacens.tableCell, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
+                    <td data-label="Descripción" className="lab-muted" style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {item.descripcion || '—'}
                     </td>
-                    <td style={{ ...stylesAlmacens.tableCell, fontWeight: 500 }}>
+                    <td data-label="Precio" className="lab-money">
                       ${parseFloat(item.precio_total).toFixed(2)}
                     </td>
-                    <td style={{ ...stylesAlmacens.tableCell, color: '#15803d', fontWeight: 500 }}>
+                    <td data-label="Abonado" className="lab-money" style={{ color: 'var(--lab-success)' }}>
                       ${parseFloat(item.total_abonado || 0).toFixed(2)}
                     </td>
-                    <td style={{ ...stylesAlmacens.tableCell, color: parseFloat(item.saldo_pendiente) > 0 ? '#dc2626' : '#15803d', fontWeight: 500 }}>
+                    <td data-label="Pendiente" className="lab-money" style={{ color: parseFloat(item.saldo_pendiente) > 0 ? 'var(--lab-danger)' : 'var(--lab-success)' }}>
                       ${parseFloat(item.saldo_pendiente || 0).toFixed(2)}
                     </td>
-                    <td style={stylesAlmacens.tableCell}>
+                    <td data-label="Modalidad">
                       <BadgeModalidad modalidad={item.modalidad_pago} />
                     </td>
-                    <td style={stylesAlmacens.tableCell}>
+                    <td data-label="Estado">
                       <BadgeEstado estado={item.estado_pago} />
                     </td>
-                    <td style={{ ...stylesAlmacens.tableCell, fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                    <td data-label="Factura" className="lab-muted">
                       {item.factura_asociada || '—'}
                     </td>
-                    <td style={stylesAlmacens.tableCell}>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <td data-label="Acciones">
+                      <div className="lab-action-buttons">
                         {/* Abono (solo crédito no pagado) */}
-                        {item.modalidad_pago === 'credito' && item.estado_pago !== 'pagado' && (
-                          <button
-                            onClick={() => setServicioAbono(item)}
-                            onMouseEnter={() => handleButtonHover(`abono-${item.id}`, true)}
-                            onMouseLeave={() => handleButtonHover(`abono-${item.id}`, false)}
-                            title="Registrar abono"
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: '4px',
-                              padding: '5px 10px', borderRadius: '8px', fontSize: '12px',
-                              border: '1px solid #bfdbfe', background: buttonHoverStates[`abono-${item.id}`] ? '#dbeafe' : '#eff6ff',
-                              color: '#1d4ed8', cursor: 'pointer', fontWeight: 500, whiteSpace: 'nowrap'
-                            }}
+                        <div className="lab-action-group">
+                          {item.modalidad_pago === 'credito' && item.estado_pago !== 'pagado' && (
+                            <button
+                              onClick={() => setServicioAbono(item)}
+                              title="Registrar abono"
+                              className="lab-btn lab-btn-success"
+                            >
+                              <Wallet size={13} /> Abonar
+                            </button>
+                          )}
+                          <button className="lab-icon-btn"
+                            onClick={() => navigate(`/register-labour/${item.id}`)}
+                            title="Editar"
                           >
-                            <Wallet size={13} /> Abonar
+                             <IconEdit />
                           </button>
-                        )}
-                        <button className="sl-act-btn sl-act-edit"
-                          onClick={() => navigate(`/register-labour/${item.id}`)}
-                          onMouseEnter={() => handleButtonHover(`edit-${item.id}`, true)}
-                          onMouseLeave={() => handleButtonHover(`edit-${item.id}`, false)}
-                          title="Editar"
-                        >
-                           <IconEdit />
-                        </button>
-                        
-                        <button  className="sl-act-btn sl-act-del"
-                          onClick={() => handleDelete(item.id)}
-                          onMouseEnter={() => handleButtonHover(`del-${item.id}`, true)}
-                          onMouseLeave={() => handleButtonHover(`del-${item.id}`, false)}
-                          title="Eliminar"
-                        >
-                           <IconTrash />
-                        </button>
+                        </div>
+                        <div className="lab-action-group">
+                          <button className="lab-icon-btn"
+                            onClick={() => handleDelete(item.id)}
+                            title="Eliminar"
+                          >
+                             <IconTrash />
+                          </button>
+                        </div>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Paginación */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '10px' }}>
-            <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+          <div className="lab-pagination">
+            <span className="lab-muted">
               Mostrando {paginatedItems.length} de {filteredItems.length} servicios
             </span>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <div className="lab-page-buttons">
               {[
                 { icon: ChevronsLeft, action: () => setPagination(p => ({ ...p, currentPage: 1 })), disabled: pagination.currentPage === 1 },
                 { icon: ChevronLeft, action: () => setPagination(p => ({ ...p, currentPage: p.currentPage - 1 })), disabled: pagination.currentPage === 1 },
                 { icon: ChevronRight, action: () => setPagination(p => ({ ...p, currentPage: p.currentPage + 1 })), disabled: pagination.currentPage === totalPages },
                 { icon: ChevronsRight, action: () => setPagination(p => ({ ...p, currentPage: totalPages })), disabled: pagination.currentPage === totalPages },
               ].map(({ icon: Icon, action, disabled }, i) => (
-                <button key={i} onClick={action} disabled={disabled} style={{
-                  ...stylesAlmacens.paginationButton,
-                  ...(disabled ? stylesAlmacens.paginationButtonDisabled : {})
-                }}>
+                <button key={i} onClick={action} disabled={disabled} className="lab-icon-btn">
                   <Icon size={15} />
                 </button>
               ))}
-              <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)', padding: '0 8px' }}>
+              <span className="lab-muted" style={{ padding: '0 8px' }}>
                 {pagination.currentPage} / {totalPages}
               </span>
             </div>
           </div>
         </>
       )}
+      </div>
     </div>
   );
 };

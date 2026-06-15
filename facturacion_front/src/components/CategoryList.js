@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { toast, Toaster } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import {
-  FaPlus, FaEdit, FaTrash, FaSearch, FaArrowLeft,
-  FaFolder, FaTag, FaBox, FaFilter, FaTimes,
-  FaInfoCircle, FaEye
+  FaPlus, FaSearch,
+  FaFolder, FaTag, FaTimes,
+  FaInfoCircle
 } from 'react-icons/fa';
+import '../css/Category.css';
 
 import {
   IconEdit,
@@ -469,7 +470,7 @@ const CategoryList = () => {
   const [categories, setCategories] = useState([]);
   const [filteredCategories, setFilteredCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
 
@@ -577,14 +578,13 @@ const CategoryList = () => {
       <Toaster position="top-right" />
 
       {/* Header */}
-      <header className="cat-header">
-        <button className="cat-btn cat-btn-secondary cat-btn-sm" onClick={() => navigate('/home')}>
-          <FaArrowLeft size={12} /> Volver
-        </button>
-
+      <header className="cat-header cat-page-header">
         <div className="cat-header-title">
-          <FaFolder size={14} style={{ color: 'var(--primary)' }} />
-          Gestión de Categorías
+          <span className="cat-title-icon"><FaFolder size={16} /></span>
+          <span>
+            <strong>Gestión de categorías</strong>
+            <small>Organiza productos y artículos por familia comercial.</small>
+          </span>
           <span className="cat-badge">{categories.length}</span>
         </div>
 
@@ -697,10 +697,10 @@ const CategoryList = () => {
                     const colors = getCategoryColor(category.name);
                     return (
                       <tr key={category.id}>
-                        <td>
+                        <td data-label="ID">
                           <span className="cat-id-badge">#{category.id}</span>
                         </td>
-                        <td>
+                        <td data-label="Nombre">
                           <div className="cat-name-cell">
                             <div className="cat-icon" style={{ background: colors.bg, color: colors.text }}>
                               <FaTag size={14} />
@@ -708,7 +708,7 @@ const CategoryList = () => {
                             <span className="cat-name">{category.name}</span>
                           </div>
                         </td>
-                        <td className="text-center">
+                        <td className="text-center" data-label="Acciones">
                           <div className="cat-actions">
                             <button className="sl-act-btn sl-act-edit"
                               onClick={() => handleEdit(category.id)}
@@ -734,17 +734,7 @@ const CategoryList = () => {
         </div>
 
         {/* Info Card */}
-        <div style={{
-          marginTop: '1rem',
-          padding: '0.75rem 1rem',
-          background: 'var(--info-light)',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          fontSize: '0.75rem',
-          color: 'var(--info)'
-        }}>
+        <div className="cat-info-card">
           <FaInfoCircle size={14} />
           <span><strong>Información:</strong> Las categorías ayudan a organizar tus productos. No se pueden eliminar categorías que tengan productos asociados.</span>
         </div>

@@ -13,172 +13,8 @@ import {
   IconBox,
   IconFilter,
 } from './Icons';
+import '../css/LowStockReports.css';
 
-const styles = `
-  .ls-shell { background: #f4f5f7; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-
-  .ls-nav {
-    background: #fff; border-bottom: 0.5px solid #e5e7eb;
-    padding: 0 24px; height: 56px;
-    display: flex; align-items: center; gap: 12px;
-    position: sticky; top: 0; z-index: 100;
-  }
-  .ls-nav-back {
-    display: flex; align-items: center; gap: 5px;
-    font-size: 12px; color: #6b7280;
-    background: transparent; border: 0.5px solid #e5e7eb;
-    border-radius: 8px; padding: 5px 12px; cursor: pointer;
-    transition: background 0.15s;
-  }
-  .ls-nav-back:hover { background: #f9fafb; }
-  .ls-nav-title { font-size: 15px; font-weight: 600; color: #111827; flex: 1; }
-  .ls-btn {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 12px; font-weight: 500;
-    border-radius: 8px; padding: 6px 14px;
-    cursor: pointer; transition: all 0.15s; border: none;
-  }
-  .ls-btn-ghost {
-    background: transparent; color: #6b7280;
-    border: 0.5px solid #e5e7eb;
-  }
-  .ls-btn-ghost:hover { background: #f9fafb; color: #111827; }
-  .ls-btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
-  .ls-btn-danger {
-    background: #FCEBEB; color: #A32D2D;
-    border: 0.5px solid #F7C1C1;
-  }
-  .ls-btn-danger:hover { background: #F7C1C1; }
-  .ls-btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .ls-body { max-width: 1100px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-
-  .ls-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .ls-stat {
-    background: #fff; border: 0.5px solid #e5e7eb;
-    border-radius: 10px; padding: 14px 16px;
-    cursor: pointer; transition: border-color 0.15s;
-  }
-  .ls-stat:hover { border-color: #9ca3af; }
-  .ls-stat.active-all    { border-color: #1D9E75; background: #f0fdf8; }
-  .ls-stat.active-critical { border-color: #BA7517; background: #fffbeb; }
-  .ls-stat.active-out    { border-color: #A32D2D; background: #fff5f5; }
-  .ls-stat-lbl {
-    font-size: 10px; font-weight: 600; color: #9ca3af;
-    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
-    display: flex; align-items: center; gap: 5px;
-  }
-  .ls-stat-lbl.teal   { color: #0F6E56; }
-  .ls-stat-lbl.amber  { color: #854F0B; }
-  .ls-stat-lbl.red    { color: #A32D2D; }
-  .ls-stat-val { font-size: 22px; font-weight: 600; color: #111827; }
-  .ls-stat-sub { font-size: 11px; color: #9ca3af; margin-top: 3px; }
-  .ls-active-pill {
-    display: inline-block; font-size: 10px; font-weight: 500;
-    padding: 2px 8px; border-radius: 10px; margin-top: 6px;
-  }
-  .ls-active-pill.teal  { background: #E1F5EE; color: #085041; }
-  .ls-active-pill.amber { background: #FAEEDA; color: #633806; }
-  .ls-active-pill.red   { background: #FCEBEB; color: #791F1F; }
-
-  .ls-filters {
-    background: #fff; border: 0.5px solid #e5e7eb;
-    border-radius: 10px; padding: 10px 16px;
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  }
-  .ls-filter-btns { display: flex; gap: 6px; }
-  .ls-filter-btn {
-    font-size: 12px; font-weight: 500;
-    padding: 5px 12px; border-radius: 20px;
-    cursor: pointer; transition: all 0.12s;
-    background: #f9fafb; border: 0.5px solid #e5e7eb; color: #6b7280;
-  }
-  .ls-filter-btn:hover { border-color: #9ca3af; color: #111827; }
-  .ls-filter-btn.active-all      { background: #E1F5EE; color: #085041; border-color: #5DCAA5; }
-  .ls-filter-btn.active-critical { background: #FAEEDA; color: #633806; border-color: #EF9F27; }
-  .ls-filter-btn.active-out      { background: #FCEBEB; color: #791F1F; border-color: #F09595; }
-  .ls-count-pill {
-    font-size: 11px; color: #6b7280;
-    background: #f3f4f6; border-radius: 10px;
-    padding: 3px 10px;
-  }
-
-  .ls-table-card {
-    background: #fff; border: 0.5px solid #e5e7eb;
-    border-radius: 10px; overflow: hidden;
-  }
-  .ls-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .ls-table thead th {
-    padding: 9px 16px; text-align: left;
-    font-size: 10px; font-weight: 600; color: #9ca3af;
-    background: #f9fafb; border-bottom: 0.5px solid #f3f4f6;
-    text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
-  }
-  .ls-table thead th.c { text-align: center; }
-  .ls-table tbody tr { border-bottom: 0.5px solid #f9fafb; transition: background 0.1s; }
-  .ls-table tbody tr:last-child { border-bottom: none; }
-  .ls-table tbody tr:hover { background: #f9fafb; }
-  .ls-table tbody td { padding: 11px 16px; vertical-align: middle; color: #111827; }
-  .ls-table tbody td.muted { color: #9ca3af; font-size: 12px; }
-  .ls-table tbody td.c { text-align: center; }
-
-  .ls-stock-bar-wrap {
-    display: flex; align-items: center; gap: 8px;
-  }
-  .ls-stock-bar-bg {
-    flex: 1; height: 4px; background: #f3f4f6;
-    border-radius: 2px; overflow: hidden; max-width: 80px;
-  }
-  .ls-stock-bar-fill { height: 100%; border-radius: 2px; }
-  .ls-stock-num { font-size: 13px; font-weight: 600; }
-
-  .ls-badge {
-    display: inline-block; font-size: 10px; font-weight: 500;
-    padding: 3px 9px; border-radius: 10px;
-  }
-  .ls-badge-out      { background: #FCEBEB; color: #A32D2D; }
-  .ls-badge-critical { background: #FAEEDA; color: #854F0B; }
-  .ls-badge-low      { background: #E6F1FB; color: #185FA5; }
-
-  .ls-restock-btn {
-    font-size: 12px; font-weight: 500;
-    padding: 5px 12px; border-radius: 7px;
-    background: transparent; border: 0.5px solid #e5e7eb;
-    color: #374151; cursor: pointer; transition: all 0.12s;
-  }
-  .ls-restock-btn:hover { background: #E1F5EE; color: #0F6E56; border-color: #5DCAA5; }
-
-  .ls-empty { padding: 56px; text-align: center; color: #9ca3af; }
-  .ls-empty-icon { font-size: 44px; opacity: 0.2; margin-bottom: 12px; }
-  .ls-empty p { font-size: 14px; margin-bottom: 12px; }
-  .ls-show-all-btn {
-    font-size: 12px; padding: 6px 14px; border-radius: 8px;
-    background: transparent; border: 0.5px solid #e5e7eb;
-    color: #374151; cursor: pointer;
-  }
-  .ls-show-all-btn:hover { background: #f9fafb; }
-
-  .ls-loading { padding: 56px; text-align: center; color: #9ca3af; font-size: 13px; }
-  .ls-spinner {
-    width: 24px; height: 24px; border: 2px solid #e5e7eb;
-    border-top-color: #1D9E75; border-radius: 50%;
-    animation: ls-spin 0.6s linear infinite; margin: 0 auto 12px;
-  }
-  @keyframes ls-spin { to { transform: rotate(360deg); } }
-
-  .ls-error {
-    background: #FCEBEB; border: 0.5px solid #F7C1C1;
-    border-radius: 10px; padding: 16px 20px;
-    display: flex; align-items: flex-start; gap: 12px;
-    font-size: 13px; color: #A32D2D;
-  }
-  .ls-error-actions { display: flex; gap: 8px; margin-top: 10px; }
-
-  @media (max-width: 768px) {
-    .ls-stats { grid-template-columns: 1fr; }
-    .ls-nav-title { display: none; }
-  }
-`;
 
 const LowStockProducts = ({ onBack }) => {
   const [products, setProducts]         = useState([]);
@@ -186,6 +22,7 @@ const LowStockProducts = ({ onBack }) => {
   const [error, setError]               = useState(null);
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [restockProduct, setRestockProduct] = useState(null);
   const navigate = useNavigate();
 
   const handleBack = () => {
@@ -250,34 +87,37 @@ const LowStockProducts = ({ onBack }) => {
   };
 
   return (
-    <>
-      <style>{styles}</style>
+    <>
       <div className="ls-shell">
 
-        {/* Navbar */}
         <nav className="ls-nav">
-          <button className="ls-nav-back" onClick={handleBack}>
-            <IconArrowLeft /> Volver
-          </button>
-          <span className="ls-nav-title">Bajo stock</span>
+          <div className="ls-nav-heading">
+            <span className="ls-nav-icon"><IconAlert /></span>
+            <div>
+              <div className="ls-nav-title">Reporte de bajo stock</div>
+              <div className="ls-nav-subtitle">Monitorea productos que requieren reabastecimiento y exporta reportes operativos.</div>
+            </div>
+          </div>
 
-          <button className="ls-btn ls-btn-ghost" onClick={fetchLowStockProducts} title="Actualizar">
-            <IconRefresh /> Actualizar
-          </button>
-          <button
-            className="ls-btn ls-btn-ghost"
-            onClick={exportToExcel}
-            disabled={filteredProducts.length === 0}
-          >
-            <IconExcel /> Exportar Excel
-          </button>
-          <button
-            className="ls-btn ls-btn-danger"
-            onClick={() => setShowPDFModal(true)}
-            disabled={products.length === 0}
-          >
-            <IconPDF /> Generar PDF
-          </button>
+          <div className="ls-nav-actions">
+            <button className="ls-btn ls-btn-ghost" onClick={fetchLowStockProducts} title="Actualizar">
+              <IconRefresh /> Actualizar
+            </button>
+            <button
+              className="ls-btn ls-btn-ghost"
+              onClick={exportToExcel}
+              disabled={filteredProducts.length === 0}
+            >
+              <IconExcel /> Exportar Excel
+            </button>
+            <button
+              className="ls-btn ls-btn-danger"
+              onClick={() => setShowPDFModal(true)}
+              disabled={products.length === 0}
+            >
+              <IconPDF /> Generar PDF
+            </button>
+          </div>
         </nav>
 
         <div className="ls-body">
@@ -287,7 +127,7 @@ const LowStockProducts = ({ onBack }) => {
             <div className="ls-error">
               <IconAlert />
               <div>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Error al cargar los datos</div>
+                <div className="ls-error-title">Error al cargar los datos</div>
                 <div>{error}</div>
                 <div className="ls-error-actions">
                   <button className="ls-btn ls-btn-ghost" onClick={fetchLowStockProducts}>
@@ -412,9 +252,9 @@ const LowStockProducts = ({ onBack }) => {
                     const pct     = getBarPercent(product.stock, product.min_stock || 3);
                     return (
                       <tr key={product.id}>
-                        <td className="muted">{index + 1}</td>
-                        <td>
-                          <div style={{ fontWeight: 500, color: '#111827' }}>{product.name}</div>
+                        <td className="muted" data-label="#">{index + 1}</td>
+                        <td data-label="Producto">
+                          <div className="ls-product-name">{product.name}</div>
                           {product.barcode && (
                             <div className="muted">{product.barcode}</div>
                           )}
@@ -422,8 +262,8 @@ const LowStockProducts = ({ onBack }) => {
                             <div className="muted">{product.category_name}</div>
                           )}
                         </td>
-                        <td className="c">
-                          <div className="ls-stock-bar-wrap" style={{ justifyContent: 'center' }}>
+                        <td className="c" data-label="Stock actual">
+                          <div className="ls-stock-bar-wrap">
                             <div className="ls-stock-bar-bg">
                               <div
                                 className="ls-stock-bar-fill"
@@ -438,14 +278,14 @@ const LowStockProducts = ({ onBack }) => {
                             </span>
                           </div>
                         </td>
-                        <td className="c muted">{product.min_stock || 3}</td>
-                        <td className="c">
+                        <td className="c muted" data-label="Mínimo">{product.min_stock || 3}</td>
+                        <td className="c" data-label="Estado">
                           <span className={`ls-badge ${status.badgeClass}`}>{status.text}</span>
                         </td>
-                        <td>
+                        <td data-label="Acción">
                           <button
                             className="ls-restock-btn"
-                            onClick={() => alert(`Reabastecer: ${product.name}`)}
+                            onClick={() => setRestockProduct(product)}
                           >
                             Reabastecer
                           </button>
@@ -466,6 +306,39 @@ const LowStockProducts = ({ onBack }) => {
             activeFilter={activeFilter}
             onClose={() => setShowPDFModal(false)}
           />
+        )}
+
+        {restockProduct && (
+          <div
+            className="ls-modal-overlay"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setRestockProduct(null);
+            }}
+          >
+            <div className="ls-info-modal" role="dialog" aria-modal="true" aria-labelledby="restock-modal-title">
+              <div className="ls-info-modal-icon">
+                <IconBox />
+              </div>
+              <div className="ls-info-modal-content">
+                <div id="restock-modal-title" className="ls-info-modal-title">
+                  Reabastecimiento pendiente
+                </div>
+                <p>
+                  El producto <strong>{restockProduct.name}</strong> requiere reposición. El flujo de
+                  compra/reabastecimiento estará disponible en una próxima fase.
+                </p>
+                <div className="ls-info-modal-meta">
+                  Stock actual: <strong>{restockProduct.stock}</strong> · Mínimo sugerido:{' '}
+                  <strong>{restockProduct.min_stock || 3}</strong>
+                </div>
+              </div>
+              <div className="ls-info-modal-actions">
+                <button className="ls-btn ls-btn-danger" onClick={() => setRestockProduct(null)}>
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </>

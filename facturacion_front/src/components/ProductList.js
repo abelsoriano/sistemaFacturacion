@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import DataTable from 'react-data-table-component';
 import api from '../services/api';
 import { Link, useNavigate } from "react-router-dom";
@@ -39,6 +39,22 @@ const DownloadIcon = () => (
     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
     <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+);
+
+const EyeIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+
+const LabelIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20.59 13.41 11 3.83A2.83 2.83 0 0 0 9 3H4a1 1 0 0 0-1 1v5c0 .75.3 1.47.83 2l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83z"/>
+    <circle cx="7.5" cy="7.5" r="1"/>
   </svg>
 );
 
@@ -103,7 +119,6 @@ const ProductList = () => {
   // Breakpoints
   const isMobile  = windowWidth < 480;
   const isTablet  = windowWidth >= 480 && windowWidth < 768;
-  const isDesktop = windowWidth >= 768;
 
   const handleImageClick = (imageUrl) => {
     setSelectedImage(imageUrl);
@@ -157,6 +172,7 @@ const ProductList = () => {
   }, []);
 
   const handleEdit   = (id) => navigate(`/productsForm/${id}`);
+  const handleLabelPrint = (id) => navigate(`/productsForm/${id}`);
   const handleCancel = () => navigate('/home');
 
   const handleDelete = async (id) => {
@@ -234,12 +250,20 @@ const ProductList = () => {
     }
   };
 
+  const inventoryValue = products.reduce(
+    (sum, product) => sum + ((parseFloat(product.price) || 0) * (parseFloat(product.stock) || 0)),
+    0
+  );
+  const hasActiveField = products.some((product) => Object.prototype.hasOwnProperty.call(product, 'is_active'));
+  const activeCount = hasActiveField ? products.filter((product) => product.is_active).length : products.length;
+  const inactiveCount = hasActiveField ? products.filter((product) => !product.is_active).length : null;
+
   /* ── columnas responsivas ──
      Mobile  (< 480px):  imagen | nombre+cat+precio+stock | acciones
      Tablet  (480-768px): imagen | nombre+cat | precio | stock | acciones
      Desktop (≥ 768px):  imagen | nombre+cat | descripción | precio | stock | acciones
   ── */
-  const columns = useCallback(() => {
+  const columns = (() => {
     // Columna imagen — siempre presente
     const colImage = {
       name: '',
@@ -264,23 +288,35 @@ const ProductList = () => {
     // Columna acciones — siempre presente
     const colActions = {
       name: '',
-      width: isMobile ? '90px' : '110px',
+      width: isMobile ? '128px' : '168px',
       right: true,
       ignoreRowClick: true,
       cell: (row) => (
         <div className="pl-actions">
-          <button className="pl-btn-icon"
-            onClick={() => navigate(`/products/${row.id}/history`)} title="Ver historial">
-            <FaHistory size={12} />
-          </button>
-          <button className="pl-btn-icon pl-btn-edit"
-            onClick={() => handleEdit(row.id)} title="Editar">
-            <EditIcon />
-          </button>
-          <button className="pl-btn-icon pl-btn-delete"
-            onClick={() => handleDelete(row.id)} title="Eliminar">
-            <TrashIcon />
-          </button>
+          <div className="pl-action-group">
+            <button className="pl-btn-icon pl-btn-view"
+              onClick={() => row.image_url ? handleImageClick(row.image_url) : handleEdit(row.id)} title="Ver">
+              <EyeIcon />
+            </button>
+            <button className="pl-btn-icon pl-btn-edit"
+              onClick={() => handleEdit(row.id)} title="Editar">
+              <EditIcon />
+            </button>
+            <button className="pl-btn-icon pl-btn-label"
+              onClick={() => handleLabelPrint(row.id)} title="Imprimir etiqueta">
+              <LabelIcon />
+            </button>
+          </div>
+          <div className="pl-action-group">
+            <button className="pl-btn-icon"
+              onClick={() => navigate(`/products/${row.id}/history`)} title="Ver historial">
+              <FaHistory size={12} />
+            </button>
+            <button className="pl-btn-icon pl-btn-delete"
+              onClick={() => handleDelete(row.id)} title="Eliminar">
+              <TrashIcon />
+            </button>
+          </div>
         </div>
       ),
     };
@@ -399,10 +435,10 @@ const ProductList = () => {
       },
       colActions,
     ];
-  }, [isMobile, isTablet, isDesktop])(); // se invoca inmediatamente para obtener el array
+  })();
 
   const customStyles = {
-    rows:  { style: { minHeight: '58px' } },
+    rows:  { style: { minHeight: '62px' } },
     cells: { style: { paddingTop: '10px', paddingBottom: '10px' } },
   };
 
@@ -420,18 +456,45 @@ const ProductList = () => {
         </Modal.Body>
       </Modal>
 
-      <div className="pl-card">
+      <div className="pl-shell">
 
-        {/* ── Encabezado ── */}
         <div className="pl-header">
-          <h2>Lista de productos</h2>
+          <div>
+            <h2>Inventario</h2>
+            <p>Productos, stock, códigos internos y etiquetas.</p>
+          </div>
           <div className="pl-header-actions">
             <button onClick={handleCancel} className="pl-btn pl-btn-ghost">
-              Cancelar
+              Volver
             </button>
             <Link to="/productsForm" className="pl-btn pl-btn-primary">
               <PlusIcon /> Nuevo producto
             </Link>
+          </div>
+        </div>
+
+        <div className="pl-stats">
+          <div className="pl-stat-card">
+            <span className="pl-stat-label">Total productos</span>
+            <strong className="pl-stat-value">{products.length}</strong>
+            <span className="pl-stat-sub">{filteredProducts.length} en vista</span>
+          </div>
+          <div className="pl-stat-card">
+            <span className="pl-stat-label">Bajo stock</span>
+            <strong className={`pl-stat-value ${lowStockCount > 0 ? 'warning' : 'success'}`}>{lowStockCount}</strong>
+            <span className="pl-stat-sub">requieren revisión</span>
+          </div>
+          <div className="pl-stat-card">
+            <span className="pl-stat-label">Valor inventario</span>
+            <strong className="pl-stat-value primary">
+              ${inventoryValue.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </strong>
+            <span className="pl-stat-sub">precio x stock</span>
+          </div>
+          <div className="pl-stat-card">
+            <span className="pl-stat-label">Activos</span>
+            <strong className="pl-stat-value">{activeCount}</strong>
+            <span className="pl-stat-sub">{inactiveCount === null ? 'sin estado explícito' : `${inactiveCount} inactivos`}</span>
           </div>
         </div>
 
@@ -452,7 +515,8 @@ const ProductList = () => {
         )}
 
         {/* ── Filtros ── */}
-        <form className="pl-filters" onSubmit={handleFilterSubmit}>
+        <form className="pl-filters pl-card" onSubmit={handleFilterSubmit}>
+          <div className="pl-section-title">Filtros</div>
           <div className="pl-filter-grid">
 
             <div className="pl-form-group">
@@ -522,7 +586,12 @@ const ProductList = () => {
         </form>
 
         {/* ── Cuerpo ── */}
-        <div className="pl-table-wrap">
+        <div className="pl-table-card">
+          <div className="pl-table-header">
+            <div className="pl-section-title">Productos</div>
+            <span className="pl-results-count">{filteredProducts.length} resultados</span>
+          </div>
+          <div className="pl-table-wrap">
           {isLoading && (
             <div className="pl-loading">
               <div className="pl-spinner" />
@@ -567,6 +636,7 @@ const ProductList = () => {
               }
             />
           )}
+          </div>
         </div>
 
       </div>

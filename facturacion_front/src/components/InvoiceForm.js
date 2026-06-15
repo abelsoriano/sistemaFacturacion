@@ -3,15 +3,26 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import {
     FaSave, FaPlus, FaTrash, FaArrowLeft, FaPrint, FaCheck,
-    FaSearch, FaBarcode, FaEdit, FaRegFilePdf,
+    FaSearch, FaBarcode, FaRegFilePdf,
     FaMoneyBillWave, FaCreditCard, FaExchangeAlt,
     FaUser, FaBox, FaCalculator, FaTimes, FaTag,
-    FaEye, FaEyeSlash
+    FaLock
 } from "react-icons/fa";
 import { toast, Toaster } from "react-hot-toast";
 import Swal from "sweetalert2";
 import "../css/facturaForm.css";
 
+
+const INVOICE_EDIT_LOCKED_FISCAL_STATUSES = new Set([
+    "signed",
+    "submitted",
+    "processing",
+    "accepted",
+    "rejected",
+]);
+
+const getFiscalStatus = (invoice) => invoice.fiscal_status || invoice.ecf_status || "draft";
+const moneyNumber = (value) => Number((Number(value) || 0).toFixed(2));
 
 /* Componente principal */
 const InvoiceForm = () => {
@@ -22,8 +33,9 @@ const InvoiceForm = () => {
     const [products, setProducts] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
-    const [taxRate, setTaxRate] = useState(16);
+    const taxRate = 18;
     const [discount, setDiscount] = useState({ value: 0, type: "percentage" });
+    const [applyItbis, setApplyItbis] = useState(true);
     const barcodeRef = useRef(null);
 
     const [invoice, setInvoice] = useState({
@@ -37,6 +49,9 @@ const InvoiceForm = () => {
     });
 
     const [errors, setErrors] = useState({});
+    const fiscalStatus = getFiscalStatus(invoice);
+    const fiscalLocked = Boolean(invoice.is_fiscally_locked) || INVOICE_EDIT_LOCKED_FISCAL_STATUSES.has(fiscalStatus);
+    const editAccessBlocked = Boolean(id && !loading && fiscalStatus !== "draft");
 
     // Cargar datos iniciales
     useEffect(() => {
@@ -64,6 +79,7 @@ const InvoiceForm = () => {
                         }));
                     }
                     setInvoice(data);
+                    setApplyItbis(Number(data.tax || 0) > 0);
                     if (data.discount) setDiscount({ value: data.discount, type: "percentage" });
                 }
             } catch (err) {
@@ -78,14 +94,15 @@ const InvoiceForm = () => {
 
     // Cálculo de totales
     const totals = useCallback(() => {
-        const subtotal = invoice.details.reduce((sum, d) => sum + (d.subtotal || d.quantity * d.price), 0);
-        let discountAmount = discount.type === "percentage" ? subtotal * (discount.value / 100) : discount.value;
-        const afterDiscount = subtotal - discountAmount;
-        const tax = afterDiscount * (taxRate / 100);
-        const total = afterDiscount + tax;
-        const change = invoice.payment_method === "cash" ? Math.max(0, invoice.cash_received - total) : 0;
-        return { subtotal, discountAmount: Math.min(discountAmount, subtotal), tax, total, change };
-    }, [invoice.details, discount, taxRate, invoice.payment_method, invoice.cash_received]);
+        const subtotal = moneyNumber(invoice.details.reduce((sum, d) => sum + (d.subtotal || d.quantity * d.price), 0));
+        const rawDiscount = discount.type === "percentage" ? subtotal * (discount.value / 100) : discount.value;
+        const discountAmount = moneyNumber(Math.min(rawDiscount, subtotal));
+        const afterDiscount = moneyNumber(subtotal - discountAmount);
+        const tax = moneyNumber(applyItbis ? afterDiscount * (taxRate / 100) : 0);
+        const total = moneyNumber(afterDiscount + tax);
+        const change = moneyNumber(invoice.payment_method === "cash" ? Math.max(0, invoice.cash_received - total) : 0);
+        return { subtotal, discountAmount, tax, total, change };
+    }, [invoice.details, discount, taxRate, applyItbis, invoice.payment_method, invoice.cash_received]);
 
     const { subtotal, discountAmount, tax, total, change } = totals();
 
@@ -176,21 +193,26 @@ const InvoiceForm = () => {
             toast.error("Complete los campos requeridos");
             return;
         }
+        if (fiscalLocked) {
+            toast.error("Factura bloqueada fiscalmente. Usa nota de crédito.");
+            return;
+        }
         setLoading(true);
         const data = {
             client_id: parseInt(invoice.client),
             receipt_type: "invoice",
             payment_method: invoice.payment_method,
-            cash_received: parseFloat(invoice.cash_received) || 0,
-            discount: discountAmount,
-            subtotal,
-            tax,
-            total,
-            change,
+            cash_received: moneyNumber(invoice.cash_received),
+            discount: moneyNumber(discountAmount),
+            apply_itbis: applyItbis,
+            subtotal: moneyNumber(subtotal),
+            tax: moneyNumber(tax),
+            total: moneyNumber(total),
+            change: moneyNumber(change),
             notes: invoice.notes,
             date: invoice.date,
             status: invoice.status,
-            details: invoice.details.map(d => ({ product: d.product, quantity: d.quantity, price: d.price }))
+            details: invoice.details.map(d => ({ product: d.product, quantity: d.quantity, price: moneyNumber(d.price) }))
         };
         try {
             let res;
@@ -199,11 +221,12 @@ const InvoiceForm = () => {
                 toast.success("Factura actualizada");
             } else {
                 res = await api.post("invoices/", data);
-                toast.success("Factura creada");
+                toast.success("Factura guardada como pendiente. Cobra y emite cuando confirmes el pago.");
             }
             if (action === "new") {
                 setInvoice({ client: "", details: [], status: "pending", date: new Date().toISOString().split("T")[0], notes: "", payment_method: "cash", cash_received: 0 });
                 setDiscount({ value: 0, type: "percentage" });
+                setApplyItbis(true);
                 barcodeRef.current?.focus();
             } else {
                 navigate(`/invoices/${res.data.id}`);
@@ -217,170 +240,249 @@ const InvoiceForm = () => {
 
     const changeStatus = async (status) => {
         const result = await Swal.fire({
-            title: `¿Marcar como ${status === "paid" ? "pagada" : "cancelada"}?`,
+            title: status === "paid" ? "¿Cobrar y emitir esta factura?" : "¿Marcar como cancelada?",
+            text: status === "paid" ? "Se descontará inventario y se enviará al flujo e-CF." : undefined,
             icon: "warning",
             showCancelButton: true,
-            confirmButtonText: "Confirmar"
+            confirmButtonText: status === "paid" ? "Cobrar y emitir" : "Confirmar"
         });
         if (result.isConfirmed) {
             try {
-                await api.patch(`invoices/${id}/`, { status });
-                setInvoice({ ...invoice, status });
-                toast.success(`Estado actualizado a ${status === "paid" ? "pagada" : "cancelada"}`);
-            } catch {
-                toast.error("Error al actualizar");
+                if (status === "paid") {
+                    const { data } = await api.post(`invoices/${id}/collect/`);
+                    setInvoice({ ...invoice, ...data });
+                    toast.success("Factura cobrada y enviada al flujo e-CF");
+                } else {
+                    await api.patch(`invoices/${id}/`, { status });
+                    setInvoice({ ...invoice, status });
+                    toast.success("Estado actualizado a cancelada");
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.detail || "Error al actualizar");
             }
         }
     };
 
     const selectedClient = clients.find(c => String(c.id) === String(invoice.client));
     const fmt = (n) => `$${(+n || 0).toFixed(2)}`;
+    const totalUnits = invoice.details.reduce((s, d) => s + d.quantity, 0);
+    const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.barcode?.includes(searchTerm));
+
+    if (editAccessBlocked) {
+        return (
+            <div className="inv-root">
+                <Toaster position="top-right" />
+                <header className="inv-page-header">
+                    <div>
+                        <span className="inv-eyebrow">Factura fiscal</span>
+                        <h1>Factura bloqueada</h1>
+                        <p>Esta factura no permite edición comercial por su estado fiscal actual.</p>
+                    </div>
+                    <button className="inv-btn secondary" onClick={() => navigate("/invoice-list")}>
+                        <FaArrowLeft /> Volver
+                    </button>
+                </header>
+                <section className="inv-locked-card">
+                    <div className="inv-card">
+                        <div className="inv-card-header">
+                            <span><FaLock /> Edición no permitida</span>
+                            {invoice.invoice_number && <strong>#{invoice.invoice_number}</strong>}
+                        </div>
+                        <div className="inv-card-body">
+                            <div className="inv-warning-box">
+                                Esta factura no puede editarse porque su estado fiscal es "{fiscalStatus}".
+                            </div>
+                            <p className="inv-muted-text">
+                                Solo se permite editar facturas en estado fiscal draft. Si la factura fue firmada, enviada, aceptada o rechazada, cualquier corrección debe gestionarse por el flujo fiscal correspondiente.
+                            </p>
+                            <div className="inv-action-row">
+                                <button className="inv-btn secondary" onClick={() => navigate("/invoice-list")}>
+                                    <FaArrowLeft /> Volver a facturas
+                                </button>
+                                <button className="inv-btn primary" onClick={() => navigate(`/invoices/${id}`)}>
+                                    Ver detalle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        );
+    }
 
     return (
         <div className="inv-root">
             <Toaster position="top-right" />
 
-            {/* Header */}
-            <header className="inv-header">
-                <button className="btn btn-outline btn-sm" onClick={() => navigate("/invoice-list")}>
-                    <FaArrowLeft size={12} /> Volver
+            <header className="inv-page-header">
+                <button className="inv-btn secondary" onClick={() => navigate("/invoice-list")}>
+                    <FaArrowLeft /> Volver
                 </button>
 
-                <div className="card-title" style={{ margin: 0 }}>
-                    {id ? <><FaEdit /> Editar Factura</> : <><FaRegFilePdf /> Nueva Factura</>}
-                    {id && invoice.invoice_number && (
-                        <span className="font-mono" style={{ color: "var(--text-muted)" }}>#{invoice.invoice_number}</span>
-                    )}
-                    {id && (
-                        <span className={`status-badge status-${invoice.status === "pending" ? "pending" : invoice.status === "paid" ? "paid" : "cancelled"}`}>
-                            {invoice.status === "pending" ? "Pendiente" : invoice.status === "paid" ? "Pagada" : "Cancelada"}
-                        </span>
-                    )}
-                </div>
-
-                <div className="input-wrapper" style={{ flex: 2, minWidth: "200px" }}>
-                    <FaBarcode className="input-icon" />
-                    <input
-                        ref={barcodeRef}
-                        type="text"
-                        placeholder="    Escanear código de barras..."
-                        onKeyPress={(e) => e.key === "Enter" && handleScan(e.target.value)}
-                    />
+                <div className="inv-title-block">
+                    <span className="inv-eyebrow">Facturación</span>
+                    <h1>{id ? "Editar factura" : "Nueva factura"}</h1>
+                    <div className="inv-title-meta">
+                        {id && invoice.invoice_number && <span className="inv-mono">#{invoice.invoice_number}</span>}
+                        {id && (
+                            <span className={`status-badge status-${invoice.status === "pending" ? "pending" : invoice.status === "paid" ? "paid" : "cancelled"}`}>
+                                {invoice.status === "pending" ? "Pendiente de cobro" : invoice.status === "paid" ? "Pagada" : "Cancelada"}
+                            </span>
+                        )}
+                        {fiscalLocked && (
+                            <span className="status-badge status-cancelled">
+                                <FaLock size={10} /> Bloqueo fiscal
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="inv-header-actions">
                     {id && (
-                        <button className="btn btn-outline btn-sm" onClick={() => window.open(`/invoice-print/${id}`, "_blank")}>
+                        <button className="inv-btn secondary" onClick={() => window.open(`/invoice-print/${id}`, "_blank")}>
                             <FaPrint /> Imprimir
                         </button>
                     )}
-                    {id && invoice.status === "pending" && (
-                        <button className="btn btn-primary btn-sm" onClick={() => changeStatus("paid")}>
-                            <FaCheck /> Cobrar
+                    {id && invoice.status === "pending" && !fiscalLocked && !invoice.inventory_committed_at && !invoice.encf && (
+                        <button className="inv-btn primary" onClick={() => changeStatus("paid")}>
+                            <FaCheck /> Cobrar y emitir
                         </button>
                     )}
-                    {id && invoice.status !== "cancelled" && (
-                        <button className="btn btn-danger btn-sm" onClick={() => changeStatus("cancelled")}>
+                    {id && invoice.status !== "cancelled" && !fiscalLocked && (
+                        <button className="inv-btn danger" onClick={() => changeStatus("cancelled")}>
                             <FaTimes /> Cancelar
                         </button>
                     )}
                 </div>
             </header>
 
-            {/* Grid principal */}
-            <div className="inv-grid">
-                {/* Columna izquierda - Carrito */}
-                <div className="card">
-                    <div className="card-header">
-                        <span className="card-title"><FaBox /> Carrito de compras</span>
-                        <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>
-                            <FaPlus /> Buscar producto
-                        </button>
-                    </div>
-
-                    {errors.details && (
-                        <div style={{ padding: "0.75rem", background: "var(--danger-light)", color: "var(--danger)", fontSize: "0.875rem", margin: "0.75rem 1.25rem", borderRadius: "var(--radius-sm)" }}>
-                            ⚠️ {errors.details}
-                        </div>
-                    )}
-
-                    {invoice.details.length === 0 ? (
-                        <div className="cart-empty">
-                            <FaBox size={48} style={{ marginBottom: "0.75rem", opacity: 0.3 }} />
-                            <p>Escanea un código o busca un producto</p>
-                        </div>
-                    ) : (
-                        <div className="cart-table-container">
-                            <table className="cart-table">
-                                <thead>
-                                    <tr>
-                                        <th>Producto</th>
-                                        <th style={{ width: 90 }}>Cant.</th>
-                                        <th style={{ width: 100 }}>Precio</th>
-                                        <th style={{ width: 90, textAlign: "right" }}>Subtotal</th>
-                                        <th style={{ width: 40 }}></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {invoice.details.map((item, idx) => (
-                                        <tr key={idx}>
-                                            <td>
-                                                <div style={{ fontWeight: 500 }}>{item.product_name}</div>
-                                                {item.barcode && (
-                                                    <div style={{ fontSize: "0.6875rem", color: "var(--text-faint)", fontFamily: "monospace" }}>
-                                                        <FaBarcode size={9} style={{ marginRight: 4 }} />{item.barcode}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td>
-                                                <input
-                                                    type="number"
-                                                    className="qty-input"
-                                                    min="1"
-                                                    value={item.quantity}
-                                                    onChange={(e) => updateDetail(idx, "quantity", e.target.value)}
-                                                />
-                                            </td>
-                                            <td>
-                                                <input
-                                                    type="number"
-                                                    className="price-input"
-                                                    step="0.01"
-                                                    value={item.price}
-                                                    onChange={(e) => updateDetail(idx, "price", e.target.value)}
-                                                />
-                                            </td>
-                                            <td className="text-right font-mono" style={{ fontWeight: 600 }}>{fmt(item.subtotal)}</td>
-                                            <td>
-                                                <button className="btn btn-danger btn-sm" style={{ padding: "0.375rem" }} onClick={() => removeDetail(idx, item.product_name)}>
-                                                    <FaTrash size={12} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            <div className="flex-between" style={{ padding: "0.75rem 1rem", borderTop: "1px solid var(--border)", background: "var(--surface-hover)", fontSize: "0.875rem" }}>
-                                <span>{invoice.details.reduce((s, d) => s + d.quantity, 0)} unidades</span>
-                                <span>Subtotal: <span className="font-mono">{fmt(subtotal)}</span></span>
-                            </div>
-                        </div>
-                    )}
+            <section className="inv-scan-card">
+                <div>
+                    <span>Entrada rápida</span>
+                    <strong>Escanear producto</strong>
                 </div>
+                <div className="inv-input-icon">
+                    <FaBarcode />
+                    <input
+                        ref={barcodeRef}
+                        type="text"
+                        placeholder="Escanear código de barras..."
+                        onKeyPress={(e) => e.key === "Enter" && handleScan(e.target.value)}
+                        disabled={fiscalLocked}
+                    />
+                </div>
+            </section>
 
-                {/* Columna derecha - Panel de gestión */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                    {/* Cliente */}
-                    <div className="card">
-                        <div className="card-header">
-                            <span className="card-title"><FaUser /> Cliente</span>
+            <div className="inv-grid">
+                <main className="inv-main-column">
+                    <section className="inv-card">
+                        {fiscalLocked && (
+                            <div className="inv-warning-strip">
+                                <FaLock /> {invoice.fiscal_lock_reason || "Esta factura tiene bloqueo fiscal. No se puede editar."}
+                            </div>
+                        )}
+                        <div className="inv-card-header">
+                            <span><FaBox /> Productos</span>
+                            <button className="inv-btn primary small" onClick={() => setShowModal(true)} disabled={fiscalLocked}>
+                                <FaPlus /> Buscar producto
+                            </button>
                         </div>
-                        <div className="card-body">
+
+                        {errors.details && <div className="inv-error-box">⚠️ {errors.details}</div>}
+
+                        {invoice.details.length === 0 ? (
+                            <div className="cart-empty">
+                                <FaBox className="inv-empty-icon" />
+                                <p>Escanea un código o busca un producto</p>
+                            </div>
+                        ) : (
+                            <div className="cart-table-container">
+                                <table className="cart-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Producto</th>
+                                            <th className="w-qty">Cant.</th>
+                                            <th className="w-price">Precio</th>
+                                            <th className="text-right w-subtotal">Subtotal</th>
+                                            <th className="w-action"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {invoice.details.map((item, idx) => (
+                                            <tr key={idx}>
+                                                <td data-label="Producto">
+                                                    <div className="inv-product-name">{item.product_name}</div>
+                                                    {item.barcode && (
+                                                        <div className="inv-product-code">
+                                                            <FaBarcode />{item.barcode}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td data-label="Cant.">
+                                                    <input
+                                                        type="number"
+                                                        className="qty-input"
+                                                        min="1"
+                                                        value={item.quantity}
+                                                        onChange={(e) => updateDetail(idx, "quantity", e.target.value)}
+                                                        disabled={fiscalLocked}
+                                                    />
+                                                </td>
+                                                <td data-label="Precio">
+                                                    <input
+                                                        type="number"
+                                                        className="price-input"
+                                                        step="0.01"
+                                                        value={item.price}
+                                                        onChange={(e) => updateDetail(idx, "price", e.target.value)}
+                                                        disabled={fiscalLocked}
+                                                    />
+                                                </td>
+                                                <td data-label="Subtotal" className="text-right inv-mono strong">{fmt(item.subtotal)}</td>
+                                                <td data-label="Acción">
+                                                    <button type="button" className="inv-btn danger icon-only" onClick={() => removeDetail(idx, item.product_name)} disabled={fiscalLocked}>
+                                                        <FaTrash />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                <div className="inv-cart-summary">
+                                    <span>{totalUnits} unidades</span>
+                                    <span>Subtotal: <strong className="inv-mono">{fmt(subtotal)}</strong></span>
+                                </div>
+                            </div>
+                        )}
+                    </section>
+
+                    <section className="inv-card">
+                        <div className="inv-card-header">
+                            <span><FaTag /> Notas</span>
+                        </div>
+                        <div className="inv-card-body">
+                            <textarea
+                                placeholder="Notas adicionales para el cliente..."
+                                rows="4"
+                                value={invoice.notes}
+                                onChange={(e) => setInvoice({ ...invoice, notes: e.target.value })}
+                                disabled={fiscalLocked}
+                            />
+                        </div>
+                    </section>
+                </main>
+
+                <aside className="inv-side-column">
+                    <section className="inv-card">
+                        <div className="inv-card-header">
+                            <span><FaUser /> Cliente</span>
+                        </div>
+                        <div className="inv-card-body">
                             <select
                                 className={errors.client ? "is-error" : ""}
                                 value={invoice.client}
                                 onChange={(e) => setInvoice({ ...invoice, client: e.target.value })}
-                                style={{ width: "100%" }}
+                                disabled={fiscalLocked}
                             >
                                 <option value="">Seleccionar cliente...</option>
                                 {clients.map(c => (
@@ -389,70 +491,106 @@ const InvoiceForm = () => {
                             </select>
                             {errors.client && <div className="error-text"><FaTimes size={10} /> {errors.client}</div>}
                             {selectedClient && (
-                                <div style={{ marginTop: "0.75rem", fontSize: "0.8125rem", background: "var(--primary-light)", padding: "0.5rem 0.75rem", borderRadius: "var(--radius-sm)", color: "var(--primary)" }}>
+                                <div className="inv-client-info">
                                     {selectedClient.email && <span>{selectedClient.email}</span>}
-                                    {selectedClient.phone && <span style={{ marginLeft: "0.75rem" }}>📞 {selectedClient.phone}</span>}
+                                    {selectedClient.phone && <span>{selectedClient.phone}</span>}
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </section>
 
-                    {/* Totales y descuentos */}
-                    <div className="card">
-                        <div className="card-header">
-                            <span className="card-title"><FaCalculator /> Totales</span>
+                    <section className="inv-card">
+                        <div className="inv-card-header">
+                            <span><FaRegFilePdf /> Tipo / estado comercial</span>
                         </div>
-                        <div className="card-body space-y-3">
-                            <div>
-                                <label style={{ fontSize: "0.75rem", fontWeight: 600, marginBottom: "0.25rem", display: "block" }}><FaTag /> Descuento</label>
-                                <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <div className="inv-card-body inv-status-grid">
+                            <label>
+                                <span>Fecha</span>
+                                <input
+                                    type="date"
+                                    value={invoice.date || ""}
+                                    onChange={(e) => setInvoice({ ...invoice, date: e.target.value })}
+                                    disabled={fiscalLocked}
+                                />
+                            </label>
+                            {id ? (
+                                <label>
+                                    <span>Estado</span>
+                                    <select
+                                        value={invoice.status}
+                                        onChange={(e) => setInvoice({ ...invoice, status: e.target.value })}
+                                        disabled={fiscalLocked}
+                                    >
+                                        <option value="pending">Pendiente de cobro</option>
+                                        <option value="paid">Pagada</option>
+                                        <option value="cancelled">Cancelada</option>
+                                    </select>
+                                </label>
+                            ) : (
+                                <div className="inv-status-note">
+                                    <strong>Estado inicial: pendiente de cobro</strong>
+                                    <span>Guardar esta factura no descuenta inventario ni emite e-CF. Usa “Cobrar y emitir” desde el detalle cuando confirmes el pago.</span>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
+                    <section className="inv-card">
+                        <div className="inv-card-header">
+                            <span><FaCalculator /> Totales</span>
+                        </div>
+                        <div className="inv-card-body">
+                            <label className="inv-field">
+                                <span><FaTag /> Descuento</span>
+                                <div className="inv-discount-row">
                                     <input
                                         type="number"
                                         value={discount.value}
                                         onChange={(e) => setDiscount({ ...discount, value: parseFloat(e.target.value) || 0 })}
-                                        style={{ flex: 1 }}
+                                        disabled={fiscalLocked}
                                     />
-                                    <button className={`btn ${discount.type === "percentage" ? "btn-primary" : "btn-outline"}`} onClick={() => setDiscount({ ...discount, type: "percentage" })}>%</button>
-                                    <button className={`btn ${discount.type === "fixed" ? "btn-primary" : "btn-outline"}`} onClick={() => setDiscount({ ...discount, type: "fixed" })}>$</button>
+                                    <button type="button" className={`inv-btn small ${discount.type === "percentage" ? "primary" : "secondary"}`} onClick={() => setDiscount({ ...discount, type: "percentage" })} disabled={fiscalLocked}>%</button>
+                                    <button type="button" className={`inv-btn small ${discount.type === "fixed" ? "primary" : "secondary"}`} onClick={() => setDiscount({ ...discount, type: "fixed" })} disabled={fiscalLocked}>$</button>
                                 </div>
-                            </div>
+                            </label>
 
-                            <div>
-                                <label style={{ fontSize: "0.75rem", fontWeight: 600, marginBottom: "0.25rem", display: "block" }}>IVA (%)</label>
-                                <input type="number" value={taxRate} onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)} step="1" />
+                            <div className="inv-total-lines">
+                                <div><span>Subtotal</span><strong className="inv-mono">{fmt(subtotal)}</strong></div>
+                                {discountAmount > 0 && <div className="success"><span>Descuento</span><strong>−{fmt(discountAmount)}</strong></div>}
+                                <div><span>ITBIS ({applyItbis ? taxRate : 0}%)</span><strong className="inv-mono">{fmt(tax)}</strong></div>
+                                <div className="grand-total"><span>Total</span><strong className="inv-mono">{fmt(total)}</strong></div>
                             </div>
-
-                            <div className="space-y-2" style={{ marginTop: "0.75rem" }}>
-                                <div className="totals-line"><span>Subtotal</span><span className="font-mono">{fmt(subtotal)}</span></div>
-                                {discountAmount > 0 && (
-                                    <div className="totals-line" style={{ color: "var(--success)" }}><span>Descuento</span><span>−{fmt(discountAmount)}</span></div>
-                                )}
-                                <div className="totals-line"><span>IVA ({taxRate}%)</span><span className="font-mono">{fmt(tax)}</span></div>
-                                <div className="totals-line total"><span>TOTAL</span><span className="font-mono">{fmt(total)}</span></div>
-                            </div>
+                            <label className="inv-tax-toggle">
+                                <input
+                                    type="checkbox"
+                                    checked={applyItbis}
+                                    onChange={(e) => setApplyItbis(e.target.checked)}
+                                    disabled={fiscalLocked}
+                                />
+                                <span>Aplicar ITBIS</span>
+                            </label>
                         </div>
-                    </div>
+                    </section>
 
-                    {/* Pago */}
-                    <div className="card">
-                        <div className="card-header">
-                            <span className="card-title">Método de pago</span>
+                    <section className="inv-card">
+                        <div className="inv-card-header">
+                            <span><FaMoneyBillWave /> Pago</span>
                         </div>
-                        <div className="card-body">
+                        <div className="inv-card-body">
                             <div className="payment-grid">
-                                <div className={`payment-option ${invoice.payment_method === "cash" ? "active-cash" : ""}`} onClick={() => setInvoice({ ...invoice, payment_method: "cash", cash_received: 0 })}>
-                                    <FaMoneyBillWave size={20} /><span>Efectivo</span>
-                                </div>
-                                <div className={`payment-option ${invoice.payment_method === "card" ? "active-card" : ""}`} onClick={() => setInvoice({ ...invoice, payment_method: "card", cash_received: 0 })}>
-                                    <FaCreditCard size={20} /><span>Tarjeta</span>
-                                </div>
-                                <div className={`payment-option ${invoice.payment_method === "transfer" ? "active-transfer" : ""}`} onClick={() => setInvoice({ ...invoice, payment_method: "transfer", cash_received: 0 })}>
-                                    <FaExchangeAlt size={20} /><span>Transferencia</span>
-                                </div>
+                                <button type="button" className={`payment-option ${invoice.payment_method === "cash" ? "active-cash" : ""}`} onClick={() => !fiscalLocked && setInvoice({ ...invoice, payment_method: "cash", cash_received: 0 })}>
+                                    <FaMoneyBillWave /><span>Efectivo</span>
+                                </button>
+                                <button type="button" className={`payment-option ${invoice.payment_method === "card" ? "active-card" : ""}`} onClick={() => !fiscalLocked && setInvoice({ ...invoice, payment_method: "card", cash_received: 0 })}>
+                                    <FaCreditCard /><span>Tarjeta</span>
+                                </button>
+                                <button type="button" className={`payment-option ${invoice.payment_method === "transfer" ? "active-transfer" : ""}`} onClick={() => !fiscalLocked && setInvoice({ ...invoice, payment_method: "transfer", cash_received: 0 })}>
+                                    <FaExchangeAlt /><span>Transferencia</span>
+                                </button>
                             </div>
 
                             {invoice.payment_method === "cash" && (
-                                <div className="space-y-2">
+                                <div className="inv-payment-cash">
                                     <input
                                         type="number"
                                         step="0.01"
@@ -460,78 +598,71 @@ const InvoiceForm = () => {
                                         value={invoice.cash_received || ""}
                                         onChange={(e) => setInvoice({ ...invoice, cash_received: parseFloat(e.target.value) || 0 })}
                                         className={errors.cash ? "is-error" : ""}
+                                        disabled={fiscalLocked}
                                     />
-                                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                                        <button className="btn btn-outline btn-sm" onClick={() => setInvoice({ ...invoice, cash_received: total })}>Exacto</button>
-                                        <button className="btn btn-outline btn-sm" onClick={() => setInvoice({ ...invoice, cash_received: Math.ceil(total / 10) * 10 })}>{fmt(Math.ceil(total / 10) * 10)}</button>
-                                        <button className="btn btn-outline btn-sm" onClick={() => setInvoice({ ...invoice, cash_received: Math.ceil(total / 50) * 50 })}>{fmt(Math.ceil(total / 50) * 50)}</button>
+                                    <div className="inv-quick-cash">
+                                        <button type="button" className="inv-btn secondary small" onClick={() => setInvoice({ ...invoice, cash_received: total })} disabled={fiscalLocked}>Exacto</button>
+                                        <button type="button" className="inv-btn secondary small" onClick={() => setInvoice({ ...invoice, cash_received: Math.ceil(total / 10) * 10 })} disabled={fiscalLocked}>{fmt(Math.ceil(total / 10) * 10)}</button>
+                                        <button type="button" className="inv-btn secondary small" onClick={() => setInvoice({ ...invoice, cash_received: Math.ceil(total / 50) * 50 })} disabled={fiscalLocked}>{fmt(Math.ceil(total / 50) * 50)}</button>
                                     </div>
                                     {errors.cash && <div className="error-text"><FaTimes size={10} /> {errors.cash}</div>}
                                     <div className="change-box">
-                                        <span style={{ fontWeight: 600 }}>Cambio</span>
-                                        <span className="font-mono" style={{ fontSize: "1.125rem", fontWeight: 700 }}>{fmt(change)}</span>
+                                        <span>Cambio</span>
+                                        <strong className="inv-mono">{fmt(change)}</strong>
                                     </div>
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </section>
 
-                    {/* Notas y acciones */}
-                    <div className="card">
-                        <div className="card-body space-y-3">
-                            <textarea
-                                placeholder="Notas adicionales para el cliente..."
-                                rows="3"
-                                value={invoice.notes}
-                                onChange={(e) => setInvoice({ ...invoice, notes: e.target.value })}
-                            />
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                                <button className="btn btn-outline" onClick={(e) => submit(e, "new")} disabled={loading}>
+                    <section className="inv-card">
+                        <div className="inv-card-body">
+                            <div className="inv-save-grid">
+                                <button type="button" className="inv-btn secondary" onClick={(e) => submit(e, "new")} disabled={loading || fiscalLocked}>
                                     <FaPlus /> Nuevo
                                 </button>
-                                <button className="btn btn-primary" onClick={(e) => submit(e, "save")} disabled={loading}>
+                                <button type="button" className="inv-btn primary" onClick={(e) => submit(e, "save")} disabled={loading || fiscalLocked}>
                                     <FaSave /> {id ? "Actualizar" : "Guardar"}
                                 </button>
                             </div>
                         </div>
-                    </div>
-                </div>
+                    </section>
+                </aside>
             </div>
 
             {/* Modal de productos */}
             {showModal && (
-                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }} onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
-                    <div className="card" style={{ width: "100%", maxWidth: "700px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
-                        <div className="card-header">
-                            <span className="card-title"><FaSearch /> Productos</span>
-                            <button className="btn btn-outline btn-sm" onClick={() => setShowModal(false)}><FaTimes /></button>
+                <div className="inv-modal-backdrop" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
+                    <div className="inv-product-modal">
+                        <div className="inv-card-header">
+                            <span><FaSearch /> Productos</span>
+                            <button type="button" className="inv-btn secondary icon-only" onClick={() => setShowModal(false)}><FaTimes /></button>
                         </div>
-                        <div style={{ padding: "1rem" }}>
-                            <div className="input-wrapper">
-                                <FaSearch className="input-icon" />
+                        <div className="inv-modal-search">
+                            <div className="inv-input-icon">
+                                <FaSearch />
                                 <input
                                     type="text"
                                     placeholder="Buscar por nombre o código..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     autoFocus
-                                    style={{ paddingLeft: "2rem" }}
                                 />
                             </div>
                         </div>
-                        <div className="products-grid" style={{ padding: "0 1rem 1rem 1rem" }}>
-                            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.barcode?.includes(searchTerm)).map(p => (
+                        <div className="products-grid">
+                            {filteredProducts.map(p => (
                                 <div key={p.id} className="product-card" onClick={() => { addProduct(p); setShowModal(false); setSearchTerm(""); }}>
-                                    <div style={{ fontWeight: 600, fontSize: "0.875rem" }}>{p.name}</div>
-                                    <div style={{ fontSize: "0.6875rem", color: "var(--text-faint)", fontFamily: "monospace" }}>{p.barcode || "sin código"}</div>
-                                    <div className="flex-between" style={{ marginTop: "0.5rem" }}>
-                                        <span style={{ fontWeight: 700, color: "var(--primary)" }}>{fmt(p.price)}</span>
-                                        <span style={{ fontSize: "0.6875rem", background: "var(--surface-hover)", padding: "0.125rem 0.5rem", borderRadius: "999px" }}>Stock: {p.stock}</span>
+                                    <div className="product-card-name">{p.name}</div>
+                                    <div className="product-card-code">{p.barcode || "sin código"}</div>
+                                    <div className="product-card-meta">
+                                        <span>{fmt(p.price)}</span>
+                                        <small>Stock: {p.stock}</small>
                                     </div>
                                 </div>
                             ))}
-                            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.barcode?.includes(searchTerm)).length === 0 && (
-                                <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-faint)", gridColumn: "1/-1" }}>No se encontraron productos</div>
+                            {filteredProducts.length === 0 && (
+                                <div className="inv-modal-empty">No se encontraron productos</div>
                             )}
                         </div>
                     </div>

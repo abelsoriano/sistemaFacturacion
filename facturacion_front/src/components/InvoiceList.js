@@ -5,7 +5,7 @@ import api from "../services/api";
 import { toast, Toaster } from "react-hot-toast";
 import Swal from "sweetalert2";
 import "../css/facturaList.css";
-import { ROUTE_PERMISSIONS, SALE_TOTALS_PERMISSION, userHasPermissions } from '../utils/permissions';
+import { FINANCIAL_TOTALS_PERMISSIONS, userHasAnyPermission } from '../utils/permissions';
 
 import {
   FaPlus,
@@ -40,17 +40,94 @@ const formatDate = (dateStr) => {
 };
 
 const STATUS_CONFIG = {
-  pending: { chipClass: "chip-pending", label: "Pendiente", icon: <FaExclamationTriangle size={8} /> },
+  pending: { chipClass: "chip-pending", label: "Pendiente de cobro", icon: <FaExclamationTriangle size={8} /> },
   paid: { chipClass: "chip-paid", label: "Pagada", icon: <FaCheck size={8} /> },
   completed: { chipClass: "chip-completed", label: "Completada", icon: <FaCheck size={8} /> },
   cancelled: { chipClass: "chip-cancelled", label: "Cancelada", icon: <FaTimes size={8} /> },
   refunded: { chipClass: "chip-refunded", label: "Reembolsada", icon: <FaExchangeAlt size={8} /> },
 };
 
+const ECF_STATUS_CONFIG = {
+  draft: { label: "Borrador", color: "#667085", bg: "#f2f4f7" },
+  xml_generated: { label: "XML", color: "#175cd3", bg: "#eff8ff" },
+  signed: { label: "Firmado", color: "#3538cd", bg: "#eef4ff" },
+  submitted: { label: "Enviado", color: "#0e7090", bg: "#ecfdff" },
+  accepted: { label: "Aceptado", color: "#067647", bg: "#ecfdf3" },
+  rejected: { label: "Rechazado", color: "#b42318", bg: "#fef3f2" },
+  cancelled: { label: "Anulado", color: "#475467", bg: "#f2f4f7" },
+};
+
+const JOB_STATUS_CONFIG = {
+  idle: { label: "Inactivo", color: "#475467", bg: "#f2f4f7" },
+  queued: { label: "En cola", color: "#175cd3", bg: "#eff8ff" },
+  running: { label: "Ejecutando", color: "#6941c6", bg: "#f4f3ff" },
+  retrying: { label: "Reintentando", color: "#b54708", bg: "#fffaeb" },
+  failed: { label: "Fallido", color: "#b42318", bg: "#fef3f2" },
+};
+
+const FISCAL_ACTION_LOCKED_STATUSES = new Set([
+  "signed",
+  "submitted",
+  "processing",
+  "accepted",
+  "rejected",
+]);
+
+const getFiscalStatus = (invoice) => invoice.fiscal_status || invoice.ecf_status || null;
+const getJobStatus = (invoice) => invoice.job_status || invoice.ecf_job_status || null;
+const getEffectiveFiscalStatus = (invoice) => getFiscalStatus(invoice) || "draft";
+const isFiscalAcceptedPendingPayment = (invoice, fiscalStatus) => (
+  invoice.status === "pending" && fiscalStatus === "accepted"
+);
+const canEditInvoice = (invoice) => getEffectiveFiscalStatus(invoice) === "draft";
+const canDeleteInvoice = (invoice) => {
+  const fiscalStatus = getFiscalStatus(invoice);
+  if (!fiscalStatus) return true;
+  if (FISCAL_ACTION_LOCKED_STATUSES.has(fiscalStatus)) return false;
+  return fiscalStatus === "draft" && !invoice.encf && !invoice.track_id;
+};
+const canCreateCreditNote = (invoice) => getFiscalStatus(invoice) === "accepted";
+const canCollectInvoice = (invoice) => (
+  invoice.can_collect === true ||
+  (
+    invoice.status === "pending" &&
+    !invoice.inventory_committed_at &&
+    !getFiscalStatus(invoice) &&
+    !invoice.encf &&
+    !invoice.track_id
+  )
+);
+
+const StatusBadge = ({ status, configMap, emptyLabel = "—" }) => {
+  if (!status) {
+    return <span className="muted-status">{emptyLabel}</span>;
+  }
+  const config = configMap[status] || { label: status, color: "#344054", bg: "#f2f4f7" };
+  return (
+    <span className="ecf-pill" style={{ color: config.color, background: config.bg }}>
+      {config.label}
+    </span>
+  );
+};
+
+const EcfIdentity = ({ invoice }) => {
+  const status = getFiscalStatus(invoice);
+  if (!status) {
+    return <span className="muted-status">Sin e-CF</span>;
+  }
+  return (
+    <div className="ecf-identity">
+      {invoice.encf && <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "#667085" }}>{invoice.encf}</span>}
+      {invoice.track_id && <span style={{ fontSize: 10, color: "#667085" }}>TrackID listo</span>}
+      {invoice.ecf_last_error && <span style={{ fontSize: 10, color: "#b42318" }}>Requiere atención</span>}
+    </div>
+  );
+};
+
 /* ─── Componente Principal ─────────────────────────────────────────────── */
 const InvoiceList = () => {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const canViewSalesTotals = userHasPermissions(currentUser, [SALE_TOTALS_PERMISSION]);
+  const canViewSalesTotals = userHasAnyPermission(currentUser, FINANCIAL_TOTALS_PERMISSIONS);
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -62,6 +139,8 @@ const InvoiceList = () => {
 
   const [filters, setFilters] = useState({
     status: "all",
+    fiscalStatus: "all",
+    jobStatus: "all",
     dateFrom: "",
     dateTo: "",
     client: "",
@@ -102,6 +181,14 @@ const InvoiceList = () => {
       result = result.filter(inv => inv.status === filters.status);
     }
 
+    if (filters.fiscalStatus !== "all") {
+      result = result.filter(inv => getEffectiveFiscalStatus(inv) === filters.fiscalStatus);
+    }
+
+    if (filters.jobStatus !== "all") {
+      result = result.filter(inv => (getJobStatus(inv) || "idle") === filters.jobStatus);
+    }
+
     if (filters.client) {
       result = result.filter(inv => String(inv.client) === String(filters.client));
     }
@@ -119,7 +206,7 @@ const InvoiceList = () => {
       result = result.filter(inv => {
         const clientName = (clients[inv.client] || "").toLowerCase();
         const invNumber = (inv.invoice_number || `FACT-${inv.id}`).toLowerCase();
-        const total = String(inv.total);
+        const total = canViewSalesTotals ? String(inv.total) : "";
         return invNumber.includes(searchLower) || 
                clientName.includes(searchLower) || 
                total.includes(searchLower);
@@ -127,12 +214,14 @@ const InvoiceList = () => {
     }
 
     setFiltered(result);
-  }, [filters, invoices, clients]);
+  }, [filters, invoices, clients, canViewSalesTotals]);
 
   const updateFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
-  const resetFilters = () => setFilters({ status: "all", dateFrom: "", dateTo: "", client: "", search: "" });
+  const resetFilters = () => setFilters({ status: "all", fiscalStatus: "all", jobStatus: "all", dateFrom: "", dateTo: "", client: "", search: "" });
   
   const hasActiveFilters = filters.status !== "all" || 
+                          filters.fiscalStatus !== "all" ||
+                          filters.jobStatus !== "all" ||
                           filters.dateFrom || 
                           filters.dateTo || 
                           filters.client || 
@@ -161,23 +250,25 @@ const InvoiceList = () => {
     }
   };
 
-  const handleStatusChange = async (id, newStatus) => {
-    const config = STATUS_CONFIG[newStatus];
+  const handleCollectInvoice = async (invoice) => {
+    const invoiceNumber = invoice.invoice_number || `FACT-${invoice.id}`;
     const result = await Swal.fire({
-      title: `¿Marcar como ${config?.label || newStatus}?`,
-      icon: "question",
+      title: "¿Cobrar y emitir esta factura?",
+      text: `La factura #${invoiceNumber} descontará inventario y se enviará al flujo e-CF.`,
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#3b82f6",
-      confirmButtonText: "Confirmar"
+      confirmButtonColor: "#6C63FF",
+      confirmButtonText: "Cobrar y emitir",
+      cancelButtonText: "Cancelar"
     });
 
     if (result.isConfirmed) {
       try {
-        await api.patch(`invoices/${id}/`, { status: newStatus });
-        setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i));
-        toast.success(`Estado actualizado a ${config?.label}`);
-      } catch {
-        toast.error("Error al actualizar");
+        const { data } = await api.post(`invoices/${invoice.id}/collect/`);
+        setInvoices(prev => prev.map(i => i.id === invoice.id ? { ...i, ...data } : i));
+        toast.success("Factura cobrada y enviada al flujo e-CF");
+      } catch (err) {
+        toast.error(err.response?.data?.detail || "No se pudo cobrar y emitir la factura");
       }
     }
   };
@@ -255,14 +346,14 @@ const InvoiceList = () => {
             <div className="stat-sub">{filtered.length} en vista</div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Pendientes</div>
+            <div className="stat-label">Pendientes de cobro</div>
             <div className="stat-value warning">{pendingCount}</div>
             <div className="stat-sub">por cobrar</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">Pagadas</div>
             <div className="stat-value success">{paidCount}</div>
-            <div className="stat-sub">{formatMoney(paidAmount)}</div>
+            <div className="stat-sub">{canViewSalesTotals ? formatMoney(paidAmount) : "facturas cobradas"}</div>
           </div>
            {canViewSalesTotals && (
           <div className="stat-card">
@@ -294,11 +385,11 @@ const InvoiceList = () => {
             </div>
             <div className="filter-body">
               <div className="filter-field full-width">
-                <label className="filter-label">Estado</label>
+                <label className="filter-label">Estado de pago</label>
                 <div className="status-pills">
                   {[
                     ["all", "Todos"],
-                    ["pending", "Pendiente"],
+                    ["pending", "Pendiente de cobro"],
                     ["paid", "Pagada"],
                     ["completed", "Completada"],
                     ["cancelled", "Cancelada"],
@@ -308,6 +399,51 @@ const InvoiceList = () => {
                       key={val}
                       className={`status-pill ${filters.status === val ? `active-${val}` : ""}`}
                       onClick={() => updateFilter("status", val)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="filter-field full-width">
+                <label className="filter-label">Estado fiscal e-CF</label>
+                <div className="status-pills">
+                  {[
+                    ["all", "Todos"],
+                    ["draft", "Borrador"],
+                    ["xml_generated", "XML"],
+                    ["signed", "Firmado"],
+                    ["submitted", "Enviado"],
+                    ["accepted", "Aceptado"],
+                    ["rejected", "Rechazado"]
+                  ].map(([val, label]) => (
+                    <button
+                      key={val}
+                      className={`status-pill ${filters.fiscalStatus === val ? "active-all" : ""}`}
+                      onClick={() => updateFilter("fiscalStatus", val)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="filter-field full-width">
+                <label className="filter-label">Proceso técnico</label>
+                <div className="status-pills">
+                  {[
+                    ["all", "Todos"],
+                    ["idle", "Inactivo"],
+                    ["queued", "En cola"],
+                    ["running", "Ejecutando"],
+                    ["retrying", "Reintentando"],
+                    ["failed", "Fallido"]
+                  ].map(([val, label]) => (
+                    <button
+                      key={val}
+                      className={`status-pill ${filters.jobStatus === val ? "active-all" : ""}`}
+                      onClick={() => updateFilter("jobStatus", val)}
                     >
                       {label}
                     </button>
@@ -374,7 +510,7 @@ const InvoiceList = () => {
           <div className="status-pills" style={{ marginBottom: "1rem" }}>
             {[
               ["all", "Todos"],
-              ["pending", "Pendientes"],
+              ["pending", "Pendientes de cobro"],
               ["paid", "Pagadas"],
               ["cancelled", "Canceladas"]
             ].map(([val, label]) => (
@@ -401,7 +537,7 @@ const InvoiceList = () => {
               Resultados
               <span className="badge">{filtered.length}</span>
             </div>
-            {filtered.length > 0 && (
+            {canViewSalesTotals && filtered.length > 0 && (
               <span style={{ fontSize: "0.75rem", color: "var(--text-faint)", fontFamily: "var(--mono)" }}>
                 Total: {formatMoney(filtered.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0))}
               </span>
@@ -416,14 +552,17 @@ const InvoiceList = () => {
                   <th><FaUser size={10} /> Cliente</th>
                   <th><FaCalendarAlt size={10} /> Fecha</th>
                  {canViewSalesTotals &&  <th className="text-right"><FaMoneyBillWave size={10} /> Total</th>}
-                  <th>Estado</th>
+                  <th>Estado de pago</th>
+                  <th>Fiscal e-CF</th>
+                  <th>Proceso</th>
+                  <th>e-NCF</th>
                   <th className="text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan="6">
+                    <td colSpan={canViewSalesTotals ? 9 : 8}>
                       <div className="empty-state">
                         <FaFileInvoice size={48} />
                         <p>
@@ -441,68 +580,116 @@ const InvoiceList = () => {
                   </tr>
                 ) : (
                   filtered.map(invoice => {
-                    const statusConfig = STATUS_CONFIG[invoice.status] || STATUS_CONFIG.pending;
                     const invoiceNumber = invoice.invoice_number || `FACT-${invoice.id}`;
-                    const clientName = clients[invoice.client] || "—";
+                    const clientName = clients[invoice.client] || "Consumidor Final";
+                    const showEdit = canEditInvoice(invoice);
+                    const showDelete = canDeleteInvoice(invoice);
+                    const showCreditNote = canCreateCreditNote(invoice);
+                    const fiscalStatus = getEffectiveFiscalStatus(invoice);
+                    const jobStatus = getJobStatus(invoice) || "idle";
+                    const statusConfig = STATUS_CONFIG[invoice.status] || STATUS_CONFIG.pending;
+                    const showAcceptedPendingPayment = isFiscalAcceptedPendingPayment(invoice, fiscalStatus);
+                    const showCollect = canCollectInvoice(invoice);
                     
                     return (
                       <tr key={invoice.id}>
-                        <td>
+                        <td data-label="Nº factura">
                           <span className="invoice-number">#{invoiceNumber}</span>
                         </td>
-                        <td>
+                        <td data-label="Cliente">
                           <span className="client-name">{clientName}</span>
                         </td>
-                        <td>
+                        <td data-label="Fecha">
                           <span className="date-text">{formatDate(invoice.date || invoice.created_at)}</span>
                           
                         </td>
-                        {canViewSalesTotals &&<td className="text-right">
+                        {canViewSalesTotals &&<td data-label="Total" className="text-right">
                           <span className="total-amount">{formatMoney(invoice.total)}</span>
                         </td>}
-                        <td>
-                          <span className={`status-chip ${statusConfig.chipClass}`}>
-                            {statusConfig.icon} {statusConfig.label}
-                          </span>
-                        </td>
-                        <td className="text-right">
-                          <div className="action-buttons">
-                            <Link to={`/invoices/${invoice.id}`} className="action-btn btn-view" title="Ver">
-                              <FaEye size={12} />
-                            </Link>
-                            <Link to={`/edit-invoice/${invoice.id}`} className="action-btn btn-edit" title="Editar">
-                              <FaEdit size={12} />
-                            </Link>
-                            <button
-                              className="action-btn btn-print"
-                              title="Imprimir"
-                              onClick={() => generatePDF(
-                                { ...invoice, clientName },
-                                {
-                                  filename: `factura_${invoice.invoice_number || invoice.id}.pdf`,
-                                  showClientName: true,
-                                  showNotes: true,
-                                }
-                              )}
+                        <td data-label="Estado de pago">
+                          <div className="payment-status-cell">
+                            <span
+                              className={`status-chip ${statusConfig.chipClass}`}
+                              title={showAcceptedPendingPayment ? "Fiscalmente aceptada, pendiente de cobro." : statusConfig.label}
                             >
-                              <FaPrint size={12} />
-                            </button>
-                            {invoice.status === "pending" && (
-                              <button
-                                className="action-btn btn-pay"
-                                title="Marcar como pagada"
-                                onClick={() => handleStatusChange(invoice.id, "paid")}
-                              >
-                                <FaCheck size={12} />
-                              </button>
+                              {statusConfig.icon} {statusConfig.label}
+                            </span>
+                            {showAcceptedPendingPayment && (
+                              <span className="payment-status-hint">
+                                Fiscalmente aceptada, pendiente de cobro
+                              </span>
                             )}
-                            <button
-                              className="action-btn btn-delete"
-                              title="Eliminar"
-                              onClick={() => handleDelete(invoice.id, invoiceNumber)}
-                            >
-                              <FaTrash size={12} />
-                            </button>
+                          </div>
+                        </td>
+                        <td data-label="Fiscal e-CF">
+                          <StatusBadge status={fiscalStatus} configMap={ECF_STATUS_CONFIG} />
+                        </td>
+                        <td data-label="Proceso">
+                          <StatusBadge status={jobStatus} configMap={JOB_STATUS_CONFIG} />
+                        </td>
+                        <td data-label="e-NCF">
+                          <EcfIdentity invoice={invoice} />
+                        </td>
+                        <td data-label="Acciones" className="text-right">
+                          <div className="action-buttons">
+                            <div className="action-group">
+                              <Link to={`/invoices/${invoice.id}`} className="action-btn btn-view" title="Ver factura">
+                                <FaEye size={12} />
+                              </Link>
+                              {showEdit && (
+                                <Link to={`/edit-invoice/${invoice.id}`} className="action-btn btn-edit" title="Editar borrador">
+                                  <FaEdit size={12} />
+                                </Link>
+                              )}
+                              <button
+                                className="action-btn btn-print"
+                                title="Imprimir"
+                                onClick={() => generatePDF(
+                                  { ...invoice, clientName },
+                                  {
+                                    filename: `factura_${invoice.invoice_number || invoice.id}.pdf`,
+                                    showClientName: true,
+                                    showNotes: true,
+                                  }
+                                )}
+                              >
+                                <FaPrint size={12} />
+                              </button>
+                            </div>
+                            <div className="action-group">
+                              {showCreditNote && (
+                                <button
+                                  className="action-btn btn-pay"
+                                  title="Nota de crédito E34"
+                                  onClick={() => navigate(`/invoices/${invoice.id}`)}
+                                >
+                                  <FaExchangeAlt size={12} />
+                                </button>
+                              )}
+                              {showCollect && (
+                                <button
+                                  className="action-btn btn-pay"
+                                  title="Cobrar y emitir e-CF"
+                                  onClick={() => handleCollectInvoice(invoice)}
+                                >
+                                  <FaCheck size={12} />
+                                </button>
+                              )}
+                            </div>
+                            {showDelete && (
+                              <div className="action-group">
+                                <button
+                                  className="action-btn btn-delete"
+                                  title="Eliminar borrador"
+                                  onClick={() => handleDelete(invoice.id, invoiceNumber)}
+                                >
+                                  <FaTrash size={12} />
+                                </button>
+                              </div>
+                            )}
+                            {!showEdit && !showDelete && (
+                              <span className="fiscal-lock-hint">Bloqueada</span>
+                            )}
                           </div>
                         </td>
                       </tr>

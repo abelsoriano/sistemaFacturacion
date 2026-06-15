@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-// URL base de tu API
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
-// const API_BASE_URL = 'https://7l51msx7-8000.use2.devtunnels.ms/api/';
+// const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://7l51msx7-8000.use2.devtunnels.ms/api/v1';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
+// Official commercial invoice contract: `${API_BASE_URL}/invoices/`.
 
 // Crear instancia de axios
 const api = axios.create({
@@ -11,8 +11,6 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
-
-let lastPermissionAlertAt = 0;
 
 // ============================================
 // INTERCEPTOR DE PETICIONES
@@ -24,6 +22,11 @@ api.interceptors.request.use(
     
     if (token) {
       config.headers.Authorization = `Token ${token}`;
+    }
+
+    const activeCompanyId = localStorage.getItem('active_company_id');
+    if (activeCompanyId) {
+      config.headers['X-Company-ID'] = activeCompanyId;
     }
     
     return config;
@@ -94,6 +97,26 @@ export const authService = {
         localStorage.setItem('user', JSON.stringify(response.data.user));
       }
       
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Registro publico de usuario SaaS
+   */
+  register: async (payload) => {
+    try {
+      const response = await api.post('/auth/register/', payload);
+
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+      }
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+
       return response.data;
     } catch (error) {
       throw error;

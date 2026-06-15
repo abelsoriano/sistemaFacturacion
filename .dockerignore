@@ -1,0 +1,8 @@
+.git
+__pycache__
+*.pyc
+myenv
+node_modules
+facturacion_front/node_modules
+media
+.env

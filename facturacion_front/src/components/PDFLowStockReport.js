@@ -10,178 +10,8 @@ import {
   IconExcel,
   IconClipboard,
 } from './Icons';
+import '../css/LowStockReports.css';
 
-const styles = `
-  .pdf-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.35);
-    z-index: 300;
-    display: flex; align-items: center; justify-content: center;
-    padding: 24px;
-  }
-  .pdf-modal {
-    background: #fff;
-    border-radius: 12px;
-    border: 0.5px solid #e5e7eb;
-    width: 100%; max-width: 820px;
-    max-height: 90vh;
-    display: flex; flex-direction: column;
-    overflow: hidden;
-  }
-  .pdf-header {
-    padding: 16px 20px;
-    border-bottom: 0.5px solid #f3f4f6;
-    display: flex; align-items: flex-start; gap: 12px;
-    flex-shrink: 0;
-  }
-  .pdf-header-icon {
-    width: 36px; height: 36px; border-radius: 8px;
-    background: #FCEBEB; display: flex; align-items: center;
-    justify-content: center; flex-shrink: 0;
-  }
-  .pdf-header-info { flex: 1; }
-  .pdf-header-title { font-size: 14px; font-weight: 600; color: #111827; }
-  .pdf-header-desc  { font-size: 12px; color: #9ca3af; margin-top: 2px; }
-  .pdf-close {
-    width: 28px; height: 28px; border-radius: 6px;
-    border: 0.5px solid #e5e7eb; background: transparent;
-    cursor: pointer; color: #6b7280;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.12s; flex-shrink: 0;
-  }
-  .pdf-close:hover { background: #f9fafb; }
-  .pdf-close:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .pdf-body {
-    flex: 1; overflow-y: auto; padding: 20px;
-    display: flex; flex-direction: column; gap: 16px;
-  }
-
-  .pdf-error {
-    background: #FCEBEB; border: 0.5px solid #F7C1C1;
-    border-radius: 8px; padding: 12px 14px;
-    font-size: 13px; color: #A32D2D;
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  }
-  .pdf-error-close {
-    background: none; border: none; cursor: pointer;
-    color: #A32D2D; padding: 0; display: flex;
-  }
-
-  .pdf-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .pdf-stat {
-    background: #f9fafb; border-radius: 8px;
-    padding: 12px 14px; text-align: center;
-  }
-  .pdf-stat-val { font-size: 22px; font-weight: 600; color: #111827; }
-  .pdf-stat-lbl { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-
-  .pdf-alert {
-    display: flex; align-items: flex-start; gap: 10px;
-    border-radius: 8px; padding: 12px 14px; font-size: 13px;
-  }
-  .pdf-alert.warn {
-    background: #FAEEDA; border: 0.5px solid #FAC775; color: #633806;
-  }
-  .pdf-alert.danger {
-    background: #FCEBEB; border: 0.5px solid #F7C1C1; color: #791F1F;
-  }
-  .pdf-alert.success {
-    background: #E1F5EE; border: 0.5px solid #5DCAA5; color: #085041;
-  }
-  .pdf-alert-title { font-weight: 600; margin-bottom: 3px; }
-
-  .pdf-table-wrap { overflow-x: auto; }
-  .pdf-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .pdf-table thead th {
-    padding: 8px 12px; text-align: left;
-    font-size: 10px; font-weight: 600; color: #9ca3af;
-    background: #f9fafb; border-bottom: 0.5px solid #f3f4f6;
-    text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
-  }
-  .pdf-table thead th.c { text-align: center; }
-  .pdf-table tbody tr { border-bottom: 0.5px solid #f9fafb; }
-  .pdf-table tbody tr:last-child { border-bottom: none; }
-  .pdf-table tbody tr:hover { background: #f9fafb; }
-  .pdf-table tbody td { padding: 10px 12px; vertical-align: middle; color: #111827; }
-  .pdf-table tbody td.c { text-align: center; }
-  .pdf-table tbody td.muted { color: #9ca3af; font-size: 11px; }
-
-  .pdf-badge {
-    display: inline-block; font-size: 10px; font-weight: 500;
-    padding: 2px 8px; border-radius: 10px;
-  }
-  .pdf-badge-out      { background: #FCEBEB; color: #A32D2D; }
-  .pdf-badge-critical { background: #FAEEDA; color: #854F0B; }
-  .pdf-badge-low      { background: #E6F1FB; color: #185FA5; }
-  .pdf-badge-hi       { background: #FCEBEB; color: #A32D2D; }
-  .pdf-badge-med      { background: #FAEEDA; color: #854F0B; }
-  .pdf-badge-lo       { background: #E1F5EE; color: #085041; }
-
-  .pdf-diff-neg { font-weight: 600; color: #A32D2D; }
-  .pdf-diff-ok  { font-weight: 600; color: #0F6E56; }
-
-  .pdf-recs {
-    background: #f9fafb; border: 0.5px solid #e5e7eb;
-    border-radius: 10px; padding: 16px 18px;
-  }
-  .pdf-recs-title {
-    font-size: 12px; font-weight: 600; color: #111827;
-    margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
-  }
-  .pdf-recs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .pdf-recs-col-title { font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 6px; }
-  .pdf-recs ul { margin: 0; padding-left: 16px; }
-  .pdf-recs ul li { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
-  .pdf-recs-note {
-    margin-top: 12px; padding: 10px 12px;
-    background: #E6F1FB; border-radius: 7px;
-    font-size: 11px; color: #185FA5;
-  }
-
-  .pdf-report-footer {
-    text-align: center; font-size: 11px; color: #9ca3af;
-    padding-top: 12px; border-top: 0.5px solid #f3f4f6;
-  }
-
-  .pdf-footer {
-    padding: 14px 20px; border-top: 0.5px solid #f3f4f6;
-    display: flex; align-items: center; gap: 8px;
-    flex-shrink: 0;
-  }
-  .pdf-footer-spacer { flex: 1; }
-  .pdf-btn {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 12px; font-weight: 500;
-    border-radius: 8px; padding: 7px 14px;
-    cursor: pointer; transition: all 0.15s; border: none;
-  }
-  .pdf-btn-ghost {
-    background: transparent; color: #6b7280;
-    border: 0.5px solid #e5e7eb;
-  }
-  .pdf-btn-ghost:hover { background: #f9fafb; color: #111827; }
-  .pdf-btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
-  .pdf-btn-danger {
-    background: #FCEBEB; color: #A32D2D;
-    border: 0.5px solid #F7C1C1;
-  }
-  .pdf-btn-danger:hover { background: #F7C1C1; }
-  .pdf-btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
-  .pdf-spinner {
-    width: 13px; height: 13px; border: 2px solid rgba(163,45,45,0.3);
-    border-top-color: #A32D2D; border-radius: 50%;
-    animation: pdf-spin 0.6s linear infinite;
-  }
-  @keyframes pdf-spin { to { transform: rotate(360deg); } }
-
-  @media (max-width: 600px) {
-    .pdf-stats { grid-template-columns: repeat(2,1fr); }
-    .pdf-recs-grid { grid-template-columns: 1fr; }
-    .pdf-overlay { padding: 0; align-items: flex-end; }
-    .pdf-modal { max-height: 95vh; border-radius: 12px 12px 0 0; }
-  }
-`;
 
 const PDFLowStockReport = ({ lowStockProducts, onClose, activeFilter = 'all' }) => {
   const [loading, setLoading] = useState(false);
@@ -307,14 +137,13 @@ const PDFLowStockReport = ({ lowStockProducts, onClose, activeFilter = 'all' }) 
   };
 
   return (
-    <>
-      <style>{styles}</style>
+    <>
       <div className="pdf-overlay" onClick={onClose}>
         <div className="pdf-modal" onClick={e => e.stopPropagation()}>
 
           {/* Header */}
           <div className="pdf-header">
-            <div className="pdf-header-icon"><IconFile stroke="#A32D2D" /></div>
+            <div className="pdf-header-icon"><IconFile stroke="#6C63FF" /></div>
             <div className="pdf-header-info">
               <div className="pdf-header-title">{getFilterTitle()}</div>
               <div className="pdf-header-desc">{getFilterDesc()}</div>
@@ -343,11 +172,11 @@ const PDFLowStockReport = ({ lowStockProducts, onClose, activeFilter = 'all' }) 
                   <div className="pdf-stat-lbl">Total productos</div>
                 </div>
                 <div className="pdf-stat">
-                  <div className="pdf-stat-val" style={{ color: '#A32D2D' }}>{fmt(stats.outOfStock)}</div>
+                  <div className="pdf-stat-val danger">{fmt(stats.outOfStock)}</div>
                   <div className="pdf-stat-lbl">Agotados</div>
                 </div>
                 <div className="pdf-stat">
-                  <div className="pdf-stat-val" style={{ color: '#854F0B' }}>{fmt(stats.critical)}</div>
+                  <div className="pdf-stat-val warn">{fmt(stats.critical)}</div>
                   <div className="pdf-stat-lbl">Stock crítico</div>
                 </div>
                 <div className="pdf-stat">
@@ -414,7 +243,7 @@ const PDFLowStockReport = ({ lowStockProducts, onClose, activeFilter = 'all' }) 
                               {product.code || `P-${String(index + 1).padStart(3, '0')}`}
                             </td>
                             <td>
-                              <div style={{ fontWeight: 500 }}>{product.name}</div>
+                              <div className="pdf-product-name">{product.name}</div>
                               {product.description && (
                                 <div className="muted">{product.description}</div>
                               )}
