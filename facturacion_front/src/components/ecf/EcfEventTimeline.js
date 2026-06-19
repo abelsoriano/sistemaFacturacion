@@ -3,17 +3,17 @@ import { Empty, Timeline, Typography } from 'antd';
 import moment from 'moment';
 
 const eventColors = {
-  created: 'blue',
-  queued: 'cyan',
-  xml_generated: 'blue',
-  signed: 'purple',
-  submitted: 'gold',
-  status_checked: 'geekblue',
-  retry_scheduled: 'orange',
-  skipped: 'gray',
-  accepted: 'green',
-  rejected: 'red',
-  error: 'red',
+  created: 'var(--saas-primary)',
+  queued: 'var(--saas-warning)',
+  xml_generated: 'var(--saas-primary)',
+  signed: 'var(--saas-success)',
+  submitted: 'var(--saas-warning)',
+  status_checked: 'var(--saas-primary)',
+  retry_scheduled: 'var(--saas-warning)',
+  skipped: 'var(--saas-muted)',
+  accepted: 'var(--saas-success)',
+  rejected: 'var(--saas-danger)',
+  error: 'var(--saas-danger)',
 };
 
 function EcfEventTimeline({ events = [] }) {
@@ -24,7 +24,7 @@ function EcfEventTimeline({ events = [] }) {
   return (
     <Timeline
       items={events.map((event) => ({
-        color: eventColors[event.event_type] || 'blue',
+        color: eventColors[event.event_type] || 'var(--saas-primary)',
         children: (
           <div className="ecf-timeline-item">
             <div className="ecf-timeline-head">

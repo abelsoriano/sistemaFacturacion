@@ -148,7 +148,7 @@ REST_FRAMEWORK = {
 # CORS (para React en desarrollo)
 # ==============================================================================
 
-CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS', 'https://7l51msx7-8000.use2.devtunnels.ms,https://7l51msx7-3000.use2.devtunnels.ms')
+CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS', 'https://assys.xyz/')
 
 CORS_ALLOW_ALL_ORIGINS = env_bool('CORS_ALLOW_ALL_ORIGINS', True)
 

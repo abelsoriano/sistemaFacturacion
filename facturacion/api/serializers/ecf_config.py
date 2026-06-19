@@ -2,7 +2,59 @@ from rest_framework import serializers
 
 from facturacion.api.company_context import get_current_company
 from facturacion.api.validators import normalize_rnc, validate_phone
-from facturacion.models import ECFCertificate, ECFEventLog, ECFIssuerConfig, ECFSequence, ECFStatusEvent
+from facturacion.models import (
+    DGIICertificationEvent,
+    DGIICertificationItem,
+    DGIICertificationPlan,
+    ECFCertificate,
+    ECFEventLog,
+    ECFIssuerConfig,
+    ECFSequence,
+    ECFStatusEvent,
+)
+
+
+class DGIICertificationItemSerializer(serializers.ModelSerializer):
+    status_label = serializers.CharField(source='get_status_display', read_only=True)
+    ecf_type_label = serializers.CharField(source='get_ecf_type_display', read_only=True)
+
+    class Meta:
+        model = DGIICertificationItem
+        fields = [
+            'id', 'plan', 'company', 'ecf_type', 'ecf_type_label', 'dgii_group',
+            'status', 'status_label', 'encf', 'document_type', 'amount',
+            'receiver_rnc', 'receiver_name', 'observations', 'source_sheet',
+            'source_row', 'raw_data', 'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+
+class DGIICertificationEventSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        model = DGIICertificationEvent
+        fields = [
+            'id', 'company', 'plan', 'item', 'event_type', 'message',
+            'payload', 'created_by', 'created_by_username', 'created_at',
+        ]
+        read_only_fields = fields
+
+
+class DGIICertificationPlanSerializer(serializers.ModelSerializer):
+    items = DGIICertificationItemSerializer(many=True, read_only=True)
+    events = DGIICertificationEventSerializer(many=True, read_only=True)
+    imported_by_username = serializers.CharField(source='imported_by.username', read_only=True)
+
+    class Meta:
+        model = DGIICertificationPlan
+        fields = [
+            'id', 'company', 'status', 'source_filename', 'file_sha256',
+            'imported_by', 'imported_by_username', 'imported_at',
+            'total_items', 'group_counts', 'items', 'events',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
 
 
 class ECFCertificateSerializer(serializers.ModelSerializer):

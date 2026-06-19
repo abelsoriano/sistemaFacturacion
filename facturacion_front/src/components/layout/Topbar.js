@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Building2, ChevronDown, Search, UserCircle } from 'lucide-react';
+import { Bell, Building2, ChevronDown, Search, UserCircle, Moon, Sun } from 'lucide-react';
 
 import api from '../../services/api';
 import { authService } from '../../services/api';
@@ -21,6 +21,27 @@ export default function Topbar() {
   const [activeCompany, setActiveCompany] = useState(null);
   const [isCompanyMenuOpen, setIsCompanyMenuOpen] = useState(false);
   const [isCompanyLoading, setIsCompanyLoading] = useState(() => Boolean(localStorage.getItem('token')));
+  const [theme, setTheme] = useState('light');
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    setTheme(savedTheme === 'dark' ? 'dark' : 'light');
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('theme-dark');
+    } else {
+      root.classList.remove('theme-dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((value) => (value === 'dark' ? 'light' : 'dark'));
+  };
+
   const initials = (
     currentUser.first_name?.[0]
     || currentUser.username?.[0]
@@ -169,6 +190,15 @@ export default function Topbar() {
           disabled
         >
           <Bell size={19} strokeWidth={1.7} />
+        </button>
+        <button
+          type="button"
+          className="saas-icon-btn"
+          onClick={toggleTheme}
+          aria-label="Cambiar modo claro/oscuro"
+          title={`Cambiar a modo ${theme === 'dark' ? 'claro' : 'oscuro'}`}
+        >
+          {theme === 'dark' ? <Sun size={19} strokeWidth={1.7} /> : <Moon size={19} strokeWidth={1.7} />}
         </button>
         <button type="button" className="saas-profile-btn" onClick={() => navigate('/profile')} aria-label="Mi perfil">
           <span>{initials}</span>

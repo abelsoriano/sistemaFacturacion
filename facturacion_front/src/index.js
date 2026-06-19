@@ -9,7 +9,10 @@ import Modal from 'react-modal';
 // Configurar el elemento raíz para react-modal
 Modal.setAppElement('#root');
 
-
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'dark') {
+  document.documentElement.classList.add('theme-dark');
+}
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

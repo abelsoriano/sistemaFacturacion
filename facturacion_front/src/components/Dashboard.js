@@ -79,7 +79,7 @@ const Dashboard = () => {
   const avgOrderValue = totalOrders ? totalSales / totalOrders : 0;
   const bestCategory = dashboardData.salesByCategory?.[0]?.name || 'N/A';
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d', '#ffc658', '#ff7c7c'];
+  const COLORS = ['var(--saas-primary)', 'var(--saas-success)', 'var(--saas-warning)', 'var(--saas-danger)', 'var(--saas-sidebar-active)', 'var(--saas-card)', 'var(--saas-surface-soft)', 'var(--saas-surface-variant)'];
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
@@ -134,8 +134,8 @@ const Dashboard = () => {
         <Badge
           count={index + 1}
           style={{
-            backgroundColor: index < 3 ? '#faad14' : '#d9d9d9',
-            color: index < 3 ? '#fff' : '#666'
+            backgroundColor: index < 3 ? 'var(--saas-warning)' : 'var(--saas-border)',
+            color: index < 3 ? 'var(--saas-primary-foreground)' : 'var(--saas-muted)'
           }}
         />
       ),
@@ -158,7 +158,7 @@ const Dashboard = () => {
       width: 100,
       align: 'center',
       render: (value) => (
-        <Badge count={value} style={{ backgroundColor: '#52c41a' }} />
+        <Badge count={value} style={{ backgroundColor: 'var(--saas-success)', color: 'var(--saas-primary-foreground)' }} />
       ),
     },
     {
@@ -215,7 +215,7 @@ const Dashboard = () => {
       width: 100,
       align: 'center',
       render: (count) => (
-        <Badge count={count} style={{ backgroundColor: '#1890ff' }} />
+        <Badge count={count} style={{ backgroundColor: 'var(--saas-primary)', color: 'var(--saas-primary-foreground)' }} />
       ),
     },
     {
@@ -292,7 +292,7 @@ const Dashboard = () => {
                   <div className={styles.metricCardValue}>${totalSales.toFixed(2)}</div>
                   <div className={styles.metricCardSubtitle}>Ingresos cobrados en el rango seleccionado</div>
                   <div className={styles.metricProgressLabel}>Valor promedio por venta</div>
-                  <Progress percent={Math.min(100, avgOrderValue ? (avgOrderValue / 1000) * 100 : 0)} showInfo={false} strokeColor="#1890ff" />
+                  <Progress percent={Math.min(100, avgOrderValue ? (avgOrderValue / 1000) * 100 : 0)} showInfo={false} strokeColor="var(--saas-primary)" />
                   <div className={styles.metricProgressValue}>${avgOrderValue.toFixed(2)} promedio</div>
                 </Card>
               </Col>
@@ -302,7 +302,7 @@ const Dashboard = () => {
                   <div className={styles.metricCardValue}>{totalOrders}</div>
                   <div className={styles.metricCardSubtitle}>Cantidad de facturas pagadas</div>
                   <div className={styles.metricProgressLabel}>Productos vendidos</div>
-                  <Progress percent={Math.min(100, totalProducts ? (totalProducts / 500) * 100 : 0)} showInfo={false} strokeColor="#52c41a" />
+                  <Progress percent={Math.min(100, totalProducts ? (totalProducts / 500) * 100 : 0)} showInfo={false} strokeColor="var(--saas-success)" />
                   <div className={styles.metricProgressValue}>{totalProducts} productos</div>
                 </Card>
               </Col>
@@ -312,7 +312,7 @@ const Dashboard = () => {
                   <div className={styles.metricCardValue}>{lowStock}</div>
                   <div className={styles.metricCardSubtitle}>Artículos con stock bajo</div>
                   <div className={styles.metricProgressLabel}>Mejor categoría</div>
-                  <Progress percent={100} showInfo={false} strokeColor="#fa8c16" />
+                  <Progress percent={100} showInfo={false} strokeColor="var(--saas-warning)" />
                   <div className={styles.metricProgressValue}>{bestCategory}</div>
                 </Card>
               </Col>
@@ -325,9 +325,9 @@ const Dashboard = () => {
                     title="Ventas cobradas"
                     value={totalSales}
                     precision={2}
-                    prefix={<DollarOutlined style={{ color: '#1890ff' }} />}
+                    prefix={<DollarOutlined style={{ color: 'var(--saas-primary)' }} />}
                     suffix="$"
-                    valueStyle={{ color: '#1890ff' }}
+                    valueStyle={{ fontSize: '14px', color: 'var(--saas-primary)' }}
                   />
                 </Card>
               </Col>
@@ -336,8 +336,8 @@ const Dashboard = () => {
                   <Statistic
                     title="Facturas pagadas"
                     value={totalOrders}
-                    prefix={<ShoppingCartOutlined style={{ color: '#52c41a' }} />}
-                    valueStyle={{ color: '#52c41a' }}
+                    prefix={<ShoppingCartOutlined style={{ color: 'var(--saas-success)' }} />}
+                    valueStyle={{ color: 'var(--saas-success)' }}
                   />
                 </Card>
               </Col>
@@ -346,8 +346,8 @@ const Dashboard = () => {
                   <Statistic
                     title="Productos Vendidos"
                     value={totalProducts}
-                    prefix={<TagOutlined style={{ color: '#faad14' }} />}
-                    valueStyle={{ color: '#faad14' }}
+                    prefix={<TagOutlined style={{ color: 'var(--saas-warning)' }} />}
+                    valueStyle={{ color: 'var(--saas-warning)' }}
                   />
                 </Card>
               </Col>
@@ -356,8 +356,8 @@ const Dashboard = () => {
                   <Statistic
                     title="Stock Bajo"
                     value={lowStock}
-                    prefix={<StockOutlined style={{ color: '#f5222d' }} />}
-                    valueStyle={{ color: '#f5222d' }}
+                    prefix={<StockOutlined style={{ color: 'var(--saas-danger)' }} />}
+                    valueStyle={{ color: 'var(--saas-danger)' }}
                   />
                 </Card>
               </Col>
@@ -377,7 +377,7 @@ const Dashboard = () => {
                       <Line
                         type="monotone"
                         dataKey="sales"
-                        stroke="#8884d8"
+                        stroke="var(--saas-primary)"
                         activeDot={{ r: 8 }}
                         name="Ventas cobradas"
                       />
@@ -395,7 +395,7 @@ const Dashboard = () => {
                         cy="50%"
                         labelLine={false}
                         outerRadius={80}
-                        fill="#8884d8"
+                        fill="var(--saas-primary)"
                         dataKey="value"
                         nameKey="name"
                         label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
@@ -459,9 +459,9 @@ const Dashboard = () => {
                   <YAxis />
                   <RechartsTooltip />
                   <Legend />
-                  <Bar dataKey="in_stock" fill="#52c41a" name="En Stock" />
-                  <Bar dataKey="low_stock" fill="#faad14" name="Stock Bajo" />
-                  <Bar dataKey="out_of_stock" fill="#f5222d" name="Agotado" />
+                  <Bar dataKey="in_stock" fill="var(--saas-success)" name="En Stock" />
+                  <Bar dataKey="low_stock" fill="var(--saas-warning)" name="Stock Bajo" />
+                  <Bar dataKey="out_of_stock" fill="var(--saas-danger)" name="Agotado" />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -526,7 +526,7 @@ const Dashboard = () => {
                       <Line
                         type="monotone"
                         dataKey="sales"
-                        stroke="#8884d8"
+                        stroke="var(--saas-primary)"
                         activeDot={{ r: 8 }}
                         name="Ventas cobradas ($)"
                         strokeWidth={3}
@@ -547,7 +547,7 @@ const Dashboard = () => {
                             cx="50%"
                             cy="50%"
                             outerRadius={100}
-                            fill="#8884d8"
+                            fill="var(--saas-primary)"
                             dataKey="value"
                             nameKey="name"
                             label={({ name, value }) => `${name}: $${value}`}
@@ -569,7 +569,7 @@ const Dashboard = () => {
                           <XAxis dataKey="name" />
                           <YAxis />
                           <RechartsTooltip />
-                          <Bar dataKey="value" fill="#8884d8" />
+                          <Bar dataKey="value" fill="var(--saas-primary)" />
                         </BarChart>
                       </ResponsiveContainer>
                     </Card>

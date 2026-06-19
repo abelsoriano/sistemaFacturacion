@@ -456,7 +456,7 @@ function ProductForm() {
 
       <form className="pf-layout" onSubmit={handleSubmit}>
         <aside className="pf-side">
-          <section className="pf-card">
+          <section className="pf-card pf-category-card">
             <div className="pf-card-head">
               <div>
                 <span>Imagen</span>

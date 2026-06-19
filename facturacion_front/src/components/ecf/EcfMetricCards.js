@@ -30,29 +30,29 @@ function EcfMetricCards({ monitor }) {
     <Row gutter={[16, 16]}>
       <Col xs={24} sm={12} xl={6}>
         <Card className="ecf-metric-card" bordered={false}>
-          <Statistic title="Aceptados" value={accepted} prefix={<CheckCircleOutlined />} valueStyle={{ color: '#12805c' }} />
-          <Progress percent={acceptanceRate} showInfo={false} strokeColor="#12805c" />
+          <Statistic title="Aceptados" value={accepted} prefix={<CheckCircleOutlined />} valueStyle={{ color: 'var(--ecf-success)' }} />
+          <Progress percent={acceptanceRate} showInfo={false} strokeColor="var(--ecf-success)" />
           <div className="ecf-muted">{acceptanceRate}% tasa aceptación</div>
         </Card>
       </Col>
       <Col xs={24} sm={12} xl={6}>
         <Card className="ecf-metric-card" bordered={false}>
-          <Statistic title="Procesando" value={processing} prefix={<CloudSyncOutlined />} valueStyle={{ color: '#1d4ed8' }} />
-          <Progress percent={Math.min(100, processing * 10)} showInfo={false} strokeColor="#1d4ed8" />
+          <Statistic title="Procesando" value={processing} prefix={<CloudSyncOutlined />} valueStyle={{ color: 'var(--saas-primary)' }} />
+          <Progress percent={Math.min(100, processing * 10)} showInfo={false} strokeColor="var(--saas-primary)" />
           <div className="ecf-muted">{submitted} enviados, {queued + running + retrying} técnicos</div>
         </Card>
       </Col>
       <Col xs={24} sm={12} xl={6}>
         <Card className="ecf-metric-card" bordered={false}>
-          <Statistic title="Rechazados DGII" value={rejected} prefix={<ExclamationCircleOutlined />} valueStyle={{ color: '#b42318' }} />
-          <Progress percent={Math.min(100, rejected * 10)} showInfo={false} strokeColor="#b42318" />
+          <Statistic title="Rechazados DGII" value={rejected} prefix={<ExclamationCircleOutlined />} valueStyle={{ color: 'var(--ecf-danger)' }} />
+          <Progress percent={Math.min(100, rejected * 10)} showInfo={false} strokeColor="var(--ecf-danger)" />
           <div className="ecf-muted">Estado fiscal terminal</div>
         </Card>
       </Col>
       <Col xs={24} sm={12} xl={6}>
         <Card className="ecf-metric-card" bordered={false}>
-          <Statistic title="Fallos técnicos" value={technicalFailed} prefix={<ClockCircleOutlined />} valueStyle={{ color: '#b54708' }} />
-          <Progress percent={Math.min(100, technicalFailed * 10)} showInfo={false} strokeColor="#b54708" />
+          <Statistic title="Fallos técnicos" value={technicalFailed} prefix={<ClockCircleOutlined />} valueStyle={{ color: 'var(--ecf-warning)' }} />
+          <Progress percent={Math.min(100, technicalFailed * 10)} showInfo={false} strokeColor="var(--ecf-warning)" />
           <div className="ecf-muted">{monitor?.retry_pending || 0} retries pendientes</div>
         </Card>
       </Col>

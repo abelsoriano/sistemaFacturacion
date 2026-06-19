@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
@@ -61,11 +61,15 @@ from facturacion.models import (
     Company,
     CompanyMembership,
     CreditNote,
+    DGIICertificationEvent,
+    DGIICertificationItem,
+    DGIICertificationPlan,
     ECFCertificate,
     ECFIssuerConfig,
     ECFEventLog,
     ECFStatusEvent,
     ECFSequence,
+    DGIIPublicRequestLog,
     ElectronicFiscalDocument,
     Invoice,
     InvoiceDetail,
@@ -85,6 +89,7 @@ from facturacion.api.views.credit_notes import CreditNoteViewSet
 from facturacion.api.views.companies import CompanyViewSet
 from facturacion.api.views.ecf_runtime import ElectronicFiscalDocumentViewSet
 from facturacion.api.views.ecf_config import ECFEventLogViewSet, ECFIssuerConfigViewSet, ECFSequenceViewSet
+from facturacion.api.views.dgii_certification import DGIICertificationPlanViewSet
 from facturacion.api.views.inventory import CategoryListCreateView, ProductListCreateView
 from facturacion.api.views.inventory_utils import (
     GenerateBarcodeImageView,
@@ -115,6 +120,266 @@ from facturacion.services.credit_notes import CreditNoteService
 from facturacion.services.invoicing import InvoiceCreationService
 from facturacion.services.onboarding import DEFAULT_OWNER_GROUP_NAME, DEFAULT_OWNER_PERMISSION_CODENAMES
 from facturacion.services.quotations import QuotationService
+
+
+class DGIIPublicEndpointsTests(TestCase):
+    def test_public_reception_endpoint_accepts_xml_without_login_and_audits(self):
+        payload = b"<ECF><RNCEmisor>101123456</RNCEmisor></ECF>"
+
+        response = self.client.post(
+            "/fe/recepcion/api/ecf",
+            data=payload,
+            content_type="application/xml",
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["code"], "FE_RECEIVED_PENDING_PROCESSING")
+        log = DGIIPublicRequestLog.objects.get(endpoint="fe_recepcion_ecf")
+        self.assertEqual(log.method, "POST")
+        self.assertEqual(log.rnc, "101123456")
+        self.assertEqual(log.response_status, 200)
+        self.assertTrue(log.body_sha256)
+
+    def test_public_commercial_approval_endpoint_accepts_xml_without_login_and_audits(self):
+        response = self.client.post(
+            "/fe/aprobacioncomercial/api/ecf",
+            data=b"<Aprobacion><RNC>101123456</RNC></Aprobacion>",
+            content_type="text/xml",
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["code"], "FE_COMMERCIAL_APPROVAL_RECEIVED")
+        self.assertTrue(DGIIPublicRequestLog.objects.filter(endpoint="fe_aprobacion_comercial_ecf").exists())
+
+    def test_public_seed_endpoint_responds_without_login_and_audits(self):
+        response = self.client.get("/fe/autenticacion/api/semilla", secure=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["code"], "FE_SEED_CREATED")
+        self.assertIn("<Semilla>", response.json()["semilla"])
+        self.assertTrue(DGIIPublicRequestLog.objects.filter(endpoint="fe_autenticacion_semilla").exists())
+
+    def test_public_certificate_validation_endpoint_responds_without_login_and_redacts_secrets(self):
+        payload = b"<Validacion><Password>super-secret</Password><RNC>101123456</RNC></Validacion>"
+
+        response = self.client.post(
+            "/fe/autenticacion/api/semillavalidacioncertificado",
+            data=payload,
+            content_type="application/xml",
+            HTTP_AUTHORIZATION="Bearer very-secret-token",
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body_text = response.content.decode("utf-8")
+        self.assertNotIn("super-secret", body_text)
+        self.assertNotIn("very-secret-token", body_text)
+        log = DGIIPublicRequestLog.objects.get(endpoint="fe_autenticacion_semilla_validacion_certificado")
+        self.assertEqual(log.safe_headers["Authorization"], "[redacted]")
+        self.assertNotIn("super-secret", log.body_preview)
+
+    def test_public_endpoint_rejects_large_payload_and_audits(self):
+        response = self.client.post(
+            "/fe/recepcion/api/ecf",
+            data=b"x" * ((2 * 1024 * 1024) + 1),
+            content_type="application/xml",
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.json()["code"], "payload_too_large")
+        log = DGIIPublicRequestLog.objects.get(endpoint="fe_recepcion_ecf")
+        self.assertEqual(log.response_status, 413)
+        self.assertIn("Payload excede", log.error)
+
+    def test_public_endpoint_rejects_unsupported_content_type_and_audits(self):
+        response = self.client.post(
+            "/fe/recepcion/api/ecf",
+            data=b"plain",
+            content_type="application/pdf",
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 415)
+        self.assertEqual(response.json()["code"], "unsupported_media_type")
+        self.assertEqual(DGIIPublicRequestLog.objects.get(endpoint="fe_recepcion_ecf").response_status, 415)
+
+
+class DGIICertificationPlanTests(TestCase):
+    def test_import_dgii_excel_creates_company_plan_items_groups_and_events(self):
+        user = get_user_model().objects.create_user(username="dgii-cert-owner", password="pass")
+        company = Company.objects.create(name="Empresa DGII Cert Plan", rnc="401010201")
+        CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
+        request = APIRequestFactory().post(
+            "/ecf/certification-plans/import-set/",
+            {
+                "file": SimpleUploadedFile(
+                    "set-dgii.xlsx",
+                    self._build_certification_workbook(),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+            format="multipart",
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "import_set"})(request)
+
+        self.assertEqual(response.status_code, 201)
+        plan = DGIICertificationPlan.objects.get(company=company)
+        self.assertEqual(plan.total_items, 5)
+        self.assertEqual(plan.group_counts, {"1": 2, "2": 1, "3": 1, "4": 1})
+        self.assertEqual(DGIICertificationItem.objects.filter(plan=plan, status="pending").count(), 5)
+        self.assertTrue(DGIICertificationItem.objects.filter(plan=plan, ecf_type="31", dgii_group=1).exists())
+        self.assertTrue(DGIICertificationItem.objects.filter(plan=plan, ecf_type="32", dgii_group=4).exists())
+        self.assertTrue(DGIICertificationItem.objects.filter(plan=plan, ecf_type="34", dgii_group=2).exists())
+        self.assertTrue(DGIICertificationItem.objects.filter(plan=plan, ecf_type="RFCE", dgii_group=3).exists())
+        self.assertEqual(DGIICertificationEvent.objects.filter(plan=plan, event_type="item_detected").count(), 5)
+        self.assertEqual(response.data["total_items"], 5)
+        self.assertEqual(len(response.data["items"]), 5)
+
+    def test_certification_plan_list_is_scoped_to_active_company(self):
+        user = get_user_model().objects.create_user(username="dgii-cert-scoped", password="pass")
+        company_a = Company.objects.create(name="Empresa DGII Scope A", rnc="401010202")
+        company_b = Company.objects.create(name="Empresa DGII Scope B", rnc="401010203")
+        CompanyMembership.objects.create(user=user, company=company_a, role=CompanyMembership.ROLE_OWNER)
+        DGIICertificationPlan.objects.create(
+            company=company_a,
+            source_filename="a.xlsx",
+            file_sha256="a" * 64,
+            total_items=0,
+            group_counts={"1": 0, "2": 0, "3": 0, "4": 0},
+        )
+        DGIICertificationPlan.objects.create(
+            company=company_b,
+            source_filename="b.xlsx",
+            file_sha256="b" * 64,
+            total_items=0,
+            group_counts={"1": 0, "2": 0, "3": 0, "4": 0},
+        )
+        request = APIRequestFactory().get("/ecf/certification-plans/")
+        request.session = {"active_company_id": company_a.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"get": "list"})(request)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.data.get("results", response.data) if hasattr(response.data, "get") else response.data
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["source_filename"], "a.xlsx")
+
+    def test_import_dgii_excel_rejects_non_excel_file(self):
+        user = get_user_model().objects.create_user(username="dgii-cert-non-excel", password="pass")
+        company = Company.objects.create(name="Empresa DGII Non Excel", rnc="401010204")
+        CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
+        request = APIRequestFactory().post(
+            "/ecf/certification-plans/import-set/",
+            {"file": SimpleUploadedFile("set.txt", b"plain", content_type="text/plain")},
+            format="multipart",
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "import_set"})(request)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("file", response.data)
+        self.assertEqual(DGIICertificationPlan.objects.count(), 0)
+
+    def test_import_real_like_large_rnc_encf_cell_does_not_overflow_amount(self):
+        user = get_user_model().objects.create_user(username="dgii-cert-large-codes", password="pass")
+        company = Company.objects.create(name="Empresa DGII Large Codes", rnc="401010205")
+        CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
+        request = APIRequestFactory().post(
+            "/ecf/certification-plans/import-set/",
+            {
+                "file": SimpleUploadedFile(
+                    "set-real-like.xlsx",
+                    self._build_real_like_workbook(
+                        caso_prueba="40222797082E330000000001",
+                        ecf_type="33",
+                        encf="E330000000001",
+                        rnc=40222797082,
+                        amount="400000.00",
+                    ),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+            format="multipart",
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "import_set"})(request)
+
+        self.assertEqual(response.status_code, 201)
+        item = DGIICertificationItem.objects.get(plan__company=company)
+        self.assertEqual(item.encf, "E330000000001")
+        self.assertEqual(item.receiver_rnc, "40222797082")
+        self.assertEqual(item.amount, Decimal("400000.00"))
+
+    def test_import_out_of_range_amount_returns_controlled_error_without_500(self):
+        user = get_user_model().objects.create_user(username="dgii-cert-overflow", password="pass")
+        company = Company.objects.create(name="Empresa DGII Overflow", rnc="401010206")
+        CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
+        request = APIRequestFactory().post(
+            "/ecf/certification-plans/import-set/",
+            {
+                "file": SimpleUploadedFile(
+                    "set-overflow.xlsx",
+                    self._build_real_like_workbook(
+                        caso_prueba="40222797082E310000000001",
+                        ecf_type="31",
+                        encf="E310000000001",
+                        rnc=40222797082,
+                        amount="1000000000000.00",
+                    ),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+            format="multipart",
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "import_set"})(request)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["code"], "dgii_excel_import_error")
+        self.assertIn("amount", response.data["error"])
+        self.assertEqual(DGIICertificationPlan.objects.filter(company=company).count(), 0)
+        self.assertTrue(DGIICertificationEvent.objects.filter(company=company, event_type="import_error").exists())
+
+    def _build_certification_workbook(self) -> bytes:
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Set DGII"
+        worksheet.append(["e-NCF", "Tipo Comprobante", "Monto", "RNC Receptor", "Nombre Receptor", "Observaciones"])
+        worksheet.append(["E310000000001", "Factura Crédito Fiscal", 1000, "101010201", "Cliente Fiscal", "Grupo 1"])
+        worksheet.append(["E320000000001", "Factura Consumo", 300000, "", "Consumidor Final Alto", "Grupo 1 por monto"])
+        worksheet.append(["E320000000002", "Factura Consumo", 500, "", "Consumidor Final Bajo", "Grupo 4"])
+        worksheet.append(["E340000000001", "Nota Crédito", 200, "101010202", "Cliente NC", "Grupo 2"])
+        worksheet.append(["", "RFCE", 0, "", "Resumen", "Grupo 3"])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        return buffer.getvalue()
+
+    def _build_real_like_workbook(self, *, caso_prueba, ecf_type, encf, rnc, amount) -> bytes:
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "ECF"
+        worksheet.append(["CasoPrueba", "TipoeCF", "ENCF", "RNCComprador", "RazonSocialComprador", "MontoTotal"])
+        worksheet.append([caso_prueba, ecf_type, encf, rnc, "Cliente DGII", amount])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        return buffer.getvalue()
 
 
 class ECFSigningTests(SimpleTestCase):
@@ -980,6 +1245,73 @@ class DGIIRESTClientTests(TestCase):
         response = ECFIssuerConfigViewSet.as_view({"get": "certificates"})(request, pk=issuer.id)
 
         self.assertEqual(response.status_code, 404)
+
+    @override_settings(DEBUG=True, ECF_DGII_ENVIRONMENT="testing")
+    def test_issuer_can_sign_certification_xml_without_creating_ecf_document(self):
+        user = get_user_model().objects.create_user(username="issuer-certification-sign", password="pass")
+        company = Company.objects.create(name="Empresa Certificacion DGII", rnc="401010132")
+        CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
+        issuer = self._manual_issuer(company=company, rnc="101010132")
+
+        with TemporaryDirectory() as temp_dir:
+            certificate_path = self._write_manual_pkcs12(
+                Path(temp_dir) / "certification.p12",
+                subject_rnc="101010132",
+            )
+            upload_request = APIRequestFactory().post(
+                f"/ecf/issuers/{issuer.id}/certificate/",
+                {
+                    "certificate": SimpleUploadedFile(
+                        "certification.p12",
+                        certificate_path.read_bytes(),
+                        content_type="application/x-pkcs12",
+                    ),
+                    "password": "secret",
+                },
+                format="multipart",
+            )
+            upload_request.session = {"active_company_id": company.id}
+            force_authenticate(upload_request, user=user)
+            ECFIssuerConfigViewSet.as_view({"post": "upload_certificate"})(upload_request, pk=issuer.id)
+
+            sign_request = APIRequestFactory().post(
+                f"/ecf/issuers/{issuer.id}/sign-certification-xml/",
+                {
+                    "xml": SimpleUploadedFile(
+                        "postulacion.xml",
+                        b"<Postulacion><RNC>101010132</RNC></Postulacion>",
+                        content_type="application/xml",
+                    ),
+                },
+                format="multipart",
+            )
+            sign_request.session = {"active_company_id": company.id}
+            force_authenticate(sign_request, user=user)
+
+            response = ECFIssuerConfigViewSet.as_view({"post": "sign_certification_xml"})(sign_request, pk=issuer.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["filename"], "postulacion-firmado.xml")
+        self.assertIn("<ds:Signature", response.data["signed_xml"])
+        self.assertEqual(ElectronicFiscalDocument.objects.count(), 0)
+
+    def test_certification_xml_signing_rejects_non_xml_file(self):
+        user = get_user_model().objects.create_user(username="issuer-certification-nonxml", password="pass")
+        company = Company.objects.create(name="Empresa Certificacion Non XML", rnc="401010133")
+        CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
+        issuer = self._manual_issuer(company=company, rnc="101010133")
+        request = APIRequestFactory().post(
+            f"/ecf/issuers/{issuer.id}/sign-certification-xml/",
+            {"xml": SimpleUploadedFile("postulacion.txt", b"plain", content_type="text/plain")},
+            format="multipart",
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = ECFIssuerConfigViewSet.as_view({"post": "sign_certification_xml"})(request, pk=issuer.id)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("xml", response.data)
 
     def _environment(self):
         return DGIIRESTEnvironment(

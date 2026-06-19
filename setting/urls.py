@@ -7,6 +7,7 @@ from setting import settings
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('fe/', include('facturacion.fe_urls')),
     path('api/v1/', include('facturacion.urls')),
     path('api/', include('facturacion.urls')),
     path('api/auth/login/', LoginView.as_view(), name='login'),

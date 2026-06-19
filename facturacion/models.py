@@ -1513,3 +1513,185 @@ class ECFEventLog(models.Model):
 
     def __str__(self):
         return f"{self.electronic_document.encf} - {self.event_type}"
+
+
+class DGIICertificationPlan(models.Model):
+    """Plan importado desde el set Excel DGII para pruebas de certificacion."""
+
+    STATUS_IMPORTED = 'imported'
+    STATUS_CHOICES = [
+        (STATUS_IMPORTED, 'Importado'),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='dgii_certification_plans',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IMPORTED)
+    source_filename = models.CharField(max_length=255)
+    file_sha256 = models.CharField(max_length=64, db_index=True)
+    imported_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dgii_certification_imports',
+    )
+    imported_at = models.DateTimeField(default=timezone.now)
+    total_items = models.PositiveIntegerField(default=0)
+    group_counts = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Plan de certificacion DGII'
+        verbose_name_plural = 'Planes de certificacion DGII'
+        ordering = ['-imported_at']
+
+    def __str__(self):
+        return f"{self.company} - {self.source_filename}"
+
+
+class DGIICertificationItem(models.Model):
+    """Escenario e-CF detectado en el Excel DGII."""
+
+    STATUS_PENDING = 'pending'
+    STATUS_GENERATED = 'generated'
+    STATUS_SIGNED = 'signed'
+    STATUS_SENT = 'sent'
+    STATUS_ACCEPTED = 'accepted'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pendiente'),
+        (STATUS_GENERATED, 'Generado'),
+        (STATUS_SIGNED, 'Firmado'),
+        (STATUS_SENT, 'Enviado'),
+        (STATUS_ACCEPTED, 'Aceptado'),
+        (STATUS_REJECTED, 'Rechazado'),
+    ]
+
+    ECF_TYPE_CHOICES = [
+        ('31', 'Factura Credito Fiscal'),
+        ('32', 'Factura Consumo'),
+        ('33', 'Nota Debito'),
+        ('34', 'Nota Credito'),
+        ('41', 'Compras'),
+        ('43', 'Gastos Menores'),
+        ('44', 'Regimenes Especiales'),
+        ('45', 'Gubernamental'),
+        ('46', 'Exportaciones'),
+        ('47', 'Pagos Exterior'),
+        ('RFCE', 'Resumen Factura Consumo'),
+    ]
+
+    plan = models.ForeignKey(
+        DGIICertificationPlan,
+        on_delete=models.CASCADE,
+        related_name='items',
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='dgii_certification_items',
+    )
+    ecf_type = models.CharField(max_length=10, choices=ECF_TYPE_CHOICES)
+    dgii_group = models.PositiveSmallIntegerField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    encf = models.CharField(max_length=30, blank=True, default='')
+    document_type = models.CharField(max_length=120, blank=True, default='')
+    amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    receiver_rnc = models.CharField(max_length=20, blank=True, default='')
+    receiver_name = models.CharField(max_length=180, blank=True, default='')
+    observations = models.TextField(blank=True, default='')
+    source_sheet = models.CharField(max_length=120)
+    source_row = models.PositiveIntegerField()
+    raw_data = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Item de certificacion DGII'
+        verbose_name_plural = 'Items de certificacion DGII'
+        ordering = ['dgii_group', 'ecf_type', 'source_sheet', 'source_row']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['plan', 'source_sheet', 'source_row'],
+                name='unique_dgii_cert_item_source_row_per_plan',
+            ),
+        ]
+
+    def __str__(self):
+        return f"Grupo {self.dgii_group} - {self.ecf_type} - fila {self.source_row}"
+
+
+class DGIICertificationEvent(models.Model):
+    """Auditoria del importador y plan de certificacion DGII."""
+
+    EVENT_EXCEL_IMPORTED = 'excel_imported'
+    EVENT_PLAN_CREATED = 'plan_created'
+    EVENT_ITEM_DETECTED = 'item_detected'
+    EVENT_IMPORT_ERROR = 'import_error'
+    EVENT_CHOICES = [
+        (EVENT_EXCEL_IMPORTED, 'Excel importado'),
+        (EVENT_PLAN_CREATED, 'Plan creado'),
+        (EVENT_ITEM_DETECTED, 'Item detectado'),
+        (EVENT_IMPORT_ERROR, 'Error de importacion'),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='dgii_certification_events',
+    )
+    plan = models.ForeignKey(
+        DGIICertificationPlan,
+        on_delete=models.CASCADE,
+        related_name='events',
+        null=True,
+        blank=True,
+    )
+    item = models.ForeignKey(
+        DGIICertificationItem,
+        on_delete=models.CASCADE,
+        related_name='events',
+        null=True,
+        blank=True,
+    )
+    event_type = models.CharField(max_length=40, choices=EVENT_CHOICES)
+    message = models.TextField(blank=True, default='')
+    payload = models.JSONField(blank=True, null=True)
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Evento certificacion DGII'
+        verbose_name_plural = 'Eventos certificacion DGII'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.event_type} - {self.company}"
+
+
+class DGIIPublicRequestLog(models.Model):
+    """Auditoria segura de endpoints publicos solicitados por postulacion DGII."""
+
+    endpoint = models.CharField(max_length=120, db_index=True)
+    method = models.CharField(max_length=10)
+    content_type = models.CharField(max_length=120, blank=True, default='')
+    safe_headers = models.JSONField(blank=True, null=True)
+    body_sha256 = models.CharField(max_length=64, blank=True, default='')
+    body_preview = models.TextField(blank=True, default='')
+    rnc = models.CharField(max_length=20, blank=True, default='', db_index=True)
+    remote_addr = models.GenericIPAddressField(blank=True, null=True)
+    response_status = models.PositiveSmallIntegerField()
+    error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Request publico DGII"
+        verbose_name_plural = "Requests publicos DGII"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.method} {self.endpoint} -> {self.response_status}"

@@ -1,7 +1,8 @@
 .dashboardContainer {
   padding: 24px;
   min-height: 100%;
-  background: #f6f8fb;
+  background: var(--saas-background);
+  color: var(--saas-text);
 }
 
 .dashboardHeader {
@@ -15,12 +16,12 @@
 .headerLeft h1 {
   margin: 0;
   font-size: 32px;
-  color: #111827;
+  color: var(--saas-text);
 }
 
 .subtitle {
   margin: 6px 0 0;
-  color: #6b7280;
+  color: var(--saas-muted);
   font-size: 14px;
 }
 
@@ -47,7 +48,7 @@
 .metricCard,
 .statCard {
   border-radius: 20px;
-  background: #ffffff;
+  background: var(--saas-card);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
@@ -60,21 +61,21 @@
 
 .metricCardTitle,
 .metricProgressLabel {
-  color: #667085;
+  color: var(--saas-muted);
   font-size: 14px;
   margin-bottom: 8px;
 }
 
 .metricCardValue,
 .metricProgressValue {
-  color: #101828;
+  color: var(--saas-text);
   font-size: 32px;
   font-weight: 700;
   margin-bottom: 8px;
 }
 
 .metricCardSubtitle {
-  color: #475569;
+  color: var(--saas-muted);
   font-size: 13px;
   margin-bottom: 16px;
 }
@@ -85,7 +86,7 @@
 
 .metricProgressValue {
   margin-top: 8px;
-  color: #334155;
+  color: var(--saas-text);
   font-size: 14px;
 }
 
@@ -102,13 +103,13 @@
 .summaryContent h3 {
   margin: 0;
   font-size: 16px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--saas-muted);
 }
 
 .summaryContent p {
   margin: 8px 0 0;
   font-size: 24px;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--saas-text);
 }
 
 .chartRow {
@@ -136,11 +137,11 @@
 .recentSalesTable td {
   padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--saas-border);
 }
 
 .recentSalesTable th {
-  background-color: #fafafa;
+  background-color: var(--saas-surface-variant);
   font-weight: 500;
 }
 
@@ -156,6 +157,7 @@
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   transition: box-shadow 0.3s;
+  background: var(--saas-card);
 }
 
 .ant-card:hover {
@@ -164,7 +166,7 @@
 
 /* Estilos para la tabla de ventas recientes */
 .recentSalesTable tr:hover td {
-  background-color: #fafafa;
+  background-color: var(--saas-surface-variant);
 }
 
 /* Estilos responsivos */

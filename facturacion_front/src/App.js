@@ -41,6 +41,7 @@ import QuotationList from './components/QuotationList';
 import PlaceholderPage from './components/PlaceholderPage';
 import CompanyPage from './components/CompanyPage';
 import CompanyOnboarding from './components/CompanyOnboarding';
+import DGIICertificationWizard from './components/DGIICertificationWizard';
 
 
 /**
@@ -158,6 +159,10 @@ function App() {
         <Route
           path="/company/team"
           element={protect(<CompanyPage initialTab="members" />)}
+        />
+        <Route
+          path="/company/dgii-certification"
+          element={protect(<DGIICertificationWizard />)}
         />
       </Routes>
     </Router>

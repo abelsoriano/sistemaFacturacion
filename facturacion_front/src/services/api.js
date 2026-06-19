@@ -1,8 +1,7 @@
 import axios from 'axios';
 
-// const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://7l51msx7-8000.use2.devtunnels.ms/api/v1';
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
-// Official commercial invoice contract: `${API_BASE_URL}/invoices/`.
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://assys.xyz/api/v1';
+// const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
 
 // Crear instancia de axios
 const api = axios.create({

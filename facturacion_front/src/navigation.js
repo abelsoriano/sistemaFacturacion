@@ -13,6 +13,8 @@ import {
   UserCog,
   Users,
   Wrench,
+  MoreHorizontal,
+  FileCheck2,
 } from 'lucide-react';
 
 import { ROUTE_PERMISSIONS } from './utils/permissions';
@@ -145,6 +147,13 @@ export const navGroups = [
         permissions: [],
       },
       {
+        id: 'dgii-certification',
+        label: 'Certificación DGII',
+        route: '/company/dgii-certification',
+        icon: FileCheck2,
+        permissions: [],
+      },
+      {
         id: 'settings',
         label: 'Configuración',
         route: '/pdf-config',
@@ -157,7 +166,6 @@ export const navGroups = [
 
 export const bottomNavItems = [
   navGroups[0].items[0],
-  navGroups[1].items[0],
   navGroups[1].items[1],
   {
     id: 'new-sale',
@@ -167,10 +175,20 @@ export const bottomNavItems = [
     permissions: ROUTE_PERMISSIONS['/Fastsales'],
   },
   navGroups[2].items[0],
-  navGroups[2].items[1],
-  navGroups[2].items[5],
-  navGroups[3].items[1],
+  {
+    id: 'more',
+    label: 'Más',
+    route: null,
+    icon: MoreHorizontal,
+    permissions: [],
+  },
 ];
+
+const bottomPrimaryIds = new Set(bottomNavItems.map((item) => item.id));
+
+export const bottomMoreItems = navGroups.flatMap((group) => (
+  group.items.filter((item) => !bottomPrimaryIds.has(item.id))
+));
 
 export function isNavItemActive(item, currentPath) {
   const itemPath = item.route || '';

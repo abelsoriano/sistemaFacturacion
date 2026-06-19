@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Edit, Trash2, Shield, User, CheckCircle, XCircle, ChevronLeft, ChevronRight, Search, Eye } from 'lucide-react';
+import { Users, UserPlus, Edit, Trash2, Shield, User, CheckCircle, XCircle, ChevronLeft, ChevronRight, Search, Eye, Plus, MoreVertical } from 'lucide-react';
 import api from '../services/api';
 import { authService } from '../services/api';
 import UserForm from './UserForm';
@@ -12,6 +12,7 @@ const UserList = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [menuOpenFor, setMenuOpenFor] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -66,11 +67,46 @@ const UserList = () => {
     handleFormClose();
   };
 
+  const avatarColors = [
+    '#6C63FF',
+    '#8C7BFF',
+    '#7B61FF',
+    '#A184FF',
+    '#C59BFF',
+    '#9F8AFF',
+  ];
+
+  const getAvatarColor = (value) => {
+    const source = (value || '').toString();
+    let hash = 0;
+    for (let i = 0; i < source.length; i += 1) {
+      hash = (hash << 5) - hash + source.charCodeAt(i);
+      hash |= 0;
+    }
+    return avatarColors[Math.abs(hash) % avatarColors.length];
+  };
+
+  const getUserInitials = (user) => {
+    const first = user.first_name?.trim();
+    const last = user.last_name?.trim();
+    if (first && last) {
+      return `${first[0]}${last[0]}`.toUpperCase();
+    }
+    if (first) {
+      return first[0].toUpperCase();
+    }
+    const fallback = user.username || user.email || 'U';
+    return fallback.slice(0, 2).toUpperCase();
+  };
+
   const getRoleDisplay = (user) => {
-    if (user.is_superuser) return { text: 'Superusuario', type: 'super' };
-    if (user.is_staff) return { text: 'Administrador', type: 'admin' };
-    if (user.groups && user.groups.length > 0) return { text: user.groups.join(', '), type: 'group' };
-    return { text: 'Usuario', type: 'user' };
+    if (user.is_superuser) return { text: 'Owner', type: 'owner' };
+    if (user.is_staff) return { text: 'Admin', type: 'admin' };
+    if (user.groups && user.groups.length > 0) {
+      const groups = user.groups.map((group) => (group?.name ? group.name : group)).join(', ');
+      return { text: groups, type: 'group' };
+    }
+    return { text: 'Member', type: 'member' };
   };
 
   // Filtrado
@@ -254,100 +290,104 @@ const UserList = () => {
           </div>
         ) : (
           <>
-            <div className="table-container">
-              <table className="users-table">
-                <thead>
-                  <tr>
-                    <th>Usuario</th>
-                    <th>Email</th>
-                    <th>Nombre Completo</th>
-                    <th>Rol</th>
-                    <th>Estado</th>
-                    <th>Último Login</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedUsers.map(user => {
-                    const role = getRoleDisplay(user);
-                    return (
-                      <tr key={user.id}>
-                        <td className="username-cell" data-label="Usuario">
-                          <div className="username-wrapper">
-                            <div className="user-avatar">
-                              <User size={16} />
-                            </div>
-                            <span className="username">{user.username}</span>
-                          </div>
-                        </td>
-                        <td className="email-cell" data-label="Email">{user.email || '-'}</td>
-                        <td data-label="Nombre Completo">
-                          {user.first_name || user.last_name
-                            ? `${user.first_name} ${user.last_name}`.trim()
-                            : '-'}
-                        </td>
-                        <td data-label="Rol">
-                          <span className={`role-badge ${role.type}`}>
-                            <Shield size={12} />
-                            {role.text}
-                          </span>
-                        </td>
-                        <td data-label="Estado">
-                          <span className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}>
-                            {user.is_active ? (
-                              <>
-                                <CheckCircle size={12} />
-                                Activo
-                              </>
-                            ) : (
-                              <>
-                                <XCircle size={12} />
-                                Inactivo
-                              </>
-                            )}
-                          </span>
-                        </td>
-                        <td className="last-login" data-label="Último Login">
-                          {user.last_login
-                            ? new Date(user.last_login).toLocaleDateString('es-ES', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric'
-                              })
-                            : 'Nunca'}
-                        </td>
-                        <td data-label="Acciones">
-                          <div className="action-buttons">
-                            <button
-                              onClick={() => setSelectedUser(user)}
-                              className="icon-btn view"
-                              title="Ver usuario"
-                            >
+            <div className="users-card-grid">
+              {paginatedUsers.map((user) => {
+                const role = getRoleDisplay(user);
+                return (
+                  <article key={user.id} className="user-card">
+                    <div className="user-card-header">
+                      <div className="user-card-meta">
+                        <div
+                          className="user-card-avatar"
+                          style={{ backgroundColor: getAvatarColor(user.username || user.email || String(user.id)) }}
+                        >
+                          {getUserInitials(user)}
+                        </div>
+                        <div className="user-card-text">
+                          <h2 className="user-card-name">
+                            {user.first_name || user.last_name
+                              ? `${user.first_name} ${user.last_name}`.trim()
+                              : user.username}
+                          </h2>
+                          <p className="user-card-email">{user.email || 'Sin email registrado'}</p>
+                        </div>
+                      </div>
+
+                      <div className="user-card-menu">
+                        <button
+                          type="button"
+                          onClick={() => setMenuOpenFor((value) => (value === user.id ? null : user.id))}
+                          className="icon-btn menu-toggle"
+                          aria-label={`Abrir menú de usuario ${user.username}`}
+                        >
+                          <MoreVertical size={18} />
+                        </button>
+
+                        {menuOpenFor === user.id && (
+                          <div className="user-card-menu-list">
+                            <button type="button" className="user-card-menu-item" onClick={() => { setSelectedUser(user); setMenuOpenFor(null); }}>
                               <Eye size={16} />
+                              Ver
                             </button>
-                            <button
-                              onClick={() => handleEdit(user)}
-                              className="icon-btn edit"
-                              title="Editar usuario"
-                            >
+                            <button type="button" className="user-card-menu-item" onClick={() => { handleEdit(user); setMenuOpenFor(null); }}>
                               <Edit size={16} />
+                              Editar
                             </button>
                             {currentUser && currentUser.id !== user.id && (
                               <button
-                                onClick={() => handleDelete(user.id, user.username)}
-                                className="icon-btn delete"
-                                title="Eliminar usuario"
+                                type="button"
+                                className="user-card-menu-item"
+                                onClick={() => { setMenuOpenFor(null); handleDelete(user.id, user.username); }}
                               >
                                 <Trash2 size={16} />
+                                Eliminar
                               </button>
                             )}
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="user-card-role">
+                      <span className={`role-badge ${role.type}`}>{role.text}</span>
+                    </div>
+
+                    <div className="user-card-footer">
+                      <span className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}>
+                        {user.is_active ? (
+                          <>
+                            <CheckCircle size={12} />
+                            Activo
+                          </>
+                        ) : (
+                          <>
+                            <XCircle size={12} />
+                            Inactivo
+                          </>
+                        )}
+                      </span>
+                      <span className="user-card-last-login">
+                        Último login:{' '}
+                        {user.last_login ? new Date(user.last_login).toLocaleDateString('es-ES', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        }) : 'Nunca'}
+                      </span>
+                    </div>
+                  </article>
+                );
+              })}
+
+              <button type="button" className="user-card invite-card" onClick={() => setShowForm(true)}>
+                <div className="invite-card-content">
+                  <div className="invite-card-icon">
+                    <Plus size={24} />
+                  </div>
+                  <strong>Invitar miembro</strong>
+                  <p>Agrega un nuevo usuario al equipo</p>
+                </div>
+              </button>
             </div>
 
             {/* Pagination */}

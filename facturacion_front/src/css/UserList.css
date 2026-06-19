@@ -1,7 +1,7 @@
 /* UserList.css */
 .users-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: var(--saas-background);
   padding: 2rem;
   display: flex;
   justify-content: center;
@@ -12,10 +12,22 @@
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
-  background: white;
+  background: transparent;
   border-radius: 16px;
-  padding: 2rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 0;
+  box-shadow: none;
+  color: var(--saas-text);
+}
+
+.users-page .page-header {
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
+  box-shadow: var(--saas-shadow);
+}
+
+.header-icon-wrapper {
+  background: var(--saas-primary-soft);
+  color: var(--saas-primary);
 }
 
 /* Header */
@@ -25,7 +37,7 @@
   align-items: center;
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--saas-border);
   flex-wrap: wrap;
   gap: 1rem;
 }
@@ -39,25 +51,25 @@
 .header-icon-wrapper {
   width: 48px;
   height: 48px;
-  background: #f8f9fa;
+  background: var(--saas-surface);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #495057;
+  color: var(--saas-text);
 }
 
 .header-title h1 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: #212529;
+  color: var(--saas-text);
 }
 
 .header-title p {
   margin: 0.25rem 0 0;
   font-size: 0.875rem;
-  color: #6c757d;
+  color: var(--saas-muted);
 }
 
 .header-actions {
@@ -67,8 +79,8 @@
 
 /* Buttons */
 .btn-primary {
-  background: #212529;
-  color: white;
+  background: var(--saas-primary);
+  color: var(--saas-primary-foreground);
   border: none;
   padding: 0.5rem 1.25rem;
   border-radius: 8px;
@@ -82,14 +94,14 @@
 }
 
 .btn-primary:hover {
-  background: #343a40;
+  filter: brightness(1.05);
   transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
+  background: var(--saas-surface);
+  color: var(--saas-text);
+  border: 1px solid var(--saas-border);
   padding: 0.5rem 1.25rem;
   border-radius: 8px;
   font-size: 0.875rem;
@@ -102,7 +114,7 @@
 }
 
 .btn-secondary:hover {
-  background: #e9ecef;
+  background: var(--saas-surface-soft);
 }
 
 /* Stats Grid */
@@ -114,7 +126,8 @@
 }
 
 .stat-card {
-  background: #f8f9fa;
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
   border-radius: 12px;
   padding: 1.25rem;
   display: flex;
@@ -125,30 +138,30 @@
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--saas-shadow-xs);
 }
 
 .stat-icon {
   width: 48px;
   height: 48px;
-  background: white;
+  background: var(--saas-surface);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6c757d;
+  color: var(--saas-muted);
 }
 
 .stat-icon.active {
-  color: #28a745;
+  color: var(--saas-success);
 }
 
 .stat-icon.inactive {
-  color: #dc3545;
+  color: var(--saas-danger);
 }
 
 .stat-icon.admin {
-  color: #ffc107;
+  color: var(--saas-warning);
 }
 
 .stat-info {
@@ -158,7 +171,7 @@
 .stat-label {
   display: block;
   font-size: 0.75rem;
-  color: #6c757d;
+  color: var(--saas-muted);
   margin-bottom: 0.25rem;
 }
 
@@ -166,7 +179,7 @@
   display: block;
   font-size: 1.75rem;
   font-weight: 600;
-  color: #212529;
+  color: var(--saas-text);
 }
 
 /* Search Section */
@@ -182,16 +195,18 @@
 .search-bar input {
   width: 100%;
   padding: 0.625rem 1rem 0.625rem 2.5rem;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--saas-border);
   border-radius: 10px;
   font-size: 0.875rem;
+  background: var(--saas-card);
+  color: var(--saas-text);
   transition: all 0.2s;
 }
 
 .search-bar input:focus {
   outline: none;
-  border-color: #adb5bd;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+  border-color: var(--saas-primary);
+  box-shadow: 0 0 0 2px var(--saas-primary-soft);
 }
 
 .search-icon {
@@ -199,7 +214,7 @@
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #adb5bd;
+  color: var(--saas-muted);
 }
 
 .clear-btn {
@@ -211,13 +226,13 @@
   border: none;
   font-size: 1.25rem;
   cursor: pointer;
-  color: #adb5bd;
+  color: var(--saas-muted);
   padding: 0;
   line-height: 1;
 }
 
 .clear-btn:hover {
-  color: #6c757d;
+  color: var(--saas-text);
 }
 
 .filters-bar {
@@ -228,32 +243,33 @@
 
 .filter-select {
   padding: 0.5rem 1rem;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--saas-border);
   border-radius: 8px;
   font-size: 0.875rem;
-  background: white;
+  background: var(--saas-card);
   cursor: pointer;
-  color: #495057;
+  color: var(--saas-text);
 }
 
 .filter-select:focus {
   outline: none;
-  border-color: #adb5bd;
+  border-color: var(--saas-primary);
+  box-shadow: 0 0 0 2px var(--saas-primary-soft);
 }
 
 .clear-filters {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: var(--saas-surface);
+  border: 1px solid var(--saas-border);
   padding: 0.5rem 1rem;
   border-radius: 8px;
   font-size: 0.75rem;
   cursor: pointer;
-  color: #6c757d;
+  color: var(--saas-text);
   transition: all 0.2s;
 }
 
 .clear-filters:hover {
-  background: #e9ecef;
+  background: var(--saas-surface-soft);
 }
 
 /* Table */
@@ -270,22 +286,22 @@
 .users-table thead th {
   text-align: left;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--saas-surface);
   font-weight: 600;
   font-size: 0.75rem;
-  color: #6c757d;
-  border-bottom: 1px solid #e9ecef;
+  color: var(--saas-muted);
+  border-bottom: 1px solid var(--saas-border);
 }
 
 .users-table tbody td {
   padding: 1rem;
   font-size: 0.875rem;
-  color: #495057;
-  border-bottom: 1px solid #f0f0f0;
+  color: var(--saas-text);
+  border-bottom: 1px solid var(--saas-border);
 }
 
 .users-table tbody tr:hover {
-  background: #fafbfc;
+  background: var(--saas-surface-soft);
 }
 
 .username-cell {
@@ -301,21 +317,21 @@
 .user-avatar {
   width: 28px;
   height: 28px;
-  background: #f8f9fa;
+  background: var(--saas-surface);
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #adb5bd;
+  color: var(--saas-muted);
 }
 
 .username {
   font-weight: 500;
-  color: #212529;
+  color: var(--saas-text);
 }
 
 .email-cell {
-  color: #6c757d;
+  color: var(--saas-muted);
   font-size: 0.8rem;
 }
 
@@ -331,23 +347,23 @@
 }
 
 .role-badge.super {
-  background: #dc3545;
-  color: white;
+  background: var(--saas-danger);
+  color: var(--saas-primary-foreground);
 }
 
 .role-badge.admin {
-  background: #ffc107;
-  color: #212529;
+  background: var(--saas-warning);
+  color: var(--saas-text);
 }
 
 .role-badge.group {
-  background: #17a2b8;
-  color: white;
+  background: var(--saas-primary);
+  color: var(--saas-primary-foreground);
 }
 
 .role-badge.user {
-  background: #6c757d;
-  color: white;
+  background: var(--saas-muted);
+  color: var(--saas-card);
 }
 
 .status-badge {
@@ -361,18 +377,178 @@
 }
 
 .status-badge.active {
-  background: #d4edda;
-  color: #155724;
+  background: var(--saas-success-surface);
+  color: var(--saas-success);
 }
 
 .status-badge.inactive {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--saas-danger-surface);
+  color: var(--saas-danger);
 }
 
 .last-login {
   font-size: 0.75rem;
-  color: #6c757d;
+  color: var(--saas-muted);
+}
+
+/* Card Grid */
+.users-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.user-card,
+.invite-card {
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
+  border-radius: 20px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 220px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.user-card:hover,
+.invite-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--saas-shadow-heavy);
+}
+
+.user-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.user-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.user-card-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--saas-primary-foreground);
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.user-card-text {
+  min-width: 0;
+}
+
+.user-card-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--saas-text);
+}
+
+.user-card-email {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--saas-muted);
+}
+
+.user-card-menu {
+  position: relative;
+}
+
+.user-card-menu-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 180px;
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
+  border-radius: 14px;
+  box-shadow: var(--saas-shadow-heavy);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-card-menu-item {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--saas-text);
+  text-align: left;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.user-card-menu-item:hover {
+  background: var(--saas-sidebar-active);
+}
+
+.user-card-role {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.user-card-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.user-card-last-login {
+  font-size: 0.8rem;
+  color: var(--saas-muted);
+}
+
+.invite-card {
+  border-style: dashed;
+  border-color: var(--saas-border);
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.invite-card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.invite-card-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--saas-primary-soft);
+  color: var(--saas-primary);
+}
+
+.invite-card strong {
+  color: var(--saas-text);
+}
+
+.invite-card p {
+  margin: 0;
+  color: var(--saas-muted);
+  font-size: 0.9rem;
 }
 
 /* Action Buttons */
@@ -396,22 +572,22 @@
 }
 
 .icon-btn.edit {
-  color: #6c757d;
-  border: 1px solid #dee2e6;
+  color: var(--saas-muted);
+  border: 1px solid var(--saas-border);
 }
 
 .icon-btn.edit:hover {
-  background: #f8f9fa;
-  color: #212529;
+  background: var(--saas-surface-soft);
+  color: var(--saas-text);
 }
 
 .icon-btn.delete {
-  color: #dc3545;
-  border: 1px solid #f8d7da;
+  color: var(--saas-danger);
+  border: 1px solid var(--saas-danger-surface);
 }
 
 .icon-btn.delete:hover {
-  background: #f8d7da;
+  background: var(--saas-danger-surface);
 }
 
 /* Pagination */
@@ -422,15 +598,15 @@
   gap: 1rem;
   margin-top: 1.5rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--saas-border);
 }
 
 .pagination button {
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid #dee2e6;
-  background: white;
+  border: 1px solid var(--saas-border);
+  background: var(--saas-card);
   border-radius: 8px;
   cursor: pointer;
   display: inline-flex;
@@ -440,8 +616,8 @@
 }
 
 .pagination button:hover:not(:disabled) {
-  background: #f8f9fa;
-  border-color: #ced4da;
+  background: var(--saas-surface-soft);
+  border-color: var(--saas-border);
 }
 
 .pagination button:disabled {
@@ -451,7 +627,7 @@
 
 .page-info {
   font-size: 0.875rem;
-  color: #6c757d;
+  color: var(--saas-muted);
 }
 
 /* Empty State */
@@ -461,7 +637,7 @@
 }
 
 .empty-state svg {
-  color: #adb5bd;
+  color: var(--saas-muted);
   margin-bottom: 1rem;
 }
 
@@ -469,11 +645,11 @@
   margin: 0 0 0.5rem;
   font-size: 1rem;
   font-weight: 500;
-  color: #495057;
+  color: var(--saas-text);
 }
 
 .empty-state p {
-  color: #6c757d;
+  color: var(--saas-muted);
   font-size: 0.875rem;
   margin-bottom: 1.5rem;
 }
@@ -487,8 +663,8 @@
 .spinner {
   width: 40px;
   height: 40px;
-  border: 2px solid #e9ecef;
-  border-top: 2px solid #212529;
+  border: 2px solid var(--saas-border);
+  border-top: 2px solid var(--saas-text);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 1rem;
@@ -500,13 +676,13 @@
 }
 
 .error-message {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--saas-danger-surface);
+  color: var(--saas-danger);
   padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.875rem;
   margin-bottom: 1.5rem;
-  border: 1px solid #f5c6cb;
+  border: 1px solid var(--saas-danger);
 }
 
 /* Responsive */
@@ -566,7 +742,7 @@
     text-align: left;
     font-weight: 600;
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--saas-muted);
   }
   
   .users-table tbody td.username-cell::before {
@@ -615,7 +791,7 @@
 /* SaaS AppShell refinements */
 .users-page {
   display: block;
-  background: #f6f7fb;
+  background: var(--saas-background);
   padding: 1.5rem;
 }
 
@@ -628,42 +804,38 @@
 }
 
 .users-page .page-header {
-  background: #ffffff;
-  border: 1px solid #e6e8f0;
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
   border-radius: 8px;
   padding: 1.25rem;
-  box-shadow: 0 12px 28px rgba(27, 26, 46, 0.06);
+  box-shadow: var(--saas-shadow);
 }
 
 .users-page .header-icon-wrapper {
-  background: #eeedfe;
-  color: #6c63ff;
+  background: var(--saas-primary-soft);
+  color: var(--saas-primary);
   border-radius: 8px;
 }
 
 .users-page .header-title h1 {
-  color: #1b1a2e;
+  color: var(--saas-text);
 }
 
 .users-page .btn-primary {
-  background: #6c63ff;
-  border-color: #6c63ff;
-  box-shadow: 0 10px 18px rgba(108, 99, 255, 0.18);
+  background: var(--saas-primary);
+  border-color: var(--saas-primary);
+  box-shadow: var(--saas-shadow-primary);
 }
 
 .users-page .btn-primary:hover {
-  background: #5b54df;
+  background: var(--saas-primary);
+  filter: brightness(0.95);
 }
 
 .users-page .btn-secondary {
-  background: #ffffff;
-  border-color: #dfe3ee;
-  color: #303044;
-}
-
-.users-page .stats-grid {
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 0.85rem;
+  background: var(--saas-surface);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
 }
 
 .users-page .stat-card,
@@ -671,10 +843,10 @@
 .users-page .table-container,
 .users-page .empty-state,
 .users-page .loading-state {
-  background: #ffffff;
-  border: 1px solid #e6e8f0;
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
   border-radius: 8px;
-  box-shadow: 0 8px 20px rgba(27, 26, 46, 0.04);
+  box-shadow: var(--saas-shadow-soft);
 }
 
 .users-page .search-section {
@@ -687,34 +859,34 @@
 
 .users-page .stat-icon {
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--saas-surface);
 }
 
 .users-page .stat-number {
-  color: #1b1a2e;
+  color: var(--saas-text);
 }
 
 .users-page .search-bar input,
 .users-page .filter-select {
-  border-color: #dfe3ee;
+  border-color: var(--saas-border);
   border-radius: 8px;
 }
 
 .users-page .search-bar input:focus,
 .users-page .filter-select:focus {
-  border-color: #6c63ff;
-  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.14);
+  border-color: var(--saas-primary);
+  box-shadow: 0 0 0 3px var(--saas-primary-soft);
 }
 
 .users-page .users-table thead th {
-  background: #fafafa;
-  color: #57576d;
+  background: var(--saas-surface);
+  color: var(--saas-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .users-page .users-table tbody tr:hover {
-  background: #fbfbff;
+  background: var(--saas-surface-soft);
 }
 
 .users-page .role-badge,
@@ -724,38 +896,39 @@
 
 .users-page .role-badge.group,
 .users-page .role-badge.user {
-  background: #eeedfe;
-  color: #6c63ff;
+  background: var(--saas-primary);
+  color: var(--saas-primary-foreground);
 }
 
 .users-page .role-badge.super {
-  background: #1b1a2e;
+  background: var(--saas-text);
+  color: var(--saas-card);
 }
 
 .users-page .role-badge.admin {
-  background: #fff7ed;
-  color: #c2410c;
+  background: var(--saas-warning);
+  color: var(--saas-text);
 }
 
 .users-page .icon-btn {
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--saas-card);
 }
 
 .users-page .icon-btn.view {
-  color: #6c63ff;
-  border: 1px solid #d9d7ff;
+  color: var(--saas-primary);
+  border: 1px solid var(--saas-primary-soft);
 }
 
 .users-page .icon-btn.view:hover,
 .users-page .icon-btn.edit:hover {
-  background: #eeedfe;
-  color: #6c63ff;
+  background: var(--saas-primary-soft);
+  color: var(--saas-primary);
 }
 
 .user-detail-overlay,
 .user-modal-shell {
-  background: rgba(27, 26, 46, 0.42);
+  background: var(--saas-overlay);
 }
 
 .user-detail-overlay {
@@ -771,14 +944,15 @@
 .user-detail-modal,
 .user-modal-content {
   width: min(620px, 100%);
-  background: #ffffff;
-  border: 1px solid #e6e8f0;
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
   border-radius: 10px;
-  box-shadow: 0 24px 70px rgba(27, 26, 46, 0.22);
+  box-shadow: var(--saas-shadow-heavy);
 }
 
 .user-modal-content {
   width: auto;
+  box-shadow: var(--saas-shadow-heavy);
 }
 
 .user-detail-header {
@@ -787,34 +961,34 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 1.25rem;
-  border-bottom: 1px solid #e6e8f0;
+  border-bottom: 1px solid var(--saas-border);
 }
 
 .user-detail-header h2 {
   margin: 0;
-  color: #1b1a2e;
+  color: var(--saas-text);
   font-size: 1.2rem;
 }
 
 .user-detail-header p {
   margin: 0.2rem 0 0;
-  color: #717184;
+  color: var(--saas-muted);
 }
 
 .user-avatar.detail {
   width: 42px;
   height: 42px;
-  color: #6c63ff;
-  background: #eeedfe;
+  color: var(--saas-primary);
+  background: var(--saas-primary-soft);
 }
 
 .user-detail-close {
   width: 34px;
   height: 34px;
-  border: 1px solid #e6e8f0;
+  border: 1px solid var(--saas-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #57576d;
+  background: var(--saas-card);
+  color: var(--saas-muted);
 }
 
 .user-detail-grid {
@@ -825,8 +999,8 @@
 }
 
 .user-detail-grid > div {
-  background: #fafafa;
-  border: 1px solid #e6e8f0;
+  background: var(--saas-surface);
+  border: 1px solid var(--saas-border);
   border-radius: 8px;
   padding: 0.85rem;
 }
@@ -834,14 +1008,14 @@
 .user-detail-grid span {
   display: block;
   margin-bottom: 0.25rem;
-  color: #717184;
+  color: var(--saas-muted);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .user-detail-grid strong {
-  color: #1b1a2e;
+  color: var(--saas-text);
 }
 
 .user-detail-actions {
@@ -849,32 +1023,32 @@
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-top: 1px solid #e6e8f0;
+  border-top: 1px solid var(--saas-border);
 }
 
 .user-modal-shell .modal-header,
 .user-modal-shell .modal-footer {
-  border-color: #e6e8f0;
+  border-color: var(--saas-border);
 }
 
 .user-modal-shell .modal-title {
-  color: #1b1a2e;
+  color: var(--saas-text);
   font-weight: 700;
 }
 
 .user-modal-shell .form-control {
-  border-color: #dfe3ee;
+  border-color: var(--saas-border);
   border-radius: 8px;
 }
 
 .user-modal-shell .form-control:focus {
-  border-color: #6c63ff;
-  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.14);
+  border-color: var(--saas-primary);
+  box-shadow: 0 0 0 3px var(--saas-primary-soft);
 }
 
 .user-modal-shell .btn-primary {
-  background: #6c63ff;
-  border-color: #6c63ff;
+  background: var(--saas-primary);
+  border-color: var(--saas-primary);
 }
 
 @media (max-width: 768px) {
@@ -909,7 +1083,7 @@
 
   .users-page .users-table tbody tr {
     padding: 0.9rem;
-    border-bottom: 1px solid #e6e8f0;
+    border-bottom: 1px solid var(--saas-border);
   }
 
   .users-page .users-table tbody td {

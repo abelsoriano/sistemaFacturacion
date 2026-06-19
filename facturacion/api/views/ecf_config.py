@@ -22,12 +22,18 @@ from facturacion.api.serializers.ecf_config import (
     ECFIssuerConfigSerializer,
     ECFSequenceSerializer,
 )
+from facturacion.ecf.certificates.loader import PKCS12CertificateLoader
 from facturacion.ecf.certificates.metadata import ECFCertificateMetadataService
+from facturacion.ecf.certificates.resolver import resolve_certificate_credentials
+from facturacion.ecf.exceptions import ECFError
+from facturacion.ecf.services.certificate_policy import ECFCertificateSigningPolicy
+from facturacion.ecf.signer.xml_signer import ECFXMLSigner
 from facturacion.models import CompanyMembership, ECFCertificate, ECFEventLog, ECFIssuerConfig, ECFSequence
 from facturacion.permissions import HasRequiredPermissions
 
 
 MANAGER_ROLES = {CompanyMembership.ROLE_OWNER, CompanyMembership.ROLE_ADMIN}
+CERTIFICATION_XML_MAX_BYTES = 2 * 1024 * 1024
 
 
 class ECFIssuerConfigViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -35,7 +41,7 @@ class ECFIssuerConfigViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = ECFIssuerConfigSerializer
     permission_classes = [IsAuthenticated, HasRequiredPermissions]
     required_permissions = model_permissions('ecfissuerconfig')
-    action_required_permissions = {'upload_certificate': [], 'certificates': []}
+    action_required_permissions = {'upload_certificate': [], 'certificates': [], 'sign_certification_xml': []}
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['business_name', 'trade_name', 'rnc']
     ordering_fields = ['business_name', 'rnc', 'created_at']
@@ -171,6 +177,84 @@ class ECFIssuerConfigViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet):
         )
         serializer = ECFCertificateSerializer(queryset, many=True, context=self.get_serializer_context())
         return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='sign-certification-xml',
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def sign_certification_xml(self, request, pk=None):
+        """Firma XML de postulacion DGII sin crear documentos e-CF.
+
+        Este endpoint es operativo para certificacion/postulacion y no toca
+        ElectronicFiscalDocument, secuencias ni colas del runtime fiscal.
+        """
+        issuer = self.get_object()
+        company = get_current_company(request)
+        membership = get_current_membership(request)
+        if company is None or issuer.company_id != company.id:
+            return Response(
+                {'detail': 'El emisor fiscal no pertenece a la empresa activa.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not (request.user.is_superuser or (membership and membership.role in MANAGER_ROLES and membership.is_active)):
+            return Response(
+                {'detail': 'Solo un owner o admin puede firmar XML de postulacion DGII.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        uploaded_file = request.FILES.get('xml')
+        if not uploaded_file:
+            return Response({'xml': ['Debe cargar un archivo XML de postulacion.']}, status=status.HTTP_400_BAD_REQUEST)
+        if Path(uploaded_file.name).suffix.lower() != '.xml':
+            return Response({'xml': ['El archivo de postulacion debe tener extension .xml.']}, status=status.HTTP_400_BAD_REQUEST)
+        if uploaded_file.size > CERTIFICATION_XML_MAX_BYTES:
+            return Response({'xml': ['El XML de postulacion no puede exceder 2 MB.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            xml_content = uploaded_file.read().decode('utf-8-sig')
+        except UnicodeDecodeError:
+            return Response({'xml': ['El XML debe estar codificado en UTF-8.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        policy_result = ECFCertificateSigningPolicy().evaluate(issuer)
+        issuer.refresh_from_db()
+        if policy_result.blocked:
+            return Response(
+                {
+                    'detail': policy_result.reason,
+                    'code': policy_result.code,
+                    'warnings': policy_result.warnings,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        certificate_path, certificate_password = resolve_certificate_credentials(issuer)
+        if not certificate_path:
+            return Response(
+                {'detail': 'El emisor fiscal no tiene certificado DGII disponible para firmar.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            certificate = PKCS12CertificateLoader().load(certificate_path, certificate_password)
+            signed_xml = ECFXMLSigner().sign(xml_content, certificate)
+        except ECFError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        original_stem = Path(uploaded_file.name).stem or 'postulacion-dgii'
+        return Response(
+            {
+                'issuer_id': issuer.id,
+                'filename': f'{original_stem}-firmado.xml',
+                'signed_xml': signed_xml,
+                'warnings': policy_result.warnings,
+                'policy_code': policy_result.code,
+                'certificate_status': issuer.certificate_status,
+                'certificate_rnc_match_status': issuer.certificate_rnc_match_status,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ECFSequenceViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet):

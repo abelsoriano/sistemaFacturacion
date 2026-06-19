@@ -111,3 +111,56 @@ class ECFStatusEventAdmin(admin.ModelAdmin):
         'previous_job_status', 'new_job_status', 'source', 'reason',
         'task_id', 'created_at',
     ]
+
+
+@admin.register(DGIIPublicRequestLog)
+class DGIIPublicRequestLogAdmin(admin.ModelAdmin):
+    list_display = ['endpoint', 'method', 'rnc', 'response_status', 'created_at']
+    list_filter = ['endpoint', 'method', 'response_status', 'created_at']
+    search_fields = ['rnc', 'body_sha256', 'error']
+    readonly_fields = [
+        'endpoint', 'method', 'content_type', 'safe_headers', 'body_sha256',
+        'body_preview', 'rnc', 'remote_addr', 'response_status', 'error', 'created_at',
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+class DGIICertificationItemInline(admin.TabularInline):
+    model = DGIICertificationItem
+    extra = 0
+    readonly_fields = [
+        'ecf_type', 'dgii_group', 'status', 'encf', 'amount',
+        'receiver_rnc', 'receiver_name', 'source_sheet', 'source_row',
+    ]
+    can_delete = False
+
+
+@admin.register(DGIICertificationPlan)
+class DGIICertificationPlanAdmin(admin.ModelAdmin):
+    list_display = ['company', 'source_filename', 'total_items', 'imported_by', 'imported_at']
+    list_filter = ['company', 'imported_at']
+    search_fields = ['source_filename', 'file_sha256', 'company__name']
+    readonly_fields = [
+        'company', 'status', 'source_filename', 'file_sha256', 'imported_by',
+        'imported_at', 'total_items', 'group_counts', 'created_at', 'updated_at',
+    ]
+    inlines = [DGIICertificationItemInline]
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(DGIICertificationEvent)
+class DGIICertificationEventAdmin(admin.ModelAdmin):
+    list_display = ['event_type', 'company', 'plan', 'item', 'created_by', 'created_at']
+    list_filter = ['event_type', 'company', 'created_at']
+    search_fields = ['message', 'company__name', 'plan__source_filename']
+    readonly_fields = ['company', 'plan', 'item', 'event_type', 'message', 'payload', 'created_by', 'created_at']
+
+    def has_add_permission(self, request):
+        return False

@@ -1,0 +1,562 @@
+.dgii-wizard-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 24px;
+}
+
+.dgii-wizard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dgii-wizard-header h1 {
+  margin: 4px 0 6px;
+  color: #1B1A2E;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.dgii-wizard-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+.dgii-wizard-eyebrow {
+  margin: 0;
+  color: #6C63FF;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dgii-wizard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  gap: 16px;
+}
+
+.dgii-wizard-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 8px;
+}
+
+.dgii-wizard-tabs button {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #475569;
+  background: transparent;
+  min-height: 38px;
+  padding: 0 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dgii-wizard-tabs button.active {
+  color: #4338ca;
+  background: #EEEDFE;
+  border-color: #d8d5ff;
+}
+
+.dgii-wizard-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+  padding: 18px;
+}
+
+.dgii-wizard-card.span-2 {
+  grid-column: span 2;
+}
+
+.dgii-wizard-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: #6C63FF;
+}
+
+.dgii-wizard-card-header h2 {
+  margin: 0 0 4px;
+  color: #1B1A2E;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.dgii-wizard-card-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.dgii-wizard-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.dgii-wizard-field select {
+  width: 100%;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  color: #1f2937;
+  background: #fff;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.dgii-wizard-status-grid,
+.dgii-wizard-xml-info {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.dgii-wizard-status-grid > div,
+.dgii-wizard-xml-info > div {
+  min-width: 0;
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.dgii-wizard-status-grid span,
+.dgii-wizard-xml-info span {
+  display: block;
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.dgii-wizard-status-grid strong,
+.dgii-wizard-xml-info strong {
+  display: block;
+  color: #1B1A2E;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.dgii-wizard-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.dgii-wizard-badge.success {
+  color: #047857;
+  background: #dcfce7;
+}
+
+.dgii-wizard-badge.warning {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.dgii-wizard-badge.danger {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.dgii-wizard-badge.neutral {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.dgii-wizard-certificate-box,
+.dgii-wizard-alert,
+.dgii-wizard-empty,
+.dgii-wizard-recommendation {
+  display: flex;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 14px;
+}
+
+.dgii-wizard-certificate-box {
+  color: #4338ca;
+  background: #EEEDFE;
+}
+
+.dgii-wizard-certificate-box p {
+  margin: 4px 0 0;
+  color: #4b5563;
+  font-size: 0.88rem;
+}
+
+.dgii-wizard-alert {
+  align-items: center;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.dgii-wizard-alert.danger {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.dgii-wizard-empty {
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+}
+
+.dgii-wizard-recommendation {
+  color: #1f2937;
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  line-height: 1.55;
+}
+
+.dgii-wizard-primary,
+.dgii-wizard-secondary,
+.dgii-wizard-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.dgii-wizard-primary {
+  color: #fff;
+  background: #6C63FF;
+  box-shadow: 0 12px 18px rgba(108, 99, 255, 0.22);
+}
+
+.dgii-wizard-secondary,
+.dgii-wizard-file {
+  color: #1B1A2E;
+  background: #f8fafc;
+  border: 1px solid #dbe2ea;
+}
+
+.dgii-wizard-primary:disabled,
+.dgii-wizard-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.dgii-wizard-primary:not(:disabled):hover,
+.dgii-wizard-secondary:not(:disabled):hover,
+.dgii-wizard-file:hover {
+  transform: translateY(-1px);
+}
+
+.dgii-wizard-file input {
+  display: none;
+}
+
+.dgii-wizard-upload,
+.dgii-wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dgii-wizard-actions {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.dgii-wizard-steps,
+.dgii-wizard-checklist,
+.dgii-wizard-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dgii-wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  padding: 10px;
+  text-align: left;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dgii-wizard-step span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.dgii-wizard-step.done {
+  color: #312e81;
+  border-color: #d8d5ff;
+  background: #fbfaff;
+}
+
+.dgii-wizard-step.done span {
+  color: #fff;
+  background: #6C63FF;
+}
+
+.dgii-wizard-step.current {
+  box-shadow: inset 3px 0 0 #6C63FF;
+}
+
+.dgii-wizard-checklist > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+  border-bottom: 1px solid #edf2f7;
+  padding-bottom: 8px;
+}
+
+.dgii-wizard-checklist > div.done {
+  color: #047857;
+  font-weight: 800;
+}
+
+.dgii-wizard-checklist span {
+  min-width: 18px;
+  color: inherit;
+  font-weight: 900;
+}
+
+.dgii-wizard-links a {
+  color: #4338ca;
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.dgii-certification-groups {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.dgii-certification-groups > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  align-items: start;
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.dgii-certification-groups strong {
+  color: #1B1A2E;
+}
+
+.dgii-certification-groups span {
+  grid-column: 1 / -1;
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.dgii-certification-groups b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 28px;
+  border-radius: 999px;
+  color: #4338ca;
+  background: #EEEDFE;
+}
+
+.dgii-certification-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+.dgii-certification-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.dgii-certification-table th,
+.dgii-certification-table td {
+  border-bottom: 1px solid #edf2f7;
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.dgii-certification-table th {
+  color: #64748b;
+  background: #f8fafc;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dgii-certification-table td {
+  color: #1f2937;
+  font-size: 0.9rem;
+}
+
+.dgii-certification-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dgii-certification-history > div,
+.dgii-certification-history > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.dgii-certification-history strong {
+  color: #1B1A2E;
+}
+
+.dgii-wizard-loading {
+  color: #64748b;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+@media (max-width: 1024px) {
+  .dgii-wizard-grid,
+  .dgii-wizard-card.span-2 {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dgii-wizard-status-grid,
+  .dgii-wizard-xml-info,
+  .dgii-certification-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .dgii-wizard-page {
+    gap: 14px;
+    padding-bottom: 88px;
+  }
+
+  .dgii-wizard-header {
+    flex-direction: column;
+  }
+
+  .dgii-wizard-header h1 {
+    font-size: 1.55rem;
+  }
+
+  .dgii-wizard-card {
+    padding: 14px;
+  }
+
+  .dgii-wizard-status-grid,
+  .dgii-wizard-xml-info,
+  .dgii-certification-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .dgii-wizard-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .dgii-certification-table {
+    min-width: 0;
+  }
+
+  .dgii-certification-table thead {
+    display: none;
+  }
+
+  .dgii-certification-table,
+  .dgii-certification-table tbody,
+  .dgii-certification-table tr,
+  .dgii-certification-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .dgii-certification-table tr {
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+
+  .dgii-certification-table td {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 8px;
+    border-bottom: 1px solid #edf2f7;
+  }
+
+  .dgii-certification-table td::before {
+    content: attr(data-label);
+    color: #64748b;
+    font-size: 0.74rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .dgii-wizard-upload,
+  .dgii-wizard-actions,
+  .dgii-wizard-primary,
+  .dgii-wizard-secondary,
+  .dgii-wizard-file {
+    width: 100%;
+  }
+}
