@@ -1558,6 +1558,7 @@ class DGIICertificationItem(models.Model):
 
     STATUS_PENDING = 'pending'
     STATUS_GENERATED = 'generated'
+    STATUS_GENERATION_ERROR = 'generation_error'
     STATUS_SIGNED = 'signed'
     STATUS_SENT = 'sent'
     STATUS_ACCEPTED = 'accepted'
@@ -1565,6 +1566,7 @@ class DGIICertificationItem(models.Model):
     STATUS_CHOICES = [
         (STATUS_PENDING, 'Pendiente'),
         (STATUS_GENERATED, 'Generado'),
+        (STATUS_GENERATION_ERROR, 'Error generacion'),
         (STATUS_SIGNED, 'Firmado'),
         (STATUS_SENT, 'Enviado'),
         (STATUS_ACCEPTED, 'Aceptado'),
@@ -1607,6 +1609,10 @@ class DGIICertificationItem(models.Model):
     source_sheet = models.CharField(max_length=120)
     source_row = models.PositiveIntegerField()
     raw_data = models.JSONField(blank=True, null=True)
+    generated_xml_path = models.CharField(max_length=500, blank=True, default='')
+    generated_xml_hash = models.CharField(max_length=64, blank=True, default='')
+    generated_at = models.DateTimeField(null=True, blank=True)
+    generation_error = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1632,11 +1638,15 @@ class DGIICertificationEvent(models.Model):
     EVENT_PLAN_CREATED = 'plan_created'
     EVENT_ITEM_DETECTED = 'item_detected'
     EVENT_IMPORT_ERROR = 'import_error'
+    EVENT_XML_GENERATED = 'xml_generated'
+    EVENT_XML_GENERATION_ERROR = 'xml_generation_error'
     EVENT_CHOICES = [
         (EVENT_EXCEL_IMPORTED, 'Excel importado'),
         (EVENT_PLAN_CREATED, 'Plan creado'),
         (EVENT_ITEM_DETECTED, 'Item detectado'),
         (EVENT_IMPORT_ERROR, 'Error de importacion'),
+        (EVENT_XML_GENERATED, 'XML generado'),
+        (EVENT_XML_GENERATION_ERROR, 'Error generacion XML'),
     ]
 
     company = models.ForeignKey(

@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<EscenarioCertificacionDGII>
+  <ecf_type>31</ecf_type>
+  <encf>E310000000007</encf>
+  <amount>228460.50</amount>
+  <receiver_rnc>131880681</receiver_rnc>
+  <receiver_name>DOCUMENTOS ELECTRONICOS DE 03</receiver_name>
+  <group_number>1</group_number>
+  <source_sheet>ECF</source_sheet>
+  <source_row>8</source_row>
+</EscenarioCertificacionDGII>

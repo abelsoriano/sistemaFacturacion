@@ -24,7 +24,8 @@ class DGIICertificationItemSerializer(serializers.ModelSerializer):
             'id', 'plan', 'company', 'ecf_type', 'ecf_type_label', 'dgii_group',
             'status', 'status_label', 'encf', 'document_type', 'amount',
             'receiver_rnc', 'receiver_name', 'observations', 'source_sheet',
-            'source_row', 'raw_data', 'created_at', 'updated_at',
+            'source_row', 'raw_data', 'generated_xml_path', 'generated_xml_hash',
+            'generated_at', 'generation_error', 'created_at', 'updated_at',
         ]
         read_only_fields = fields
 

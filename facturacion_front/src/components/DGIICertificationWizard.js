@@ -120,6 +120,7 @@ export default function DGIICertificationWizard() {
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
   const [importingSet, setImportingSet] = useState(false);
+  const [generatingXml, setGeneratingXml] = useState('');
   const [error, setError] = useState('');
   const [activeSection, setActiveSection] = useState('certificate');
   const [xmlFile, setXmlFile] = useState(null);
@@ -271,6 +272,75 @@ export default function DGIICertificationWizard() {
       notify.error('No se pudo firmar', err.response?.data?.detail || 'Revise el certificado del emisor.');
     } finally {
       setSigning(false);
+    }
+  };
+
+  const replacePlan = (updatedPlan) => {
+    if (!updatedPlan) return;
+    setPlans((current) => [updatedPlan, ...current.filter((plan) => plan.id !== updatedPlan.id)]);
+  };
+
+  const handleGenerateItemXml = async (planId, itemId) => {
+    setGeneratingXml(`item-${itemId}`);
+    try {
+      const response = await api.post(`/ecf/certification-plans/${planId}/items/${itemId}/generate-xml/`);
+      setPlans((current) => current.map((plan) => (
+        plan.id === planId
+          ? { ...plan, items: (plan.items || []).map((item) => (item.id === itemId ? response.data : item)) }
+          : plan
+      )));
+      notify.success('Escenario preparado', 'El escenario normalizado quedó listo para descargar.');
+    } catch (err) {
+      const itemPayload = err.response?.data;
+      if (itemPayload?.id) {
+        setPlans((current) => current.map((plan) => (
+          plan.id === planId
+            ? { ...plan, items: (plan.items || []).map((item) => (item.id === itemId ? itemPayload : item)) }
+            : plan
+        )));
+      }
+      notify.error('No se pudo preparar el escenario', itemPayload?.generation_error || itemPayload?.detail || 'Revise el escenario DGII.');
+    } finally {
+      setGeneratingXml('');
+    }
+  };
+
+  const handleGenerateGroupXml = async (planId, groupNumber) => {
+    setGeneratingXml(`group-${groupNumber}`);
+    try {
+      const response = await api.post(`/ecf/certification-plans/${planId}/groups/${groupNumber}/generate-xml/`);
+      replacePlan(response.data?.plan);
+      const summary = response.data?.summary || {};
+      const message = `${summary.generated || 0} generados, ${summary.failed || 0} fallidos.`;
+      if (summary.failed) {
+        notify.warning('Grupo procesado con errores', message);
+      } else {
+        notify.success('Grupo preparado', message);
+      }
+    } catch (err) {
+      notify.error('No se pudo preparar el grupo', err.response?.data?.detail || 'Revise el plan DGII.');
+    } finally {
+      setGeneratingXml('');
+    }
+  };
+
+  const handleDownloadGeneratedXml = async (planId, item) => {
+    try {
+      const response = await api.get(
+        `/ecf/certification-plans/${planId}/items/${item.id}/download-xml/`,
+        { responseType: 'blob' },
+      );
+      const filename = item.generated_xml_path?.split('/').pop() || `${item.ecf_type}-${item.encf || item.id}.xml`;
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      notify.error('No se pudo descargar', err.response?.data?.detail || 'El escenario normalizado no está disponible.');
     }
   };
 
@@ -590,16 +660,29 @@ export default function DGIICertificationWizard() {
       {activeSection === 'tests' && (
         <DGIICertificationTestsSection
           importingSet={importingSet}
+          generatingXml={generatingXml}
           latestPlan={latestPlan}
           plans={plans}
           onImportSet={handleImportSet}
+          onGenerateItemXml={handleGenerateItemXml}
+          onGenerateGroupXml={handleGenerateGroupXml}
+          onDownloadGeneratedXml={handleDownloadGeneratedXml}
         />
       )}
     </section>
   );
 }
 
-function DGIICertificationTestsSection({ importingSet, latestPlan, plans, onImportSet }) {
+function DGIICertificationTestsSection({
+  importingSet,
+  generatingXml,
+  latestPlan,
+  plans,
+  onImportSet,
+  onGenerateItemXml,
+  onGenerateGroupXml,
+  onDownloadGeneratedXml,
+}) {
   const groupCounts = latestPlan?.group_counts || {};
   const statusCounts = (latestPlan?.items || []).reduce((acc, item) => {
     acc[item.status] = (acc[item.status] || 0) + 1;
@@ -609,7 +692,7 @@ function DGIICertificationTestsSection({ importingSet, latestPlan, plans, onImpo
   const groups = [
     { id: '1', title: 'Grupo 1', detail: '31, 32 >= 250,000, 41, 43, 44, 45, 46, 47' },
     { id: '2', title: 'Grupo 2', detail: '33, 34' },
-    { id: '3', title: 'Grupo 3', detail: 'RFCE' },
+    { id: '3', title: 'Grupo 3', detail: 'RFCE / Resúmenes de consumo' },
     { id: '4', title: 'Grupo 4', detail: '32 < 250,000' },
   ];
 
@@ -659,6 +742,14 @@ function DGIICertificationTestsSection({ importingSet, latestPlan, plans, onImpo
                   <strong>{group.title}</strong>
                   <span>{group.detail}</span>
                   <b>{groupCounts[group.id] || 0}</b>
+                  <button
+                    type="button"
+                    className="dgii-wizard-mini-action"
+                    disabled={!latestPlan || generatingXml === `group-${group.id}`}
+                    onClick={() => onGenerateGroupXml(latestPlan.id, group.id)}
+                  >
+                    {generatingXml === `group-${group.id}` ? 'Preparando...' : 'Preparar grupo'}
+                  </button>
                 </div>
               ))}
             </div>
@@ -674,6 +765,7 @@ function DGIICertificationTestsSection({ importingSet, latestPlan, plans, onImpo
                     <th>Receptor</th>
                     <th>Origen</th>
                     <th>Estado</th>
+                    <th>Escenario</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -686,6 +778,31 @@ function DGIICertificationTestsSection({ importingSet, latestPlan, plans, onImpo
                       <td data-label="Receptor">{item.receiver_name || item.receiver_rnc || 'No disponible'}</td>
                       <td data-label="Origen">{item.source_sheet} · fila {item.source_row}</td>
                       <td data-label="Estado">{statusBadge({ label: item.status_label || 'Pendiente', tone: 'neutral' })}</td>
+                      <td data-label="Escenario">
+                        <div className="dgii-certification-actions">
+                          {item.status === 'generation_error' ? (
+                            <span title={item.generation_error}>{item.generation_error || 'Error generación'}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="dgii-wizard-mini-action"
+                              disabled={generatingXml === `item-${item.id}`}
+                              onClick={() => onGenerateItemXml(latestPlan.id, item.id)}
+                            >
+                              {generatingXml === `item-${item.id}` ? 'Preparando...' : 'Preparar'}
+                            </button>
+                          )}
+                          {item.generated_xml_path && (
+                            <button
+                              type="button"
+                              className="dgii-wizard-mini-action secondary"
+                              onClick={() => onDownloadGeneratedXml(latestPlan.id, item)}
+                            >
+                              Descargar
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

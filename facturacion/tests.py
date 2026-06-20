@@ -22,6 +22,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.core.files.storage import default_storage
 from django.db import IntegrityError, close_old_connections, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -321,6 +322,73 @@ class DGIICertificationPlanTests(TestCase):
         self.assertEqual(item.receiver_rnc, "40222797082")
         self.assertEqual(item.amount, Decimal("400000.00"))
 
+    def test_import_rfce_sheet_classifies_e32_rows_as_group_three(self):
+        user = get_user_model().objects.create_user(username="dgii-cert-rfce-sheet", password="pass")
+        company = Company.objects.create(name="Empresa DGII RFCE Sheet", rnc="401010207")
+        CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
+        request = APIRequestFactory().post(
+            "/ecf/certification-plans/import-set/",
+            {
+                "file": SimpleUploadedFile(
+                    "set-rfce.xlsx",
+                    self._build_real_like_workbook(
+                        caso_prueba="40222797082E320000000012",
+                        ecf_type="32",
+                        encf="E320000000012",
+                        rnc=131880681,
+                        amount="47200.00",
+                        sheet_title="RFCE",
+                    ),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+            format="multipart",
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "import_set"})(request)
+
+        self.assertEqual(response.status_code, 201)
+        plan = DGIICertificationPlan.objects.get(company=company)
+        self.assertEqual(plan.group_counts, {"1": 0, "2": 0, "3": 1, "4": 0})
+        item = DGIICertificationItem.objects.get(plan=plan)
+        self.assertEqual(item.ecf_type, "RFCE")
+        self.assertEqual(item.dgii_group, 3)
+        self.assertEqual(item.encf, "E320000000012")
+
+    def test_import_cleans_unusable_receiver_name(self):
+        user = get_user_model().objects.create_user(username="dgii-cert-clean-receiver", password="pass")
+        company = Company.objects.create(name="Empresa DGII Clean Receiver", rnc="401010208")
+        CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
+        request = APIRequestFactory().post(
+            "/ecf/certification-plans/import-set/",
+            {
+                "file": SimpleUploadedFile(
+                    "set-clean-receiver.xlsx",
+                    self._build_real_like_workbook(
+                        caso_prueba="40222797082E310000000002",
+                        ecf_type="31",
+                        encf="E310000000002",
+                        rnc=131880681,
+                        amount="1000.00",
+                        receiver_name="ªç",
+                    ),
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+            format="multipart",
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "import_set"})(request)
+
+        self.assertEqual(response.status_code, 201)
+        item = DGIICertificationItem.objects.get(plan__company=company)
+        self.assertEqual(item.receiver_name, "")
+        self.assertEqual(item.receiver_rnc, "131880681")
+
     def test_import_out_of_range_amount_returns_controlled_error_without_500(self):
         user = get_user_model().objects.create_user(username="dgii-cert-overflow", password="pass")
         company = Company.objects.create(name="Empresa DGII Overflow", rnc="401010206")
@@ -353,6 +421,161 @@ class DGIICertificationPlanTests(TestCase):
         self.assertEqual(DGIICertificationPlan.objects.filter(company=company).count(), 0)
         self.assertTrue(DGIICertificationEvent.objects.filter(company=company, event_type="import_error").exists())
 
+    def test_generate_xml_for_item_31_creates_clean_scenario_without_productive_invoice(self):
+        user, company, plan = self._create_plan_with_items([
+            {"ecf_type": "31", "dgii_group": 1, "encf": "E310000000001", "amount": Decimal("1000.00")},
+        ])
+        item = plan.items.get()
+        invoice_count = Invoice.objects.count()
+        sequence_count = ECFSequence.objects.count()
+        request = APIRequestFactory().post(
+            f"/ecf/certification-plans/{plan.id}/items/{item.id}/generate-xml/"
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "generate_item_xml"})(request, pk=plan.id, item_id=item.id)
+
+        self.assertEqual(response.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.status, DGIICertificationItem.STATUS_GENERATED)
+        self.assertTrue(item.generated_xml_path)
+        self.assertTrue(item.generated_xml_hash)
+        self.assertTrue(item.generated_at)
+        self.assertTrue(default_storage.exists(item.generated_xml_path))
+        with default_storage.open(item.generated_xml_path, "rb") as generated_xml:
+            xml_text = generated_xml.read().decode("utf-8")
+        self.assertIn("<EscenarioCertificacionDGII>", xml_text)
+        self.assertIn("<ecf_type>31</ecf_type>", xml_text)
+        self.assertIn("<encf>E310000000001</encf>", xml_text)
+        self.assertIn("<amount>1000.00</amount>", xml_text)
+        self.assertIn("<receiver_rnc>131880681</receiver_rnc>", xml_text)
+        self.assertIn("<receiver_name>Cliente DGII</receiver_name>", xml_text)
+        self.assertIn("<group_number>1</group_number>", xml_text)
+        self.assertIn("<source_sheet>ECF</source_sheet>", xml_text)
+        self.assertIn("<source_row>2</source_row>", xml_text)
+        self.assertNotIn("<ECF>", xml_text)
+        self.assertNotIn("DatosSetDGII", xml_text)
+        self.assertNotIn("DatosOriginales", xml_text)
+        self.assertNotIn("<Celda", xml_text)
+        self.assertEqual(Invoice.objects.count(), invoice_count)
+        self.assertEqual(ECFSequence.objects.count(), sequence_count)
+        self.assertTrue(DGIICertificationEvent.objects.filter(item=item, event_type="xml_generated").exists())
+
+    def test_generate_xml_for_item_32_creates_artifact(self):
+        user, company, plan = self._create_plan_with_items([
+            {"ecf_type": "32", "dgii_group": 4, "encf": "E320000000001", "amount": Decimal("500.00")},
+        ])
+        item = plan.items.get()
+        request = APIRequestFactory().post(
+            f"/ecf/certification-plans/{plan.id}/items/{item.id}/generate-xml/"
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "generate_item_xml"})(request, pk=plan.id, item_id=item.id)
+
+        self.assertEqual(response.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.status, DGIICertificationItem.STATUS_GENERATED)
+        with default_storage.open(item.generated_xml_path, "rb") as generated_xml:
+            xml_text = generated_xml.read().decode("utf-8")
+        self.assertIn("<ecf_type>32</ecf_type>", xml_text)
+        self.assertNotIn("DatosOriginales", xml_text)
+
+    def test_generate_xml_for_group_supports_41_43_44_45_46_47(self):
+        user, company, plan = self._create_plan_with_items([
+            {"ecf_type": "41", "dgii_group": 1, "encf": "E410000000001", "amount": Decimal("100.00")},
+            {"ecf_type": "43", "dgii_group": 1, "encf": "E430000000001", "amount": Decimal("200.00")},
+            {"ecf_type": "44", "dgii_group": 1, "encf": "E440000000001", "amount": Decimal("300.00")},
+            {"ecf_type": "45", "dgii_group": 1, "encf": "E450000000001", "amount": Decimal("400.00")},
+            {"ecf_type": "46", "dgii_group": 1, "encf": "E460000000001", "amount": Decimal("500.00")},
+            {"ecf_type": "47", "dgii_group": 1, "encf": "E470000000001", "amount": Decimal("600.00")},
+        ])
+        request = APIRequestFactory().post(f"/ecf/certification-plans/{plan.id}/groups/1/generate-xml/")
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "generate_group_xml"})(request, pk=plan.id, group_number="1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["summary"]["generated"], 6)
+        self.assertEqual(response.data["summary"]["failed"], 0)
+        self.assertEqual(plan.items.filter(status=DGIICertificationItem.STATUS_GENERATED).count(), 6)
+
+    def test_generate_rfce_fails_controlled_without_breaking_group(self):
+        user, company, plan = self._create_plan_with_items([
+            {"ecf_type": "RFCE", "dgii_group": 3, "encf": "E320000000012", "amount": Decimal("47200.00")},
+        ])
+        item = plan.items.get()
+        request = APIRequestFactory().post(
+            f"/ecf/certification-plans/{plan.id}/items/{item.id}/generate-xml/"
+        )
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "generate_item_xml"})(request, pk=plan.id, item_id=item.id)
+
+        self.assertEqual(response.status_code, 400)
+        item.refresh_from_db()
+        self.assertEqual(item.status, DGIICertificationItem.STATUS_GENERATION_ERROR)
+        self.assertIn("RFCE", item.generation_error)
+        self.assertFalse(item.generated_xml_path)
+        self.assertTrue(DGIICertificationEvent.objects.filter(item=item, event_type="xml_generation_error").exists())
+
+    def test_generate_group_returns_summary_for_generated_and_failed_items(self):
+        user, company, plan = self._create_plan_with_items([
+            {"ecf_type": "33", "dgii_group": 2, "encf": "E330000000001", "amount": Decimal("100.00")},
+            {"ecf_type": "34", "dgii_group": 2, "encf": "E340000000001", "amount": Decimal("50.00")},
+            {"ecf_type": "RFCE", "dgii_group": 2, "encf": "E320000000099", "amount": Decimal("50.00")},
+        ])
+        request = APIRequestFactory().post(f"/ecf/certification-plans/{plan.id}/groups/2/generate-xml/")
+        request.session = {"active_company_id": company.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "generate_group_xml"})(request, pk=plan.id, group_number="2")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["summary"]["generated"], 2)
+        self.assertEqual(response.data["summary"]["failed"], 1)
+        self.assertEqual(len(response.data["summary"]["errors"]), 1)
+
+    def test_generate_xml_is_tenant_scoped(self):
+        user = get_user_model().objects.create_user(username="dgii-cert-tenant-xml", password="pass")
+        company_a = Company.objects.create(name="Empresa DGII XML A", rnc="401010209")
+        company_b = Company.objects.create(name="Empresa DGII XML B", rnc="401010210")
+        CompanyMembership.objects.create(user=user, company=company_a, role=CompanyMembership.ROLE_OWNER)
+        plan_b = DGIICertificationPlan.objects.create(
+            company=company_b,
+            source_filename="b.xlsx",
+            file_sha256="b" * 64,
+            total_items=1,
+            group_counts={"1": 1, "2": 0, "3": 0, "4": 0},
+        )
+        item_b = DGIICertificationItem.objects.create(
+            plan=plan_b,
+            company=company_b,
+            ecf_type="31",
+            dgii_group=1,
+            encf="E310000000001",
+            document_type="Factura Credito Fiscal",
+            amount=Decimal("100.00"),
+            source_sheet="ECF",
+            source_row=2,
+            raw_data={"col_1": "E310000000001"},
+        )
+        request = APIRequestFactory().post(
+            f"/ecf/certification-plans/{plan_b.id}/items/{item_b.id}/generate-xml/"
+        )
+        request.session = {"active_company_id": company_a.id}
+        force_authenticate(request, user=user)
+
+        response = DGIICertificationPlanViewSet.as_view({"post": "generate_item_xml"})(request, pk=plan_b.id, item_id=item_b.id)
+
+        self.assertEqual(response.status_code, 404)
+        item_b.refresh_from_db()
+        self.assertEqual(item_b.status, DGIICertificationItem.STATUS_PENDING)
+
     def _build_certification_workbook(self) -> bytes:
         from openpyxl import Workbook
 
@@ -369,17 +592,66 @@ class DGIICertificationPlanTests(TestCase):
         workbook.save(buffer)
         return buffer.getvalue()
 
-    def _build_real_like_workbook(self, *, caso_prueba, ecf_type, encf, rnc, amount) -> bytes:
+    def _build_real_like_workbook(
+        self,
+        *,
+        caso_prueba,
+        ecf_type,
+        encf,
+        rnc,
+        amount,
+        sheet_title="ECF",
+        receiver_name="Cliente DGII",
+    ) -> bytes:
         from openpyxl import Workbook
 
         workbook = Workbook()
         worksheet = workbook.active
-        worksheet.title = "ECF"
+        worksheet.title = sheet_title
         worksheet.append(["CasoPrueba", "TipoeCF", "ENCF", "RNCComprador", "RazonSocialComprador", "MontoTotal"])
-        worksheet.append([caso_prueba, ecf_type, encf, rnc, "Cliente DGII", amount])
+        worksheet.append([caso_prueba, ecf_type, encf, rnc, receiver_name, amount])
         buffer = BytesIO()
         workbook.save(buffer)
         return buffer.getvalue()
+
+    def _create_plan_with_items(self, items):
+        user = get_user_model().objects.create_user(
+            username=f"dgii-cert-xml-{Company.objects.count()}",
+            password="pass",
+        )
+        company = Company.objects.create(
+            name=f"Empresa DGII XML {Company.objects.count()}",
+            rnc=f"40102{Company.objects.count():04d}",
+        )
+        CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
+        group_counts = {"1": 0, "2": 0, "3": 0, "4": 0}
+        plan = DGIICertificationPlan.objects.create(
+            company=company,
+            source_filename="set-dgii.xlsx",
+            file_sha256=f"{company.id:064x}"[-64:],
+            total_items=len(items),
+            group_counts=group_counts,
+            imported_by=user,
+        )
+        for index, item_data in enumerate(items, start=1):
+            group_counts[str(item_data["dgii_group"])] = group_counts.get(str(item_data["dgii_group"]), 0) + 1
+            DGIICertificationItem.objects.create(
+                plan=plan,
+                company=company,
+                ecf_type=item_data["ecf_type"],
+                dgii_group=item_data["dgii_group"],
+                encf=item_data["encf"],
+                document_type=f"Tipo {item_data['ecf_type']}",
+                amount=item_data["amount"],
+                receiver_rnc="131880681",
+                receiver_name="Cliente DGII",
+                source_sheet="ECF" if item_data["ecf_type"] != "RFCE" else "RFCE",
+                source_row=index + 1,
+                raw_data={"col_1": item_data["encf"], "col_2": str(item_data["amount"])},
+            )
+        plan.group_counts = group_counts
+        plan.save(update_fields=["group_counts", "updated_at"])
+        return user, company, plan
 
 
 class ECFSigningTests(SimpleTestCase):

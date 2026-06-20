@@ -9,8 +9,12 @@ import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db import DataError, transaction
+from django.utils import timezone
 
 from facturacion.models import (
     Company,
@@ -23,6 +27,7 @@ from facturacion.models import (
 logger = logging.getLogger(__name__)
 MAX_AMOUNT_ABS = Decimal('999999999999.99')
 SUPPORTED_ECF_TYPES = {'31', '32', '33', '34', '41', '43', '44', '45', '46', '47', 'RFCE'}
+CERTIFICATION_XML_SUPPORTED_TYPES = {'31', '32', '33', '34', '41', '43', '44', '45', '46', '47'}
 ENCF_RE = re.compile(r'\bE(31|32|33|34|41|43|44|45|46|47)\d{6,12}\b', re.IGNORECASE)
 ENCF_FRAGMENT_RE = re.compile(r'E(31|32|33|34|41|43|44|45|46|47)\d{6,12}', re.IGNORECASE)
 RNC_RE = re.compile(r'\b\d{3}-?\d{5}-?\d{1}\b|\b\d{3}-?\d{7}-?\d{1}\b')
@@ -271,7 +276,7 @@ class DGIICertificationExcelImporter:
 
         amount = self._extract_amount(values, normalized_values, header_map, field_values)
         receiver_rnc = field_values.get('receiver_rnc') or self._extract_rnc(row_text, encf)
-        receiver_name = field_values.get('receiver_name') or self._extract_name(values, normalized_values, header_map)
+        receiver_name = _clean_receiver_name(field_values.get('receiver_name')) or self._extract_name(values, normalized_values, header_map)
         observations = field_values.get('observations') or ''
         document_type = field_values.get('document_type') or self._document_type_label(ecf_type)
         dgii_group = self._classify_group(ecf_type, amount)
@@ -340,6 +345,9 @@ class DGIICertificationExcelImporter:
         return fields
 
     def _detect_ecf_type(self, row_text: str, encf: str, sheet_name: str, document_type: str) -> str | None:
+        if self._is_rfce_context(row_text, sheet_name, document_type):
+            return 'RFCE'
+
         if encf:
             match = ENCF_FRAGMENT_RE.search(encf)
             if match:
@@ -389,8 +397,10 @@ class DGIICertificationExcelImporter:
                 continue
             text = str(value).strip()
             normalized = normalized_values[index]
-            if len(text) < 3:
+            text = _clean_receiver_name(text)
+            if not text:
                 continue
+            normalized = _normalize_text(text)
             if ENCF_FRAGMENT_RE.search(normalized.upper()) or RNC_RE.search(normalized):
                 continue
             if _parse_decimal(value) is not None:
@@ -399,6 +409,10 @@ class DGIICertificationExcelImporter:
                 continue
             return text[:180]
         return ''
+
+    def _is_rfce_context(self, row_text: str, sheet_name: str, document_type: str) -> bool:
+        corpus = f'{_normalize_text(sheet_name)} {row_text} {_normalize_text(document_type)}'
+        return any(hint in corpus for hint in TYPE_TEXT_HINTS['RFCE'])
 
     def _classify_group(self, ecf_type: str, amount: Decimal | None) -> int:
         if ecf_type in {'31', '41', '43', '44', '45', '46', '47'}:
@@ -442,6 +456,23 @@ def _normalize_digits(value) -> str:
     return re.sub(r'\D+', '', str(value or ''))
 
 
+def _clean_receiver_name(value) -> str:
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    normalized = _normalize_text(text)
+    if normalized in {'#e', 'e', 'n/a', 'na', 'null', 'none', 'no aplica'}:
+        return ''
+    if len(normalized) < 3:
+        return ''
+    if not re.search(r'[A-Za-z]', text):
+        return ''
+    alpha_count = sum(1 for char in normalized if char.isalpha())
+    if alpha_count < 3:
+        return ''
+    return text
+
+
 def _parse_decimal(value) -> Decimal | None:
     if value is None or value == '':
         return None
@@ -467,3 +498,131 @@ def _parse_decimal(value) -> Decimal | None:
         return Decimal(cleaned).quantize(Decimal('0.01'))
     except (InvalidOperation, ValueError):
         return None
+
+
+class DGIICertificationXMLGenerator:
+    """Build isolated DGII certification scenarios without touching productive fiscal flows."""
+
+    unsupported_rfce_message = 'Generador RFCE pendiente de implementación'
+
+    def generate_item(self, *, item: DGIICertificationItem, user=None) -> DGIICertificationItem:
+        if item.ecf_type == 'RFCE':
+            return self._mark_generation_error(item=item, user=user, error=self.unsupported_rfce_message)
+        if item.ecf_type not in CERTIFICATION_XML_SUPPORTED_TYPES:
+            return self._mark_generation_error(
+                item=item,
+                user=user,
+                error=f'Generador no disponible para tipo {item.ecf_type}.',
+            )
+
+        xml_content = self._build_xml(item)
+        encoded = xml_content.encode('utf-8')
+        digest = hashlib.sha256(encoded).hexdigest()
+        filename = self._filename_for(item)
+        storage_path = default_storage.save(filename, ContentFile(encoded))
+
+        item.generated_xml_path = storage_path
+        item.generated_xml_hash = digest
+        item.generated_at = timezone.now()
+        item.generation_error = ''
+        item.status = DGIICertificationItem.STATUS_GENERATED
+        item.save(update_fields=[
+            'generated_xml_path',
+            'generated_xml_hash',
+            'generated_at',
+            'generation_error',
+            'status',
+            'updated_at',
+        ])
+        DGIICertificationEvent.objects.create(
+            company=item.company,
+            plan=item.plan,
+            item=item,
+            event_type=DGIICertificationEvent.EVENT_XML_GENERATED,
+            message='Escenario de certificacion DGII generado.',
+            payload={
+                'ecf_type': item.ecf_type,
+                'dgii_group': item.dgii_group,
+                'path': storage_path,
+                'sha256': digest,
+            },
+            created_by=user,
+        )
+        return item
+
+    def generate_group(self, *, plan: DGIICertificationPlan, group_number: int, user=None) -> dict:
+        queryset = plan.items.filter(dgii_group=group_number, status=DGIICertificationItem.STATUS_PENDING).order_by(
+            'source_sheet',
+            'source_row',
+        )
+        generated = 0
+        failed = 0
+        errors = []
+        for item in queryset:
+            updated_item = self.generate_item(item=item, user=user)
+            if updated_item.status == DGIICertificationItem.STATUS_GENERATED:
+                generated += 1
+            else:
+                failed += 1
+                errors.append({
+                    'item_id': item.id,
+                    'ecf_type': item.ecf_type,
+                    'source_sheet': item.source_sheet,
+                    'source_row': item.source_row,
+                    'error': updated_item.generation_error,
+                })
+        return {'generated': generated, 'failed': failed, 'errors': errors}
+
+    def _mark_generation_error(self, *, item: DGIICertificationItem, user=None, error: str) -> DGIICertificationItem:
+        item.status = DGIICertificationItem.STATUS_GENERATION_ERROR
+        item.generation_error = error
+        item.save(update_fields=['status', 'generation_error', 'updated_at'])
+        DGIICertificationEvent.objects.create(
+            company=item.company,
+            plan=item.plan,
+            item=item,
+            event_type=DGIICertificationEvent.EVENT_XML_GENERATION_ERROR,
+            message=error,
+            payload={'ecf_type': item.ecf_type, 'dgii_group': item.dgii_group},
+            created_by=user,
+        )
+        return item
+
+    def _build_xml(self, item: DGIICertificationItem) -> str:
+        root = ET.Element('EscenarioCertificacionDGII')
+        self._set_text(root, 'ecf_type', item.ecf_type)
+        self._set_text(root, 'encf', item.encf)
+        if item.amount is not None:
+            self._set_text(root, 'amount', f'{item.amount:.2f}')
+        self._set_text(root, 'receiver_rnc', item.receiver_rnc)
+        self._set_text(root, 'receiver_name', item.receiver_name)
+        self._set_text(root, 'observations', item.observations)
+        self._set_text(root, 'group_number', str(item.dgii_group))
+        self._set_text(root, 'source_sheet', item.source_sheet)
+        self._set_text(root, 'source_row', str(item.source_row))
+
+        ET.indent(root, space='  ')
+        return ET.tostring(root, encoding='unicode', xml_declaration=True)
+
+    def _set_text(self, parent, tag: str, value) -> None:
+        cleaned = _clean_scenario_value(value)
+        if not cleaned:
+            return
+        element = ET.SubElement(parent, tag)
+        element.text = cleaned
+
+    def _filename_for(self, item: DGIICertificationItem) -> str:
+        encf = item.encf or f'fila-{item.source_row}'
+        return (
+            f'dgii_certification/company-{item.company_id}/plan-{item.plan_id}/'
+            f'grupo-{item.dgii_group}/{item.ecf_type}-{encf}-item-{item.id}.xml'
+        )
+
+def _clean_scenario_value(value) -> str:
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    normalized = _normalize_text(text)
+    if normalized in {'#e', 'e', 'n/a', 'na', 'null', 'none', 'no aplica'}:
+        return ''
+    return text
