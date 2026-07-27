@@ -3,6 +3,10 @@ from rest_framework import serializers
 from facturacion.api.company_context import get_current_company
 from facturacion.api.validators import normalize_rnc, validate_phone
 from facturacion.models import (
+    DGIICertificationDocument,
+    DGIICertificationCommercialApprovalEvent,
+    DGIICertificationCommercialApprovalItem,
+    DGIICertificationCommercialApprovalPlan,
     DGIICertificationEvent,
     DGIICertificationItem,
     DGIICertificationPlan,
@@ -14,9 +18,36 @@ from facturacion.models import (
 )
 
 
+class DGIICertificationDocumentSerializer(serializers.ModelSerializer):
+    status_label = serializers.CharField(source='get_status_display', read_only=True)
+    signed_xml_available = serializers.SerializerMethodField()
+    needs_resubmit = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DGIICertificationDocument
+        fields = [
+            'id', 'company', 'plan', 'item', 'ecf_type', 'encf',
+            'status', 'status_label', 'xml_hash', 'generated_at',
+            'generation_error', 'signed_xml_hash', 'signed_at',
+            'signing_error', 'dgii_track_id', 'dgii_status',
+            'dgii_response_code', 'dgii_response_message', 'submitted_at',
+            'accepted_at', 'rejected_at', 'accepted_stale', 'stale_reason',
+            'stale_at', 'needs_resubmit', 'submit_error', 'signed_xml_available',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_signed_xml_available(self, obj):
+        return bool(obj.signed_xml_path)
+
+    def get_needs_resubmit(self, obj):
+        return bool(obj.accepted_stale)
+
+
 class DGIICertificationItemSerializer(serializers.ModelSerializer):
     status_label = serializers.CharField(source='get_status_display', read_only=True)
     ecf_type_label = serializers.CharField(source='get_ecf_type_display', read_only=True)
+    certification_document = DGIICertificationDocumentSerializer(read_only=True)
 
     class Meta:
         model = DGIICertificationItem
@@ -26,6 +57,7 @@ class DGIICertificationItemSerializer(serializers.ModelSerializer):
             'receiver_rnc', 'receiver_name', 'observations', 'source_sheet',
             'source_row', 'raw_data', 'generated_xml_path', 'generated_xml_hash',
             'generated_at', 'generation_error', 'created_at', 'updated_at',
+            'certification_document',
         ]
         read_only_fields = fields
 
@@ -56,6 +88,83 @@ class DGIICertificationPlanSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = fields
+
+
+class DGIICertificationCommercialApprovalItemSerializer(serializers.ModelSerializer):
+    dgii_status_label = serializers.CharField(source='get_dgii_status_display', read_only=True)
+    source_approval_status_label = serializers.CharField(source='get_source_approval_status_display', read_only=True)
+    submission_status_label = serializers.CharField(source='get_submission_status_display', read_only=True)
+    match_status_label = serializers.CharField(source='get_match_status_display', read_only=True)
+
+    class Meta:
+        model = DGIICertificationCommercialApprovalItem
+        fields = [
+            'id', 'plan', 'company', 'version', 'issuer_rnc', 'encf',
+            'issue_date', 'total_amount', 'buyer_rnc', 'dgii_status',
+            'dgii_status_label', 'source_approval_status',
+            'source_approval_status_label', 'submission_status',
+            'submission_status_label', 'approval_receiver_rnc',
+            'rejection_reason', 'commercial_approval_at', 'raw_data',
+            'generated_xml_path', 'generated_at', 'signed_xml_path',
+            'signed_xml_hash', 'signed_at', 'signature_metadata',
+            'dgii_track_id', 'dgii_response_code', 'dgii_response_message',
+            'dgii_response', 'accepted_at', 'rejected_at', 'submission_error',
+            'matched_document_type', 'matched_document_id', 'match_status',
+            'match_status_label', 'match_observations', 'source_row',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+
+class DGIICertificationCommercialApprovalEventSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        model = DGIICertificationCommercialApprovalEvent
+        fields = [
+            'id', 'company', 'plan', 'item', 'event_type', 'message',
+            'payload', 'created_by', 'created_by_username', 'created_at',
+        ]
+        read_only_fields = fields
+
+
+class DGIICertificationCommercialApprovalPlanSerializer(serializers.ModelSerializer):
+    items = DGIICertificationCommercialApprovalItemSerializer(many=True, read_only=True)
+    events = DGIICertificationCommercialApprovalEventSerializer(many=True, read_only=True)
+    imported_by_username = serializers.CharField(source='imported_by.username', read_only=True)
+    is_step_complete = serializers.SerializerMethodField()
+    submission_summary = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DGIICertificationCommercialApprovalPlan
+        fields = [
+            'id', 'company', 'source_filename', 'file_sha256', 'imported_at',
+            'imported_by', 'imported_by_username', 'status', 'total_records',
+            'approved_count', 'rejected_count', 'pending_count', 'raw_summary',
+            'is_step_complete', 'submission_summary', 'items', 'events',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_is_step_complete(self, obj):
+        summary = self.get_submission_summary(obj)
+        return obj.total_records > 0 and summary['accepted_by_dgii'] == obj.total_records
+
+    def get_submission_summary(self, obj):
+        items = list(obj.items.all())
+        return {
+            'total': len(items),
+            'source_approved': sum(1 for item in items if item.source_approval_status == DGIICertificationCommercialApprovalItem.SOURCE_APPROVED),
+            'source_rejected': sum(1 for item in items if item.source_approval_status == DGIICertificationCommercialApprovalItem.SOURCE_REJECTED),
+            'source_pending': sum(1 for item in items if item.source_approval_status == DGIICertificationCommercialApprovalItem.SOURCE_PENDING),
+            'pending_submission': sum(1 for item in items if item.submission_status == DGIICertificationCommercialApprovalItem.SUBMISSION_PENDING),
+            'generated': sum(1 for item in items if item.submission_status == DGIICertificationCommercialApprovalItem.SUBMISSION_GENERATED),
+            'signed': sum(1 for item in items if item.submission_status == DGIICertificationCommercialApprovalItem.SUBMISSION_SIGNED),
+            'submitted': sum(1 for item in items if item.submission_status == DGIICertificationCommercialApprovalItem.SUBMISSION_SUBMITTED),
+            'accepted_by_dgii': sum(1 for item in items if item.submission_status == DGIICertificationCommercialApprovalItem.SUBMISSION_ACCEPTED),
+            'rejected_by_dgii': sum(1 for item in items if item.submission_status == DGIICertificationCommercialApprovalItem.SUBMISSION_REJECTED),
+            'failed': sum(1 for item in items if item.submission_status == DGIICertificationCommercialApprovalItem.SUBMISSION_FAILED),
+        }
 
 
 class ECFCertificateSerializer(serializers.ModelSerializer):

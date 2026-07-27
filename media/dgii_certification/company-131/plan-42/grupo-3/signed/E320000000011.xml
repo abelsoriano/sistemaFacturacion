@@ -1,0 +1,63 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<RFCE>
+  <Encabezado>
+    <Version>1.0</Version>
+    <IdDoc>
+      <TipoeCF>32</TipoeCF>
+      <eNCF>E320000000011</eNCF>
+      <TipoIngresos>01</TipoIngresos>
+      <TipoPago>1</TipoPago>
+    </IdDoc>
+    <Emisor>
+      <RNCEmisor>401020001</RNCEmisor>
+      <RazonSocialEmisor>Empresa DGII XML 1</RazonSocialEmisor>
+      <FechaEmision>01-04-2020</FechaEmision>
+    </Emisor>
+    <Comprador>
+      <RNCComprador>131880681</RNCComprador>
+      <RazonSocialComprador>Cliente DGII</RazonSocialComprador>
+    </Comprador>
+    <Totales>
+      <MontoExento>40120.00</MontoExento>
+      <MontoTotal>40120.00</MontoTotal>
+    </Totales>
+    <CodigoSeguridadeCF>nk3u45</CodigoSeguridadeCF>
+  </Encabezado>
+  <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+    <ds:SignedInfo>
+      <ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+      <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+      <ds:Reference URI="">
+        <ds:Transforms>
+          <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+          <ds:Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+        </ds:Transforms>
+        <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+        <ds:DigestValue>wpUCXmMoh75F9a7jj1TNazlk0ACBkleeKpF6iVAGCzQ=</ds:DigestValue>
+      </ds:Reference>
+    </ds:SignedInfo>
+    <ds:SignatureValue>nSsiX/YQBg2KNlNYMSUi3CFm7HX1YRawQrhXBeuXYW03W4M0qcvzIgt7ErwjsXO6ymbps1AN1CcvgEi5Gqs133jXK01KqiyvnZSksyusMO1l7yjB6n8mV0hKOLWFmhuosXKK54h4gvcbiF5cTQo62Qq0sc/BE6Jgujt0r0l3HxmNmXbaNxdqbR898tsNAVwPK7meXM2xAlJRI1MEkQyzq2ht+hHNUWclPRs8CNFlVuePNQk3AAGMAb+DAEkMlyZ2Xg8PykwU9jTjU7gpxsaTYfj1OYPk8VMya2E8Q2i42FK0rF2OM8TsjvvAF/KBJlxe9kGH6fiprpCohldrdPdFUw==</ds:SignatureValue>
+    <ds:KeyInfo>
+      <ds:X509Data>
+        <ds:X509Certificate>MIIDEjCCAfqgAwIBAgIUCrsO0oCs/etxVDAH5ZQg21d08PIwDQYJKoZIhvcNAQEL
+BQAwQzELMAkGA1UEBhMCRE8xEjAQBgNVBAoMCURHSUkgVGVzdDEgMB4GA1UEAwwX
+REdJSSBDZXJ0aWZpY2F0aW9uIFRlc3QwHhcNMjYwNzExMDQzNTMyWhcNMjcwNzEy
+MDQzNTMyWjBDMQswCQYDVQQGEwJETzESMBAGA1UECgwJREdJSSBUZXN0MSAwHgYD
+VQQDDBdER0lJIENlcnRpZmljYXRpb24gVGVzdDCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBANJi/vsiuEbdffk2uW3nAuh81iscYNq/Qe36qiSe7Uuo4u2q
+ci5am7dRLDtQr06tpEvaO64j1Oqqx6YAck45BUGvZtiWvRQaeNdr8GjdyuOekHiY
+DIWKlY+/H3Q09vtwYqbkWohsdss0f6/GQwZ5Do2F80+CKMfL8nJ9BLgpFv7LE6nb
+G4i3Bn1ZQOp/9uZ/do+2c4eYfqFcC7YyQxu2xrLOjwD6rY9gRte4LSI96SYOclJl
+KnwLWAQFYbRO0fu6ZK6/A5u0aqnBn1PzxAGqyqwe+XMTiUvjCLCBM3I+h4efNHI3
+qUZsPUdxnXcYzWqcx8MX9iNsvGGDOHLKjhLvOhECAwEAATANBgkqhkiG9w0BAQsF
+AAOCAQEAnXVbuxzp8+KKpBqqVyVnFepqPQr2hEFdpIHeIVOZwaSFZr/4mVMXPfZq
+MRwm1/Md1sGgi3cuZhouO8xBOoPFbY/mDWffEgcvczoCkczAZl2MjiOptgi87rTr
+dlIVCxkP9XJfoO0s+cIgt3RuJ/D47FdVnagYIa/o0Z5O/Z0XiYKM++zrg8DfcCUq
+bCjgYZJJOd65rVpx5Gc59UdJtM+UuaUXRyi9zzQBVQAuSBM1FXILPNPilRTHxeT6
+vIzerz7KXOa4G/HTDwpf7+Y5l09WCesR0hqYlfTAgEpNYOyVvUTnGJYgSIjf636/
+olZjZbMDi+mun7A1v6NMPpU8M0960Q==
+</ds:X509Certificate>
+      </ds:X509Data>
+    </ds:KeyInfo>
+  </ds:Signature>
+</RFCE>

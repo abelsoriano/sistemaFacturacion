@@ -1,0 +1,233 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<ECF>
+  <Encabezado>
+    <Version>1.0</Version>
+    <IdDoc>
+      <TipoeCF>45</TipoeCF>
+      <eNCF>E450000000005</eNCF>
+      <FechaVencimientoSecuencia>31-12-2028</FechaVencimientoSecuencia>
+      <IndicadorMontoGravado>1</IndicadorMontoGravado>
+      <TipoIngresos>01</TipoIngresos>
+      <TipoPago>1</TipoPago>
+      <TablaFormasPago>
+        <FormaDePago>
+          <FormaPago>1</FormaPago>
+          <MontoPago>477750.00</MontoPago>
+        </FormaDePago>
+      </TablaFormasPago>
+    </IdDoc>
+    <Emisor>
+      <RNCEmisor>40222797082</RNCEmisor>
+      <RazonSocialEmisor>DOCUMENTOS ELECTRONICOS DE 02</RazonSocialEmisor>
+      <NombreComercial>DOCUMENTOS ELECTRONICOS DE 02</NombreComercial>
+      <DireccionEmisor>AVE. ISABEL AGUIAR NO. 269, ZONA INDUSTRIAL DE HERRERA</DireccionEmisor>
+      <Municipio>010100</Municipio>
+      <Provincia>010000</Provincia>
+      <TablaTelefonoEmisor>
+        <TelefonoEmisor>809-472-7676</TelefonoEmisor>
+        <TelefonoEmisor>809-491-1918</TelefonoEmisor>
+      </TablaTelefonoEmisor>
+      <CorreoEmisor>DOCUMENTOSELECTRONICOSDE0612345678969789+9000000000000000000000000000001@123.COM</CorreoEmisor>
+      <WebSite>www.facturaelectronica.com</WebSite>
+      <CodigoVendedor>AA0000000100000000010000000002000000000300000000050000000006</CodigoVendedor>
+      <NumeroFacturaInterna>123456789016</NumeroFacturaInterna>
+      <NumeroPedidoInterno>123456789016</NumeroPedidoInterno>
+      <ZonaVenta>NORTE</ZonaVenta>
+      <FechaEmision>01-04-2020</FechaEmision>
+    </Emisor>
+    <Comprador>
+      <RNCComprador>131880681</RNCComprador>
+      <RazonSocialComprador>DOCUMENTOS ELECTRONICOS DE 03</RazonSocialComprador>
+      <ContactoComprador>MARCOS LATIPLOL</ContactoComprador>
+      <CorreoComprador>MARCOSLATIPLOL@KKKK.COM</CorreoComprador>
+      <DireccionComprador>CALLE JACINTO DE LA CONCHA FELIZ ESQUINA 27 DE FEBRERO,FRENTE A DOMINO</DireccionComprador>
+      <MunicipioComprador>010100</MunicipioComprador>
+      <ProvinciaComprador>010000</ProvinciaComprador>
+      <FechaEntrega>10-10-2020</FechaEntrega>
+      <FechaOrdenCompra>10-11-2018</FechaOrdenCompra>
+      <NumeroOrdenCompra>4500352238</NumeroOrdenCompra>
+      <CodigoInternoComprador>10633440</CodigoInternoComprador>
+    </Comprador>
+    <Totales>
+      <MontoGravadoTotal>404872.88</MontoGravadoTotal>
+      <MontoGravadoI1>404872.88</MontoGravadoI1>
+      <ITBIS1>18</ITBIS1>
+      <TotalITBIS>72877.12</TotalITBIS>
+      <TotalITBIS1>72877.12</TotalITBIS1>
+      <MontoTotal>477750.00</MontoTotal>
+    </Totales>
+  </Encabezado>
+  <DetallesItems>
+    <Item>
+      <NumeroLinea>1</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>BLOCK</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>100.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>450.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>44900.00</MontoItem>
+    </Item>
+    <Item>
+      <NumeroLinea>2</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>VARILLAS</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>300.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>350.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>104900.00</MontoItem>
+    </Item>
+    <Item>
+      <NumeroLinea>3</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>CINZ</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>200.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>425.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>84900.00</MontoItem>
+    </Item>
+    <Item>
+      <NumeroLinea>4</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>CLAVOS DE MEDIA</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>50.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>550.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>27400.00</MontoItem>
+    </Item>
+    <Item>
+      <NumeroLinea>5</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>CLAVOS DE CUARTA</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>50.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>325.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>16150.00</MontoItem>
+    </Item>
+    <Item>
+      <NumeroLinea>6</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>ALAMBRE DULCE</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>60.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>250.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>14900.00</MontoItem>
+    </Item>
+    <Item>
+      <NumeroLinea>7</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>CEMENTO BLANCO</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>250.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>250.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>62400.00</MontoItem>
+    </Item>
+    <Item>
+      <NumeroLinea>8</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>CEMENTO GRIS</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>400.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>250.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>99900.00</MontoItem>
+    </Item>
+    <Item>
+      <NumeroLinea>9</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>COLORANTE</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>30.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>250.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>7400.00</MontoItem>
+    </Item>
+    <Item>
+      <NumeroLinea>10</NumeroLinea>
+      <IndicadorFacturacion>1</IndicadorFacturacion>
+      <NombreItem>TINER</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>60.00</CantidadItem>
+      <UnidadMedida>23</UnidadMedida>
+      <PrecioUnitarioItem>250.0000</PrecioUnitarioItem>
+      <DescuentoMonto>100.00</DescuentoMonto>
+      <MontoItem>14900.00</MontoItem>
+    </Item>
+  </DetallesItems>
+  <FechaHoraFirma>05-07-2026 01:38:12</FechaHoraFirma>
+  <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+    <ds:SignedInfo>
+      <ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+      <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+      <ds:Reference URI="">
+        <ds:Transforms>
+          <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+          <ds:Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+        </ds:Transforms>
+        <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+        <ds:DigestValue>X9A52h/IhF0qIA789d9PqnP8Q4wG4vUZzvXMCkU5KD8=</ds:DigestValue>
+      </ds:Reference>
+    </ds:SignedInfo>
+    <ds:SignatureValue>HvHQInewiNef2YPYmJMBQMM+7sOCMZmNKbHKIarFGT0V8cWeyvZnG5vSbAqRAmmxbkFNb4VkwQVzNrA2L8xAVfYl0TC38BQGUD/5lJh97VVpIi0Q8b2rTGRSkAi98EnnTI5KeYOtZOjqIfE+2LC0pTd5XX+ZDLEy/T4Ps/hXXbQDbuS4wwgFFokydkVL8Ey3rjRKOAFfPBYGgKgUOjBo/SkKOKmDtpIkQSJXeAAUTh/6TRrb0YJgKs5QwKIrp6RKIdXdCXdvr1j6kdC1fqDY/KJyehQOozwHLJcdLWC0FRx7BlQh5lIsXNyEu4k7J9NdVz40Cw5BlHDjdiMLtVKeHg==</ds:SignatureValue>
+    <ds:KeyInfo>
+      <ds:X509Data>
+        <ds:X509Certificate>MIIHWzCCBUOgAwIBAgIUUtCocq4al+OyAEknNLZQc5obE6AwDQYJKoZIhvcNAQEL
+BQAwgYIxCzAJBgNVBAYTAkRPMREwDwYDVQQKDAhWSUFGSVJNQTEcMBoGA1UECwwT
+VklBRklSTUEgRE9NSU5JQ0FOQTEYMBYGA1UEBRMPVkFURE8tMTMwMjIyNTA5MSgw
+JgYDVQQDDB9WSUFGSVJNQSBRVUFMSUZJRUQgQ0VSVElGSUNBVEVTMB4XDTI2MDYx
+OTE3MjQ0NloXDTI3MDYxOTE3MjQ0NlowgbcxCzAJBgNVBAYTAkRPMRkwFwYDVQQE
+DBBTT1JJQU5PIFPDgU5DSEVaMQ0wCwYDVQQqDARBQkVMMRowGAYDVQQFExFJRENE
+Ty00MDIyMjc5NzA4MjEeMBwGA1UEAwwVQUJFTCBTT1JJQU5PIFPDgU5DSEVaMUIw
+QAYDVQQuEzlRVUFMSUZJRUQgQ0VSVElGSUNBVEUgRk9SIE5BVFVSQUwgUEVSU09O
+IC0gVEFYIFBST0NFRFVSRVMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIB
+AQCA7mtJNd/7tT6pEi8MPKl75FxcMsW8EO0JxhAicfu9g3RxrmV+YtkdZsdGR86T
+Cbvgl884KUxAus1S/U8AasCWOvC/vgQNVomNQsViNzO8EusU7syYMWCE/8WXhdBU
+04OI/3ZWd3WMJcWOeMNg/rsslH/E+ZpflB6jkY0IAabk0RhEgHzLPy2QmkH9AQx1
+B9eVTMn1tsed5uWQJKaTu1st8c9GNak0ofDpEfhzmK7pKq0e1+HaK0YMwG/q5ORa
+MKkMP3bI0mHVy1/MI1WSthGu3n42pWPunCz+yvYIIfRlQp4hwrysBDmSNhFTkgol
+NolcdlIUNUYgzi5FlsMwebZvAgMBAAGjggKQMIICjDB5BggrBgEFBQcBAQRtMGsw
+PAYIKwYBBQUHMAKGMGh0dHBzOi8vY3BzLnZpYWZpcm1hLmRvL3ZpYWZpcm1hcXRz
+cHN1YmNhMDA4LmNydDArBggrBgEFBQcwAYYfaHR0cDovL29jc3AudmlhZmlybWEu
+ZG8vb2NzcDAwODAdBgNVHQ4EFgQU6ENAJrDggK1ePGitR8h4uChQ7Z4wDAYDVR0T
+AQH/BAIwADAfBgNVHSMEGDAWgBRFAqa6un5haDUlB+xpcnnnmZeHhjAiBggrBgEF
+BQcBAwQWMBQwCAYGBACORgEBMAgGBgQAjkYBBDCB0QYDVR0gBIHJMIHGMAkGBwQA
+i+xAAQAwgbgGDCsGAQQBgotNBwQVADCBpzAiBggrBgEFBQcCARYWaHR0cDovL2Nw
+cy52aWFmaXJtYS5kbzCBgAYIKwYBBQUHAgIwdB5yAFEAVQBBAEwASQBGAEkARQBE
+ACAAQwBFAFIAVABJAEYASQBDAEEAVABFACAARgBPAFIAIABOAEEAVABVAFIAQQBM
+ACAAUABFAFIAUwBPAE4AIAAtACAAVABBAFgAIABQAFIATwBDAEUARABVAFIARQBT
+MHgGA1UdHwRxMG8wNaAzoDGGL2h0dHA6Ly9jcmwudmlhZmlybWEuZG8vdmlhZmly
+bWFxdHNwc3ViY2EwMDguY3JsMDagNKAyhjBodHRwOi8vY3JsMi52aWFmaXJtYS5k
+by92aWFmaXJtYXF0c3BzdWJjYTAwOC5jcmwwDgYDVR0PAQH/BAQDAgXgMB0GA1Ud
+JQQWMBQGCCsGAQUFBwMCBggrBgEFBQcDBDAgBgNVHREEGTAXgRVBQkVMU0lSSUFO
+T0BHTUFJTC5DT00wDQYJKoZIhvcNAQELBQADggIBAGzpyKBqBrx2yVcEnXx1fGyr
+M00sjwT8VdzjlreMif/PDKiI3IxldDBtyDQWxA+DtjNPRm0wMQIzePDmryyZDE9p
+JPWsWAKIHN+QWm0SwPZdOnhMXABrSRGM3SRgL1Ji28dDFtOQjTS2n/ZXbWVmPTxT
+hEHutesWoZZP/mkg/Y002ypgY7mDBHG0Y+J10MGkptXdkxSTsP4v3CSxA21XRxFu
+fGKlzucnPlHIhSDfQTsSLrNz2DFqwxrYI2bR2Fw696l1KpitkqmNkHi1icLX4Gej
+O7Q1T64DHBRtzXF6m26SW5raQnXnOL7/UoK+lNQ9+WCpEJGSz9M7cOgNfQ9ErrC3
+ETrrPH6+YsZ5esxgB8c+1T9FYzoibGuWxUXqPPZ8C8ocWfDfRRzNY8UlDcv/RAI5
+DaD37bD5ioH//Wd0T2QnhwZoDA9Lxwir5Aab8xp/5HOJ8nqCl1brzl1OXJMIqlIq
+nJCQFe6fiyteozbl5HhIrqnqr3gJ5sQSrGVEWqw+nf1IcaNMzoGiUUA4uX3zWOCh
+IPoKVnvXZ7UGdh2feg1lnN/6uqcADifZ9JjRQzV2FZNDriDQHZte8CctPNm0iVg2
+iyC0UzQGdfDl76xO5v3Q4kGkcXEZ9GUIBRIDTetUySL8SbR9HuXkjEZgwgFH7jKD
+HuDLgl4WjXviXkj0FGfv
+</ds:X509Certificate>
+      </ds:X509Data>
+    </ds:KeyInfo>
+  </ds:Signature>
+</ECF>

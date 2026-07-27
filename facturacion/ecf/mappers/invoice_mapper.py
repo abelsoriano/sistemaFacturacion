@@ -37,6 +37,11 @@ class ECFPayload:
     internal_invoice_number: str
     modified_document: dict[str, Any] | None = None
     include_signature_placeholder: bool = True
+    payment_forms: list[dict[str, Any]] | None = None
+    discounts_or_surcharges: list[dict[str, Any]] | None = None
+    id_doc_fields: dict[str, Any] | None = None
+    use_issuer_location_emisor_tags: bool = False
+    include_buyer: bool = True
 
 
 class InvoiceECFMapper:

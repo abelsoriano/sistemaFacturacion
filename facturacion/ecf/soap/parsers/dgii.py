@@ -38,19 +38,19 @@ class DGIISOAPResponseParser:
     def parse_status(self, response: Any) -> DGIIStatusResponse:
         """Parse status response and normalize DGII state."""
         data = self._to_data(response)
-        status = str(self._first(data, "estado", "status", default="pending"))
-        code = self._first(data, "codigo", "code")
-        track_id = self._first(data, "trackId", "TrackId", "trackid")
+        status = str(self._first_deep(data, "estado", "Estado", "status", "Status", "estatus", default="pending"))
+        code = self._first_deep(data, "codigo", "code", "Codigo", "codigoEstado", "codigoRespuesta")
+        track_id = self._first_deep(data, "trackId", "trackID", "TrackId", "trackid")
 
         return DGIIStatusResponse(
             track_id=str(track_id) if track_id is not None else None,
             status=status,
             normalized_status=self.normalize_status(status, code),
             code=self._int_or_none(code),
-            rnc=self._first(data, "rnc", "rncEmisor"),
-            encf=self._first(data, "eNCF", "encf", "ncfElectronico"),
-            sequence_used=self._bool_or_none(self._first(data, "secuenciaUtilizada")),
-            received_at=self._first(data, "fechaRecepcion"),
+            rnc=self._first_deep(data, "rnc", "rncEmisor", "RNCEmisor"),
+            encf=self._first_deep(data, "eNCF", "encf", "ncfElectronico", "eNCFEnviado"),
+            sequence_used=self._bool_or_none(self._first_deep(data, "secuenciaUtilizada")),
+            received_at=self._first_deep(data, "fechaRecepcion"),
             messages=self._messages(data),
             raw=data,
         )
@@ -118,8 +118,24 @@ class DGIISOAPResponseParser:
                 return lowered[key.lower()]
         return default
 
+    def _first_deep(self, data: Any, *keys: str, default=None):
+        value = self._first(data, *keys, default=None)
+        if value is not None:
+            return value
+        if isinstance(data, dict):
+            for child in data.values():
+                found = self._first_deep(child, *keys, default=None)
+                if found is not None:
+                    return found
+        if isinstance(data, list):
+            for child in data:
+                found = self._first_deep(child, *keys, default=None)
+                if found is not None:
+                    return found
+        return default
+
     def _messages(self, data: Any) -> list[dict[str, Any]]:
-        messages = self._first(data, "mensajes", "messages", default=[])
+        messages = self._first_deep(data, "mensajes", "messages", "mensaje", "Mensaje", default=[])
         if messages is None:
             return []
         if isinstance(messages, dict):

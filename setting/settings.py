@@ -264,24 +264,63 @@ ECF_DGII_TIMEOUT = int(os.environ.get('ECF_DGII_TIMEOUT', '30'))
 ECF_DGII_RETRIES = int(os.environ.get('ECF_DGII_RETRIES', '3'))
 ECF_DGII_RETRY_BACKOFF = float(os.environ.get('ECF_DGII_RETRY_BACKOFF', '0.5'))
 ECF_DGII_VERIFY_TLS = os.environ.get('ECF_DGII_VERIFY_TLS', 'True') == 'True'
+ECF_DGII_RFCE_MULTIPART_FIELD = os.environ.get(
+    'RFCE_MULTIPART_FIELD',
+    os.environ.get('ECF_DGII_RFCE_MULTIPART_FIELD', 'xml'),
+)
+ECF_DGII_RFCE_CONTENT_TYPE = os.environ.get(
+    'RFCE_CONTENT_TYPE',
+    os.environ.get('ECF_DGII_RFCE_CONTENT_TYPE', 'text/xml'),
+)
+ECF_DGII_RFCE_SEND_SIGNED_XML = os.environ.get(
+    'RFCE_SEND_SIGNED_XML',
+    os.environ.get('ECF_DGII_RFCE_SEND_SIGNED_XML', 'True'),
+) == 'True'
+
+
+def _dgii_rest_path(name, default):
+    env_prefixes = {
+        'testing': 'TEST',
+        'certification': 'CERT',
+        'production': 'PROD',
+    }
+    env_prefix = env_prefixes.get(ECF_DGII_ENVIRONMENT)
+    if env_prefix:
+        env_key = f'ECF_DGII_{env_prefix}_{name}_PATH'
+        if env_key in os.environ:
+            return os.environ.get(env_key)
+    return os.environ.get(f'ECF_DGII_REST_{name}_PATH', default)
+
+
+ECF_DGII_REST_PATHS = {
+    'auth_semilla': _dgii_rest_path('AUTH_SEMILLA', '/api/Autenticacion/Semilla'),
+    'auth_validar': _dgii_rest_path('AUTH_VALIDAR', '/api/Autenticacion/ValidarSemilla'),
+    'reception': _dgii_rest_path('RECEPTION', '/api/FacturasElectronicas'),
+    'status': _dgii_rest_path('STATUS', '/api/Consultas/Estado'),
+    'trackids': _dgii_rest_path('TRACKIDS', '/api/ConsultaTrackIds'),
+    'rfce': _dgii_rest_path('RFCE', '/api/recepcion/ecf'),
+}
 ECF_DGII_REST_BASE_URLS = {
     'testing': {
         'auth': os.environ.get('ECF_DGII_TEST_AUTH_BASE_URL'),
         'reception': os.environ.get('ECF_DGII_TEST_RECEPTION_BASE_URL'),
         'status': os.environ.get('ECF_DGII_TEST_STATUS_BASE_URL'),
         'trackids': os.environ.get('ECF_DGII_TEST_TRACKIDS_BASE_URL'),
+        'rfce': os.environ.get('ECF_DGII_TEST_RFCE_BASE_URL'),
     },
     'certification': {
         'auth': os.environ.get('ECF_DGII_CERT_AUTH_BASE_URL'),
         'reception': os.environ.get('ECF_DGII_CERT_RECEPTION_BASE_URL'),
         'status': os.environ.get('ECF_DGII_CERT_STATUS_BASE_URL'),
         'trackids': os.environ.get('ECF_DGII_CERT_TRACKIDS_BASE_URL'),
+        'rfce': os.environ.get('ECF_DGII_CERT_RFCE_BASE_URL'),
     },
     'production': {
         'auth': os.environ.get('ECF_DGII_PROD_AUTH_BASE_URL'),
         'reception': os.environ.get('ECF_DGII_PROD_RECEPTION_BASE_URL'),
         'status': os.environ.get('ECF_DGII_PROD_STATUS_BASE_URL'),
         'trackids': os.environ.get('ECF_DGII_PROD_TRACKIDS_BASE_URL'),
+        'rfce': os.environ.get('ECF_DGII_PROD_RFCE_BASE_URL'),
     },
 }
 ECF_DGII_SOAP_WSDLS = {

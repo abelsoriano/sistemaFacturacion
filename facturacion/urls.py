@@ -19,6 +19,7 @@ from facturacion.api.views.companies import CompanyViewSet
 from facturacion.api.views.credit_notes import CreditNoteViewSet
 from facturacion.api.views.ecf_config import ECFEventLogViewSet, ECFIssuerConfigViewSet, ECFSequenceViewSet
 from facturacion.api.views.dgii_certification import DGIICertificationPlanViewSet
+from facturacion.api.views.dgii_commercial_approval import DGIICertificationCommercialApprovalViewSet
 from facturacion.api.views.ecf_runtime import ElectronicFiscalDocumentViewSet
 from facturacion.api.views.inventory import (
     CategoryListCreateView,
@@ -65,6 +66,7 @@ router.register(r'servicios-mano-obra', ServicioManoObraViewSet, basename='servi
 router.register(r'ecf/issuers', ECFIssuerConfigViewSet, basename='ecf-issuer')
 router.register(r'ecf/sequences', ECFSequenceViewSet, basename='ecf-sequence')
 router.register(r'ecf/certification-plans', DGIICertificationPlanViewSet, basename='dgii-certification-plan')
+router.register(r'ecf/certification-commercial-approvals', DGIICertificationCommercialApprovalViewSet, basename='dgii-certification-commercial-approval')
 router.register(r'ecf/documents', ElectronicFiscalDocumentViewSet, basename='ecf-document')
 router.register(r'ecf/events', ECFEventLogViewSet, basename='ecf-event')
 

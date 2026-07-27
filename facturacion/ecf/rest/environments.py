@@ -22,6 +22,7 @@ class DGIIRESTEnvironment:
     retries: int
     retry_backoff: float
     verify_tls: bool
+    rfce_base_url: str | None = None
 
 
 class DGIIRESTEnvironmentResolver:
@@ -35,6 +36,7 @@ class DGIIRESTEnvironmentResolver:
         reception_base_url = self._clean(url_map.get("reception"))
         status_base_url = self._clean(url_map.get("status"))
         trackids_base_url = self._clean(url_map.get("trackids"))
+        rfce_base_url = self._clean(url_map.get("rfce"))
 
         if not auth_base_url:
             raise ECFValidationError(f"No hay URL REST de autenticacion DGII configurada para ambiente {env_name}.")
@@ -53,6 +55,7 @@ class DGIIRESTEnvironmentResolver:
             retries=getattr(settings, "ECF_DGII_RETRIES", 3),
             retry_backoff=getattr(settings, "ECF_DGII_RETRY_BACKOFF", 0.5),
             verify_tls=getattr(settings, "ECF_DGII_VERIFY_TLS", True),
+            rfce_base_url=rfce_base_url,
         )
 
     def _clean(self, value: str | None) -> str | None:

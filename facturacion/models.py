@@ -1559,18 +1559,24 @@ class DGIICertificationItem(models.Model):
     STATUS_PENDING = 'pending'
     STATUS_GENERATED = 'generated'
     STATUS_GENERATION_ERROR = 'generation_error'
+    STATUS_SIGNING_ERROR = 'signing_error'
     STATUS_SIGNED = 'signed'
+    STATUS_SUBMIT_ERROR = 'submit_error'
     STATUS_SENT = 'sent'
     STATUS_ACCEPTED = 'accepted'
     STATUS_REJECTED = 'rejected'
+    STATUS_SUBMIT_CONFLICT = 'submit_conflict'
     STATUS_CHOICES = [
         (STATUS_PENDING, 'Pendiente'),
         (STATUS_GENERATED, 'Generado'),
         (STATUS_GENERATION_ERROR, 'Error generacion'),
+        (STATUS_SIGNING_ERROR, 'Error firma'),
         (STATUS_SIGNED, 'Firmado'),
+        (STATUS_SUBMIT_ERROR, 'Error envio'),
         (STATUS_SENT, 'Enviado'),
         (STATUS_ACCEPTED, 'Aceptado'),
         (STATUS_REJECTED, 'Rechazado'),
+        (STATUS_SUBMIT_CONFLICT, 'Secuencia ya usada'),
     ]
 
     ECF_TYPE_CHOICES = [
@@ -1631,6 +1637,322 @@ class DGIICertificationItem(models.Model):
         return f"Grupo {self.dgii_group} - {self.ecf_type} - fila {self.source_row}"
 
 
+class DGIICertificationDocument(models.Model):
+    """Documento e-CF generado para certificacion DGII, aislado del negocio productivo."""
+
+    STATUS_PENDING = 'pending'
+    STATUS_GENERATED = 'generated'
+    STATUS_GENERATION_ERROR = 'generation_error'
+    STATUS_SIGNED = 'signed'
+    STATUS_SIGNING_ERROR = 'signing_error'
+    STATUS_SUBMITTED = 'submitted'
+    STATUS_ACCEPTED = 'accepted'
+    STATUS_REJECTED = 'rejected'
+    STATUS_SUBMIT_ERROR = 'submit_error'
+    STATUS_SUBMIT_CONFLICT = 'submit_conflict'
+    STATUS_READY_FOR_PORTAL_UPLOAD = 'ready_for_portal_upload'
+    STATUS_UPLOADED_TO_PORTAL = 'uploaded_to_portal'
+    STATUS_ACCEPTED_BY_PORTAL = 'accepted_by_portal'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pendiente'),
+        (STATUS_GENERATED, 'Documento generado'),
+        (STATUS_GENERATION_ERROR, 'Error generacion'),
+        (STATUS_SIGNED, 'Firmado'),
+        (STATUS_SIGNING_ERROR, 'Error firma'),
+        (STATUS_SUBMITTED, 'Enviado'),
+        (STATUS_ACCEPTED, 'Aceptado'),
+        (STATUS_REJECTED, 'Rechazado'),
+        (STATUS_SUBMIT_ERROR, 'Error envio'),
+        (STATUS_SUBMIT_CONFLICT, 'Secuencia ya usada'),
+        (STATUS_READY_FOR_PORTAL_UPLOAD, 'Listo para cargar en portal'),
+        (STATUS_UPLOADED_TO_PORTAL, 'Cargado en portal'),
+        (STATUS_ACCEPTED_BY_PORTAL, 'Aceptado en portal'),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='dgii_certification_documents',
+    )
+    plan = models.ForeignKey(
+        DGIICertificationPlan,
+        on_delete=models.CASCADE,
+        related_name='certification_documents',
+    )
+    item = models.OneToOneField(
+        DGIICertificationItem,
+        on_delete=models.CASCADE,
+        related_name='certification_document',
+    )
+    ecf_type = models.CharField(max_length=10, choices=DGIICertificationItem.ECF_TYPE_CHOICES)
+    encf = models.CharField(max_length=30, blank=True, default='')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    xml_content = models.TextField(blank=True, default='')
+    xml_hash = models.CharField(max_length=64, blank=True, default='')
+    generated_at = models.DateTimeField(null=True, blank=True)
+    generation_error = models.TextField(blank=True, default='')
+    signed_xml_path = models.CharField(max_length=500, blank=True, default='')
+    signed_xml_hash = models.CharField(max_length=64, blank=True, default='')
+    signed_at = models.DateTimeField(null=True, blank=True)
+    signing_error = models.TextField(blank=True, default='')
+    dgii_track_id = models.CharField(max_length=120, blank=True, default='')
+    dgii_status = models.CharField(max_length=40, blank=True, default='')
+    dgii_response_code = models.CharField(max_length=40, blank=True, default='')
+    dgii_response_message = models.TextField(blank=True, default='')
+    dgii_response = models.JSONField(blank=True, null=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    accepted_stale = models.BooleanField(default=False)
+    stale_reason = models.TextField(blank=True, default='')
+    stale_at = models.DateTimeField(null=True, blank=True)
+    submit_error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Documento de certificacion DGII'
+        verbose_name_plural = 'Documentos de certificacion DGII'
+        ordering = ['plan_id', 'item__dgii_group', 'item__source_sheet', 'item__source_row']
+
+    def clean(self):
+        if self.item_id:
+            if self.company_id and self.item.company_id != self.company_id:
+                raise ValidationError({'item': 'El item debe pertenecer a la misma empresa que el documento.'})
+            if self.plan_id and self.item.plan_id != self.plan_id:
+                raise ValidationError({'item': 'El item debe pertenecer al mismo plan que el documento.'})
+            if not self.company_id:
+                self.company_id = self.item.company_id
+            if not self.plan_id:
+                self.plan_id = self.item.plan_id
+            if not self.ecf_type:
+                self.ecf_type = self.item.ecf_type
+            if not self.encf:
+                self.encf = self.item.encf
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.ecf_type} - {self.encf or self.item_id}"
+
+
+class DGIICertificationCommercialApprovalPlan(models.Model):
+    """Excel DGII del Paso 3: resultados de aprobacion comercial."""
+
+    STATUS_IMPORTED = 'imported'
+    STATUS_PROCESSED = 'processed'
+    STATUS_ERROR = 'error'
+    STATUS_CHOICES = [
+        (STATUS_IMPORTED, 'Importado'),
+        (STATUS_PROCESSED, 'Procesado'),
+        (STATUS_ERROR, 'Error'),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='dgii_commercial_approval_plans',
+    )
+    source_filename = models.CharField(max_length=255)
+    file_sha256 = models.CharField(max_length=64, db_index=True)
+    imported_at = models.DateTimeField(default=timezone.now)
+    imported_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dgii_commercial_approval_imports',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IMPORTED)
+    total_records = models.PositiveIntegerField(default=0)
+    approved_count = models.PositiveIntegerField(default=0)
+    rejected_count = models.PositiveIntegerField(default=0)
+    pending_count = models.PositiveIntegerField(default=0)
+    raw_summary = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Plan aprobacion comercial DGII'
+        verbose_name_plural = 'Planes aprobacion comercial DGII'
+        ordering = ['-imported_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'file_sha256'],
+                name='unique_dgii_commercial_approval_file_per_company',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.company} - {self.source_filename}"
+
+
+class DGIICertificationCommercialApprovalItem(models.Model):
+    """Registro de aprobacion comercial importado desde Excel DGII."""
+
+    SOURCE_APPROVED = 'approved'
+    SOURCE_REJECTED = 'rejected'
+    SOURCE_PENDING = 'pending'
+    SOURCE_UNKNOWN = 'unknown'
+    SOURCE_STATUS_CHOICES = [
+        (SOURCE_APPROVED, 'Aprobado'),
+        (SOURCE_REJECTED, 'Rechazado'),
+        (SOURCE_PENDING, 'Pendiente'),
+        (SOURCE_UNKNOWN, 'Desconocido'),
+    ]
+
+    STATUS_APPROVED = 'aprobado'
+    STATUS_REJECTED = 'rechazado'
+    STATUS_PENDING = 'pendiente'
+    STATUS_UNKNOWN = 'desconocido'
+    STATUS_CHOICES = [
+        (STATUS_APPROVED, 'Aprobado legacy'),
+        (STATUS_REJECTED, 'Rechazado legacy'),
+        (STATUS_PENDING, 'Pendiente legacy'),
+        (STATUS_UNKNOWN, 'Desconocido legacy'),
+    ]
+
+    SUBMISSION_PENDING = 'pending'
+    SUBMISSION_GENERATED = 'generated'
+    SUBMISSION_SIGNED = 'signed'
+    SUBMISSION_SUBMITTED = 'submitted'
+    SUBMISSION_ACCEPTED = 'accepted'
+    SUBMISSION_REJECTED = 'rejected'
+    SUBMISSION_FAILED = 'failed'
+    SUBMISSION_STATUS_CHOICES = [
+        (SUBMISSION_PENDING, 'Por enviar'),
+        (SUBMISSION_GENERATED, 'Generado'),
+        (SUBMISSION_SIGNED, 'Firmado'),
+        (SUBMISSION_SUBMITTED, 'Enviado'),
+        (SUBMISSION_ACCEPTED, 'Aceptado DGII'),
+        (SUBMISSION_REJECTED, 'Rechazado DGII'),
+        (SUBMISSION_FAILED, 'Fallido'),
+    ]
+
+    MATCH_MATCHED = 'matched'
+    MATCH_NOT_FOUND = 'not_found'
+    MATCH_AMBIGUOUS = 'ambiguous'
+    MATCH_NOT_APPLICABLE = 'not_applicable'
+    MATCH_CHOICES = [
+        (MATCH_MATCHED, 'Coincide'),
+        (MATCH_NOT_FOUND, 'No encontrado'),
+        (MATCH_AMBIGUOUS, 'Ambiguo'),
+        (MATCH_NOT_APPLICABLE, 'No aplica'),
+    ]
+
+    plan = models.ForeignKey(
+        DGIICertificationCommercialApprovalPlan,
+        on_delete=models.CASCADE,
+        related_name='items',
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='dgii_commercial_approval_items',
+    )
+    version = models.CharField(max_length=20, blank=True, default='')
+    issuer_rnc = models.CharField(max_length=20)
+    encf = models.CharField(max_length=30)
+    issue_date = models.DateField(null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    buyer_rnc = models.CharField(max_length=20, blank=True, default='')
+    approval_receiver_rnc = models.CharField(max_length=20, blank=True, default='')
+    dgii_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_UNKNOWN)
+    source_approval_status = models.CharField(max_length=20, choices=SOURCE_STATUS_CHOICES, default=SOURCE_UNKNOWN)
+    submission_status = models.CharField(max_length=20, choices=SUBMISSION_STATUS_CHOICES, default=SUBMISSION_PENDING)
+    rejection_reason = models.TextField(blank=True, default='')
+    commercial_approval_at = models.DateTimeField(null=True, blank=True)
+    raw_data = models.JSONField(blank=True, null=True)
+    generated_xml_path = models.CharField(max_length=500, blank=True, default='')
+    generated_at = models.DateTimeField(null=True, blank=True)
+    signed_xml_path = models.CharField(max_length=500, blank=True, default='')
+    signed_xml_hash = models.CharField(max_length=64, blank=True, default='')
+    signed_at = models.DateTimeField(null=True, blank=True)
+    signature_metadata = models.JSONField(blank=True, null=True)
+    dgii_track_id = models.CharField(max_length=120, blank=True, default='')
+    dgii_response_code = models.CharField(max_length=40, blank=True, default='')
+    dgii_response_message = models.TextField(blank=True, default='')
+    dgii_response = models.JSONField(blank=True, null=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    submission_error = models.TextField(blank=True, default='')
+    matched_document_type = models.CharField(max_length=80, blank=True, default='')
+    matched_document_id = models.PositiveIntegerField(null=True, blank=True)
+    match_status = models.CharField(max_length=20, choices=MATCH_CHOICES, default=MATCH_NOT_FOUND)
+    match_observations = models.TextField(blank=True, default='')
+    source_row = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Item aprobacion comercial DGII'
+        verbose_name_plural = 'Items aprobacion comercial DGII'
+        ordering = ['source_row', 'encf']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['plan', 'encf'],
+                name='unique_dgii_commercial_approval_encf_per_plan',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.encf} - {self.dgii_status}"
+
+
+class DGIICertificationCommercialApprovalEvent(models.Model):
+    """Auditoria del Paso 3 de aprobaciones comerciales."""
+
+    EVENT_IMPORTED = 'imported'
+    EVENT_REPLACED = 'replaced'
+    EVENT_STRUCTURE_ERROR = 'structure_error'
+    EVENT_NOT_FOUND = 'not_found'
+    EVENT_AMOUNT_MISMATCH = 'amount_mismatch'
+    EVENT_RNC_MISMATCH = 'rnc_mismatch'
+    EVENT_CHOICES = [
+        (EVENT_IMPORTED, 'Importacion'),
+        (EVENT_REPLACED, 'Reemplazo'),
+        (EVENT_STRUCTURE_ERROR, 'Error estructura'),
+        (EVENT_NOT_FOUND, 'No encontrado'),
+        (EVENT_AMOUNT_MISMATCH, 'Diferencia monto'),
+        (EVENT_RNC_MISMATCH, 'Diferencia RNC'),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='dgii_commercial_approval_events',
+    )
+    plan = models.ForeignKey(
+        DGIICertificationCommercialApprovalPlan,
+        on_delete=models.CASCADE,
+        related_name='events',
+        null=True,
+        blank=True,
+    )
+    item = models.ForeignKey(
+        DGIICertificationCommercialApprovalItem,
+        on_delete=models.CASCADE,
+        related_name='events',
+        null=True,
+        blank=True,
+    )
+    event_type = models.CharField(max_length=40, choices=EVENT_CHOICES)
+    message = models.TextField(blank=True, default='')
+    payload = models.JSONField(blank=True, null=True)
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Evento aprobacion comercial DGII'
+        verbose_name_plural = 'Eventos aprobacion comercial DGII'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.event_type} - {self.plan_id or 'sin-plan'}"
+
+
 class DGIICertificationEvent(models.Model):
     """Auditoria del importador y plan de certificacion DGII."""
 
@@ -1640,6 +1962,15 @@ class DGIICertificationEvent(models.Model):
     EVENT_IMPORT_ERROR = 'import_error'
     EVENT_XML_GENERATED = 'xml_generated'
     EVENT_XML_GENERATION_ERROR = 'xml_generation_error'
+    EVENT_DOCUMENT_SIGNED = 'document_signed'
+    EVENT_DOCUMENT_SIGNING_ERROR = 'document_signing_error'
+    EVENT_DOCUMENT_SUBMITTED = 'document_submitted'
+    EVENT_DOCUMENT_ACCEPTED = 'document_accepted'
+    EVENT_DOCUMENT_REJECTED = 'document_rejected'
+    EVENT_DOCUMENT_SUBMIT_ERROR = 'document_submit_error'
+    EVENT_DOCUMENT_STATUS_CHECKED = 'document_status_checked'
+    EVENT_DGII_RESET_DETECTED = 'dgii_reset_detected'
+    EVENT_DOCUMENT_ACCEPTANCE_STALE = 'document_acceptance_stale'
     EVENT_CHOICES = [
         (EVENT_EXCEL_IMPORTED, 'Excel importado'),
         (EVENT_PLAN_CREATED, 'Plan creado'),
@@ -1647,6 +1978,15 @@ class DGIICertificationEvent(models.Model):
         (EVENT_IMPORT_ERROR, 'Error de importacion'),
         (EVENT_XML_GENERATED, 'XML generado'),
         (EVENT_XML_GENERATION_ERROR, 'Error generacion XML'),
+        (EVENT_DOCUMENT_SIGNED, 'Documento firmado'),
+        (EVENT_DOCUMENT_SIGNING_ERROR, 'Error firma documento'),
+        (EVENT_DOCUMENT_SUBMITTED, 'Documento enviado'),
+        (EVENT_DOCUMENT_ACCEPTED, 'Documento aceptado'),
+        (EVENT_DOCUMENT_REJECTED, 'Documento rechazado'),
+        (EVENT_DOCUMENT_SUBMIT_ERROR, 'Error envio documento'),
+        (EVENT_DOCUMENT_STATUS_CHECKED, 'Estado documento consultado'),
+        (EVENT_DGII_RESET_DETECTED, 'Reinicio DGII detectado'),
+        (EVENT_DOCUMENT_ACCEPTANCE_STALE, 'Aceptacion DGII obsoleta'),
     ]
 
     company = models.ForeignKey(

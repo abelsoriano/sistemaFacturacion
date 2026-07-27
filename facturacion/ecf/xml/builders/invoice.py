@@ -1,4 +1,4 @@
-"""Builders for invoice-like e-CF types E31, E32 and E34."""
+"""Builders for invoice-like e-CF types E31, E32, E33 and E34."""
 
 from lxml import etree
 
@@ -23,6 +23,18 @@ class E32XMLBuilder(BaseECFBuilder):
     """Build XML for Factura de Consumo Electrónica."""
 
     supported_type = "32"
+
+    def __init__(self, serializer: ECFXMLSerializer | None = None) -> None:
+        self.serializer = serializer or ECFXMLSerializer()
+
+    def build(self, payload: ECFPayload) -> etree._Element:
+        return self.serializer.serialize(payload)
+
+
+class E33XMLBuilder(BaseECFBuilder):
+    """Build XML for Nota de Débito Electrónica."""
+
+    supported_type = "33"
 
     def __init__(self, serializer: ECFXMLSerializer | None = None) -> None:
         self.serializer = serializer or ECFXMLSerializer()

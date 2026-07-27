@@ -33,3 +33,7 @@ services:
 
 volumes:
   redis_data:
+
+  
+# celery -A setting worker --loglevel=INFO --pool=solo -Q ecf.xml,ecf.signing,ecf.dgii,ecf.status,ecf.retry,ecf.default  
+# docker compose -f docker-compose.ecf.yml up -d redis celery-flower  

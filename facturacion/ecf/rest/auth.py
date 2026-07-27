@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import requests
+from django.conf import settings
 from django.core.cache import cache
 
 from facturacion.ecf.certificates.loader import PKCS12CertificateLoader
@@ -44,6 +45,9 @@ class DGIIRESTAuthClient:
         self.signer = signer or ECFXMLSigner()
         self.session = session or requests.Session()
         self.session.verify = self.environment.verify_tls
+        paths = getattr(settings, "ECF_DGII_REST_PATHS", {})
+        self.seed_path = paths.get("auth_semilla", self.seed_path)
+        self.validate_seed_path = paths.get("auth_validar", self.validate_seed_path)
 
     def get_token(self, certificate_path: str, certificate_password: str | bytes | None, issuer_rnc: str | None = None) -> DGIIRESTToken:
         cache_key = self._cache_key(certificate_path, issuer_rnc)
