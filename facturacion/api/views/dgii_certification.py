@@ -18,6 +18,11 @@ from facturacion.api.scoping import CompanyScopedQuerysetMixin
 from facturacion.api.serializers.ecf_config import DGIICertificationItemSerializer, DGIICertificationPlanSerializer
 from facturacion.models import CompanyMembership, DGIICertificationDocument, DGIICertificationEvent, DGIICertificationItem, DGIICertificationPlan, ECFIssuerConfig
 from facturacion.services.dgii_certification import (
+    CertificationDocumentImmutableError,
+    CertificationDocumentImmutableForSigning,
+    CertificationGenerationAttemptFailed,
+    CertificationResignAuthorizationError,
+    CertificationSigningAttemptFailed,
     DGIICertificationDocumentGenerator,
     DGIICertificationDataTestsRunner,
     DGIICertificationRFCERebuilder,
@@ -26,6 +31,7 @@ from facturacion.services.dgii_certification import (
     DGIICertificationExcelImporter,
     DGIICertificationXMLGenerator,
 )
+from facturacion.services.certification_locking import CertificationArtifactChanged, CertificationMutationBlocked
 
 
 MANAGER_ROLES = {CompanyMembership.ROLE_OWNER, CompanyMembership.ROLE_ADMIN}
@@ -145,7 +151,12 @@ class DGIICertificationPlanViewSet(CompanyScopedQuerysetMixin, viewsets.ReadOnly
         if item is None:
             return Response({'detail': 'Item de certificacion DGII no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 
-        document = DGIICertificationDocumentGenerator().generate_item(item=item, user=request.user)
+        try:
+            document = DGIICertificationDocumentGenerator().generate_item(item=item, user=request.user)
+        except CertificationGenerationAttemptFailed as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except (CertificationDocumentImmutableError, CertificationMutationBlocked) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
         item.refresh_from_db()
         serializer = DGIICertificationItemSerializer(item, context={'request': request})
         response_status = status.HTTP_200_OK
@@ -198,6 +209,8 @@ class DGIICertificationPlanViewSet(CompanyScopedQuerysetMixin, viewsets.ReadOnly
 
         try:
             document = DGIICertificationDocumentSigner().sign_item(item=item, user=request.user)
+        except (CertificationDocumentImmutableForSigning, CertificationMutationBlocked, CertificationArtifactChanged) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -207,6 +220,27 @@ class DGIICertificationPlanViewSet(CompanyScopedQuerysetMixin, viewsets.ReadOnly
         if document.status == DGIICertificationDocument.STATUS_SIGNING_ERROR:
             response_status = status.HTTP_400_BAD_REQUEST
         return Response(serializer.data, status=response_status)
+
+    @action(detail=True, methods=['post'], url_path=r'items/(?P<item_id>[^/.]+)/resign-document')
+    def resign_item_document(self, request, pk=None, item_id=None):
+        plan = self.get_object()
+        permission_response = self._manager_permission_response(request)
+        if permission_response is not None:
+            return permission_response
+        item = self._get_plan_item(plan, item_id)
+        if item is None:
+            return Response({'detail': 'Item de certificacion DGII no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            document = DGIICertificationDocumentSigner().resign_item(
+                item=item, actor=request.user, reason=request.data.get('reason', ''),
+            )
+        except (CertificationDocumentImmutableForSigning, CertificationResignAuthorizationError, CertificationMutationBlocked, CertificationArtifactChanged) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
+        except (CertificationSigningAttemptFailed, ValueError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        item.refresh_from_db()
+        serializer = DGIICertificationItemSerializer(item, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path=r'groups/(?P<group_number>[1-4])/sign-documents')
     def sign_group_documents(self, request, pk=None, group_number=None):

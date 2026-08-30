@@ -14,6 +14,7 @@ from facturacion.ecf.exceptions import ECFCeleryUnavailable
 from facturacion.ecf.queues import enqueue_submission_pipeline
 from facturacion.ecf.services.document_factory import ECFDocumentFactoryService
 from facturacion.models import Company, CreditNote, CreditNoteDetail, ECFEventLog, Invoice, InvoiceDetail, Product, ElectronicFiscalDocument
+from facturacion.services.inventory_locking import lock_products_for_inventory
 
 
 @dataclass(frozen=True)
@@ -202,7 +203,8 @@ class CreditNoteService:
                 )
             return False
 
-        for item in normalized:
+        lock_products_for_inventory(item["product"].pk for item in normalized)
+        for item in sorted(normalized, key=lambda item: item["product"].pk):
             Product.objects.filter(pk=item["product"].pk).update(stock=F("stock") + item["quantity"])
 
         locked_note.inventory_restored_at = timezone.now()

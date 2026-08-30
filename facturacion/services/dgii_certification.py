@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import json
 import logging
 import re
 import unicodedata
+from uuid import uuid4
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -18,7 +20,7 @@ from django.conf import settings
 from django.db import DataError, transaction
 from django.utils import timezone
 
-from facturacion.ecf.constants import PAYMENT_METHOD_TO_DGII
+from facturacion.ecf.constants import PAYMENT_METHOD_TO_DGII, should_include_buyer
 from facturacion.ecf.certificates.loader import PKCS12CertificateLoader
 from facturacion.ecf.certificates.resolver import resolve_certificate_credentials
 from facturacion.ecf.exceptions import ECFError, ECFValidationError, UnsupportedECFTypeError
@@ -38,12 +40,20 @@ from facturacion.ecf.xml.builders.factory import ECFBuilderFactory
 from facturacion.ecf.xml.render import render_xml
 from facturacion.models import (
     Company,
+    CompanyMembership,
     DGIICertificationDocument,
     DGIICertificationEvent,
     DGIICertificationItem,
     DGIICertificationPlan,
     ECFIssuerConfig,
     ECFSequence,
+)
+from facturacion.services.certification_locking import (
+    CertificationArtifactChanged,
+    CertificationDocumentNotFound,
+    CertificationLockService,
+    CertificationLockedScope,
+    CertificationMutationBlocked,
 )
 
 
@@ -55,18 +65,15 @@ CERTIFICATION_DOCUMENT_GROUP1_TYPES = {'31', '32', '41', '43', '44', '45', '46',
 DGII_CERTIFICATION_DEFAULT_BUYER_RNC = '131880681'
 DGII_CERTIFICATION_DEFAULT_BUYER_NAME = 'DOCUMENTOS ELECTRONICOS DE 03'
 DGII_CERTIFICATION_REJECTED_INTERNAL_INVOICE = 'AA0000000100000000010000000002000000000300000000050000000006'
-DGII_CERTIFICATION_OMIT_BUYER_ENCFS = {'E430000000007', 'E430000000012'}
 DGII_CERTIFICATION_RETRY_ENCFS = {
     'E320000000004',
     'E410000000010',
     'E410000000007',
     'E450000000003',
 }
-DGII_CERTIFICATION_ITEM_SUBADJUSTMENT_ENCFS = {
-    'E410000000010',
-    'E410000000007',
-    'E450000000003',
-}
+DGII_CERTIFICATION_ITEM_REFERENCE_TYPES = {'31', '32', '33', '34', '45'}
+DGII_CERTIFICATION_ITEM_DATE_TYPES = {'31', '32', '33', '34', '41', '44', '45', '46'}
+DGII_CERTIFICATION_ITEM_SUBDISCOUNT_TYPES = {'31', '32', '33', '34', '41', '44', '45', '46'}
 
 DGII_ECF_COLUMN_ALIASES = {
     'TipoeCF': 'col_3',
@@ -734,34 +741,163 @@ class DGIICertificationXMLGenerator:
         )
 
 
+class CertificationDocumentImmutableError(CertificationMutationBlocked):
+    """Raised when a generated or signed certification artifact is immutable."""
+
+
+class CertificationGenerationAttemptFailed(Exception):
+    """A regeneration failed while the previously published version was preserved."""
+
+
+@dataclass(frozen=True)
+class CertificationDocumentFence:
+    plan_id: int
+    company_id: int
+    item_id: int
+    document_id: int | None
+    expected_document_absent: bool
+    status: str = ''
+    xml_content: str = ''
+    xml_hash: str = ''
+    signed_xml_path: str = ''
+    signed_xml_hash: str = ''
+    signed_at: object = None
+    submission_outcome: str = DGIICertificationDocument.SUBMISSION_OUTCOME_NOT_STARTED
+
+
+@dataclass(frozen=True)
+class CertificationArtifactFence:
+    plan_id: int
+    company_id: int
+    item_id: int
+    document_id: int
+    xml_hash: str
+    signed_xml_path: str
+    signed_xml_hash: str
+    signed_at: object
+
+
+@dataclass(frozen=True)
+class PreparedCertificationDocument:
+    target_fence: CertificationDocumentFence
+    item_snapshot: DGIICertificationItem
+    xml_content: str
+    xml_hash: str
+    generated_at: object
+    dependency_fences: tuple[CertificationArtifactFence, ...] = ()
+
+
+@dataclass(frozen=True)
+class PreparedCertificationSignature:
+    prepared_document: PreparedCertificationDocument
+    storage_path: str
+    signed_xml_hash: str
+    policy_code: str
+    warnings: tuple
+
+
 class DGIICertificationDocumentGenerator:
     """Generate isolated e-CF XML documents for DGII certification scenarios."""
 
-    def __init__(self, builder_factory: ECFBuilderFactory | None = None) -> None:
+    mutable_statuses = {
+        DGIICertificationDocument.STATUS_PENDING,
+        DGIICertificationDocument.STATUS_GENERATED,
+        DGIICertificationDocument.STATUS_GENERATION_ERROR,
+        DGIICertificationDocument.STATUS_SIGNING_ERROR,
+    }
+
+    def __init__(
+        self,
+        builder_factory: ECFBuilderFactory | None = None,
+        lock_service: CertificationLockService | None = None,
+    ) -> None:
         self.builder_factory = builder_factory or ECFBuilderFactory()
+        self.lock_service = lock_service or CertificationLockService()
 
     def generate_item(self, *, item: DGIICertificationItem, user=None) -> DGIICertificationDocument:
-        document = self._get_or_create_document(item)
-        if not item.encf:
-            return self._mark_generation_error(
-                document=document,
-                user=user,
-                error='El escenario DGII no tiene e-NCF detectado.',
+        item_id = item.pk
+        plan_id = item.plan_id
+        result = None
+        pending_error = None
+        try:
+            with transaction.atomic():
+                plan = self.lock_service.lock_plan(plan_id=plan_id)
+                scope, target_item_ids = self._lock_generation_scope(plan, [item_id])
+                locked_item = scope.item(item_id)
+                document = self._document_for_item_or_none(scope, item_id)
+                previous_version = self._published_version_snapshot(document, locked_item)
+                try:
+                    self.assert_generation_mutable(document)
+                except (CertificationDocumentImmutableError, CertificationMutationBlocked) as exc:
+                    self._record_generation_failure(
+                        item=locked_item, document=document, error=str(exc), user=user,
+                        stage='certification_generation_blocked', rolled_back=False,
+                    )
+                    pending_error = exc
+                else:
+                    try:
+                        with transaction.atomic():
+                            result = self._generate_locked_item(item=locked_item, user=user)
+                    except (UnsupportedECFTypeError, ValueError) as exc:
+                        result, should_raise = self._mark_generation_error(
+                            item=locked_item,
+                            user=user,
+                            error=str(exc),
+                            previous_version=previous_version,
+                        )
+                        if should_raise:
+                            pending_error = CertificationGenerationAttemptFailed(str(exc))
+        except Exception as exc:
+            if pending_error is not exc:
+                self._persist_unexpected_generation_failure(
+                    plan_id=plan_id, item_ids=[item_id], error=exc, user=user
+                )
+            raise
+        if pending_error is not None:
+            raise pending_error
+        return result
+
+    def has_dgii_delivery_evidence(self, document: DGIICertificationDocument) -> bool:
+        """Only fields written as evidence of a remote DGII exchange count here."""
+        return bool(
+            document.dgii_track_id
+            or document.submitted_at
+            or document.accepted_at
+            or document.rejected_at
+        )
+
+    def assert_generation_mutable(self, document: DGIICertificationDocument | None) -> None:
+        if document is None:
+            return
+        if document.submission_outcome != DGIICertificationDocument.SUBMISSION_OUTCOME_NOT_STARTED:
+            raise CertificationMutationBlocked(
+                f'{document.encf or document.pk}: submission_outcome={document.submission_outcome} bloquea regeneración.'
+            )
+        if self.has_dgii_delivery_evidence(document):
+            raise CertificationDocumentImmutableError(
+                f'{document.encf or document.pk}: existe evidencia de entrega DGII.'
+            )
+        if document.signed_xml_path or document.signed_xml_hash or document.signed_at:
+            raise CertificationDocumentImmutableError(
+                f'{document.encf or document.pk}: existe evidencia de artefacto firmado.'
+            )
+        if document.status == DGIICertificationDocument.STATUS_SIGNED:
+            raise CertificationDocumentImmutableError(
+                f'{document.encf or document.pk}: un documento firmado no puede regenerarse.'
+            )
+        if document.status not in self.mutable_statuses:
+            raise CertificationDocumentImmutableError(
+                f'{document.encf or document.pk}: status={document.status} no permite regeneración.'
             )
 
-        try:
-            if item.ecf_type == 'RFCE':
-                xml_content = self._build_rfce_xml(item)
-            else:
-                issuer = self._resolve_issuer(item.company)
-                payload = self._build_payload(item=item, issuer=issuer)
-                builder = self.builder_factory.get(item.ecf_type)
-                root = builder.build(payload)
-                xml_content = render_xml(root)
-        except (UnsupportedECFTypeError, ValueError) as exc:
-            return self._mark_generation_error(document=document, user=user, error=str(exc))
-
-        digest = hashlib.sha256(xml_content.encode('utf-8')).hexdigest()
+    def _generate_locked_item(self, *, item: DGIICertificationItem, user=None):
+        document = self._get_or_create_document(item)
+        prepared = self.prepare_item(
+            item_snapshot=item,
+            target_fence=self.document_fence(item=item, document=document),
+        )
+        xml_content = prepared.xml_content
+        digest = prepared.xml_hash
         document.ecf_type = item.ecf_type
         document.encf = item.encf
         document.status = DGIICertificationDocument.STATUS_GENERATED
@@ -769,6 +905,7 @@ class DGIICertificationDocumentGenerator:
         document.xml_hash = digest
         document.generated_at = timezone.now()
         document.generation_error = ''
+        document.signing_error = ''
         document.accepted_stale = False
         document.stale_reason = ''
         document.stale_at = None
@@ -781,48 +918,84 @@ class DGIICertificationDocumentGenerator:
         document.rejected_at = None
         document.submit_error = ''
         document.save(update_fields=[
-            'ecf_type',
-            'encf',
-            'status',
-            'xml_content',
-            'xml_hash',
-            'generated_at',
-            'generation_error',
-            'accepted_stale',
-            'stale_reason',
-            'stale_at',
-            'dgii_track_id',
-            'dgii_status',
-            'dgii_response_code',
-            'dgii_response_message',
-            'submitted_at',
-            'accepted_at',
-            'rejected_at',
-            'submit_error',
-            'updated_at',
+            'ecf_type', 'encf', 'status', 'xml_content', 'xml_hash', 'generated_at',
+            'generation_error', 'signing_error', 'accepted_stale', 'stale_reason',
+            'stale_at', 'dgii_track_id', 'dgii_status', 'dgii_response_code',
+            'dgii_response_message', 'submitted_at', 'accepted_at', 'rejected_at',
+            'submit_error', 'updated_at',
         ])
         item.status = DGIICertificationItem.STATUS_GENERATED
         item.generation_error = ''
         item.save(update_fields=['status', 'generation_error', 'updated_at'])
         DGIICertificationEvent.objects.create(
-            company=item.company,
-            plan=item.plan,
-            item=item,
+            company=item.company, plan=item.plan, item=item,
             event_type=DGIICertificationEvent.EVENT_XML_GENERATED,
             message='Documento e-CF de certificacion DGII generado.',
             payload={
-                'certification_document_id': document.id,
-                'ecf_type': item.ecf_type,
-                'dgii_group': item.dgii_group,
-                'encf': item.encf,
-                'sha256': digest,
+                'certification_document_id': document.id, 'ecf_type': item.ecf_type,
+                'dgii_group': item.dgii_group, 'encf': item.encf, 'sha256': digest,
                 'engine': 'ECFBuilderFactory',
             },
             created_by=user,
         )
         return document
 
-    def _build_rfce_xml(self, item: DGIICertificationItem) -> str:
+    def prepare_item(
+        self,
+        *,
+        item_snapshot: DGIICertificationItem,
+        target_fence: CertificationDocumentFence,
+        dependency_fences: tuple[CertificationArtifactFence, ...] = (),
+        integral_signature_value: str | None = None,
+    ) -> PreparedCertificationDocument:
+        """Build an e-CF in memory without publishing document state or events."""
+        item = copy.deepcopy(item_snapshot)
+        if not item.encf:
+            raise ValueError('El escenario DGII no tiene e-NCF detectado.')
+        if item.ecf_type == 'RFCE':
+            xml_content = self._build_rfce_xml(
+                item,
+                integral_signature_value=integral_signature_value,
+            )
+        else:
+            issuer = self._resolve_issuer(item.company)
+            payload = self._build_payload(item=item, issuer=issuer)
+            builder = self.builder_factory.get(item.ecf_type)
+            root = builder.build(payload)
+            xml_content = render_xml(root)
+        digest = hashlib.sha256(xml_content.encode('utf-8')).hexdigest()
+        return PreparedCertificationDocument(
+            target_fence=target_fence,
+            item_snapshot=item,
+            xml_content=xml_content,
+            xml_hash=digest,
+            generated_at=timezone.now(),
+            dependency_fences=tuple(dependency_fences),
+        )
+
+    @staticmethod
+    def document_fence(*, item, document=None):
+        if document is None:
+            return CertificationDocumentFence(
+                plan_id=item.plan_id, company_id=item.company_id, item_id=item.pk,
+                document_id=None, expected_document_absent=True,
+            )
+        return CertificationDocumentFence(
+            plan_id=document.plan_id, company_id=document.company_id,
+            item_id=item.pk, document_id=document.pk, expected_document_absent=False,
+            status=document.status, xml_hash=document.xml_hash,
+            xml_content=document.xml_content,
+            signed_xml_path=document.signed_xml_path,
+            signed_xml_hash=document.signed_xml_hash, signed_at=document.signed_at,
+            submission_outcome=document.submission_outcome,
+        )
+
+    def _build_rfce_xml(
+        self,
+        item: DGIICertificationItem,
+        *,
+        integral_signature_value: str | None = None,
+    ) -> str:
         raw = item.raw_data or {}
         root = ET.Element('RFCE')
         encabezado = ET.SubElement(root, 'Encabezado')
@@ -860,7 +1033,12 @@ class DGIICertificationDocumentGenerator:
             'MontoPeriodo',
         ):
             self._append_text(totales, tag, self._rfce_raw_value(raw, tag))
-        self._append_text(encabezado, 'CodigoSeguridadeCF', self._rfce_security_code(raw, item))
+        security_code = (
+            integral_signature_value[:6]
+            if integral_signature_value is not None
+            else self._rfce_security_code(raw, item)
+        )
+        self._append_text(encabezado, 'CodigoSeguridadeCF', security_code)
 
         ET.indent(root, space='  ')
         return ET.tostring(root, encoding='unicode', xml_declaration=True)
@@ -922,64 +1100,181 @@ class DGIICertificationDocumentGenerator:
         element.text = cleaned
 
     def generate_group(self, *, plan: DGIICertificationPlan, group_number: int, user=None) -> dict:
-        queryset = plan.items.filter(dgii_group=group_number).order_by(
-            'source_sheet',
-            'source_row',
-        )
-        generated = 0
-        failed = 0
-        errors = []
-        for item in queryset:
-            document = self.generate_item(item=item, user=user)
-            if document.status == DGIICertificationDocument.STATUS_GENERATED:
-                generated += 1
-            else:
-                failed += 1
-                errors.append({
-                    'item_id': item.id,
-                    'ecf_type': item.ecf_type,
-                    'source_sheet': item.source_sheet,
-                    'source_row': item.source_row,
-                    'error': document.generation_error,
-                })
-        return {'generated': generated, 'failed': failed, 'errors': errors}
+        plan_id = plan.pk
+        diagnostic = None
+        try:
+            with transaction.atomic():
+                locked_plan = self.lock_service.lock_plan(plan_id=plan_id)
+                target_item_ids = list(
+                    locked_plan.items.filter(dgii_group=group_number)
+                    .order_by('pk').values_list('pk', flat=True)
+                )
+                scope, _all_item_ids = self._lock_generation_scope(locked_plan, target_item_ids)
+                target_items = sorted(
+                    (scope.item(item_id) for item_id in target_item_ids),
+                    key=lambda current: (current.source_sheet, current.source_row, current.pk),
+                )
+                previous_versions = {
+                    current.pk: self._published_version_snapshot(
+                        self._document_for_item_or_none(scope, current.pk), current
+                    )
+                    for current in target_items
+                }
+                for current in target_items:
+                    document = self._document_for_item_or_none(scope, current.pk)
+                    try:
+                        self.assert_generation_mutable(document)
+                    except (CertificationDocumentImmutableError, CertificationMutationBlocked) as exc:
+                        diagnostic = self._group_error(current, str(exc))
+                        self._record_generation_failure(
+                            item=current, document=document, error=str(exc), user=user,
+                            stage='certification_group_generation_blocked', rolled_back=True,
+                        )
+                        break
+                if diagnostic is None:
+                    causal_item = None
+                    try:
+                        with transaction.atomic():
+                            for current in target_items:
+                                causal_item = current
+                                self._generate_locked_item(item=current, user=user)
+                    except (UnsupportedECFTypeError, ValueError) as exc:
+                        diagnostic = self._group_error(causal_item, str(exc))
+                        self._mark_generation_error(
+                            item=causal_item,
+                            user=user,
+                            error=str(exc),
+                            previous_version=previous_versions[causal_item.pk],
+                            stage='certification_group_generation_failed',
+                            rolled_back=True,
+                        )
+                if diagnostic is None:
+                    return {'generated': len(target_items), 'failed': 0, 'errors': []}
+        except Exception as exc:
+            self._persist_unexpected_generation_failure(
+                plan_id=plan_id,
+                item_ids=list(
+                    DGIICertificationItem.objects.filter(
+                        plan_id=plan_id, dgii_group=group_number
+                    ).values_list('pk', flat=True)
+                ),
+                error=exc,
+                user=user,
+            )
+            raise
+        return {'generated': 0, 'failed': 1, 'errors': [diagnostic]}
 
     def _get_or_create_document(self, item: DGIICertificationItem) -> DGIICertificationDocument:
-        document, _created = DGIICertificationDocument.objects.get_or_create(
-            item=item,
-            defaults={
-                'company': item.company,
-                'plan': item.plan,
-                'ecf_type': item.ecf_type,
-                'encf': item.encf,
-            },
-        )
+        document = DGIICertificationDocument.objects.filter(item_id=item.pk).first()
+        if document is None:
+            document = DGIICertificationDocument.objects.create(
+                item=item,
+                company=item.company,
+                plan=item.plan,
+                ecf_type=item.ecf_type,
+                encf=item.encf,
+            )
         return document
 
     def _mark_generation_error(
         self,
         *,
-        document: DGIICertificationDocument,
+        item: DGIICertificationItem,
         user=None,
         error: str,
-    ) -> DGIICertificationDocument:
-        item = document.item
+        previous_version: dict,
+        stage: str = 'certification_document_generation_failed',
+        rolled_back: bool = True,
+    ) -> tuple[DGIICertificationDocument, bool]:
+        document = DGIICertificationDocument.objects.filter(item_id=item.pk).first()
+        if previous_version['published']:
+            self._record_generation_failure(
+                item=item, document=document, error=error, user=user,
+                stage='certification_document_regeneration_failed', rolled_back=rolled_back,
+                previous_xml_hash=previous_version['xml_hash'],
+            )
+            return document, True
+        if document is None:
+            document = self._get_or_create_document(item)
+        self.assert_generation_mutable(document)
         document.status = DGIICertificationDocument.STATUS_GENERATION_ERROR
         document.generation_error = error
         document.xml_content = ''
         document.xml_hash = ''
         document.generated_at = None
         document.save(update_fields=[
-            'status',
-            'generation_error',
-            'xml_content',
-            'xml_hash',
-            'generated_at',
-            'updated_at',
+            'status', 'generation_error', 'xml_content', 'xml_hash',
+            'generated_at', 'updated_at',
         ])
         item.status = DGIICertificationItem.STATUS_GENERATION_ERROR
         item.generation_error = error
         item.save(update_fields=['status', 'generation_error', 'updated_at'])
+        self._record_generation_failure(
+            item=item, document=document, error=error, user=user,
+            stage=stage, rolled_back=rolled_back,
+        )
+        return document, False
+
+    def _lock_generation_scope(self, plan, target_item_ids):
+        items = list(
+            DGIICertificationItem.objects.filter(
+                plan_id=plan.pk, company_id=plan.company_id, pk__in=target_item_ids
+            ).order_by('pk')
+        )
+        all_item_ids = {current.pk for current in items}
+        rfce_encfs = [current.encf for current in items if current.ecf_type == 'RFCE' and current.encf]
+        if rfce_encfs:
+            all_item_ids.update(
+                DGIICertificationItem.objects.filter(
+                    plan_id=plan.pk, company_id=plan.company_id,
+                    dgii_group=4, encf__in=rfce_encfs,
+                ).values_list('pk', flat=True)
+            )
+        document_ids = list(
+            DGIICertificationDocument.objects.filter(
+                plan_id=plan.pk, company_id=plan.company_id, item_id__in=all_item_ids
+            ).order_by('pk').values_list('pk', flat=True)
+        )
+        scope = self.lock_service.lock_scope(
+            plan_id=plan.pk,
+            item_ids=sorted(all_item_ids),
+            document_ids=document_ids,
+        )
+        return scope, sorted(all_item_ids)
+
+    @staticmethod
+    def _document_for_item_or_none(scope, item_id):
+        try:
+            return scope.document_for_item(item_id)
+        except CertificationDocumentNotFound:
+            return None
+
+    @staticmethod
+    def _published_version_snapshot(document, item):
+        return {
+            'published': bool(
+                document and document.xml_content and document.xml_hash and document.generated_at
+            ),
+            'xml_hash': document.xml_hash if document else '',
+            'document_status': document.status if document else None,
+            'item_status': item.status,
+        }
+
+    @staticmethod
+    def _group_error(item, error):
+        return {
+            'item_id': item.pk,
+            'ecf_type': item.ecf_type,
+            'source_sheet': item.source_sheet,
+            'source_row': item.source_row,
+            'error': error,
+            'rolled_back': True,
+        }
+
+    def _record_generation_failure(
+        self, *, item, document, error, user, stage, rolled_back,
+        previous_xml_hash='',
+    ):
         DGIICertificationEvent.objects.create(
             company=item.company,
             plan=item.plan,
@@ -987,14 +1282,34 @@ class DGIICertificationDocumentGenerator:
             event_type=DGIICertificationEvent.EVENT_XML_GENERATION_ERROR,
             message=error,
             payload={
-                'certification_document_id': document.id,
+                'stage': stage,
+                'rolled_back': rolled_back,
+                'certification_document_id': document.pk if document else None,
                 'ecf_type': item.ecf_type,
                 'dgii_group': item.dgii_group,
                 'encf': item.encf,
+                'previous_xml_hash': previous_xml_hash,
             },
             created_by=user,
         )
-        return document
+
+    def _persist_unexpected_generation_failure(self, *, plan_id, item_ids, error, user):
+        try:
+            with transaction.atomic():
+                plan = self.lock_service.lock_plan(plan_id=plan_id)
+                scope, _all_ids = self._lock_generation_scope(plan, item_ids)
+                item = scope.item(sorted(item_ids)[0]) if item_ids else None
+                if item:
+                    self._record_generation_failure(
+                        item=item,
+                        document=self._document_for_item_or_none(scope, item.pk),
+                        error=str(error),
+                        user=user,
+                        stage='certification_generation_unexpected_error',
+                        rolled_back=True,
+                    )
+        except Exception:
+            logger.exception('No se pudo persistir diagnóstico inesperado de generación DGII.')
 
     def _resolve_issuer(self, company: Company) -> ECFIssuerConfig:
         issuers = list(ECFIssuerConfig.objects.filter(company=company, is_active=True).order_by('id')[:2])
@@ -1041,13 +1356,34 @@ class DGIICertificationDocumentGenerator:
         )
 
     def _include_buyer(self, item: DGIICertificationItem) -> bool:
-        return item.encf not in DGII_CERTIFICATION_OMIT_BUYER_ENCFS
+        return should_include_buyer(item.ecf_type, self._has_buyer_fields(item))
+
+    def _has_buyer_fields(self, item: DGIICertificationItem) -> bool:
+        buyer_fields = (
+            'RNCComprador',
+            'RNCCompradorAlt',
+            'IdentificadorExtranjero',
+            'RazonSocialComprador',
+            'ContactoComprador',
+            'CorreoComprador',
+            'DireccionComprador',
+            'MunicipioComprador',
+            'ProvinciaComprador',
+            'ContactoEntrega',
+            'DireccionEntrega',
+            'TelefonoAdicional',
+            'FechaOrdenCompra',
+            'NumeroOrdenCompra',
+            'CodigoInternoComprador',
+        )
+        return any(self._raw_text(item, field) for field in buyer_fields) or bool(item.receiver_name) or bool(item.receiver_rnc)
 
     def _build_id_doc_fields(self, item: DGIICertificationItem) -> dict:
         keys = [
             'IndicadorNotaCredito',
             'IndicadorEnvioDiferido',
             'IndicadorMontoGravado',
+            'IndicadorServicioTodoIncluido',
             'FechaLimitePago',
             'TerminoPago',
         ]
@@ -1203,6 +1539,8 @@ class DGIICertificationDocumentGenerator:
             'present_total_fields': {
                 key: bool(self._raw_text(item, key))
                 for key in (
+                    'ITBIS2',
+                    'ITBIS3',
                     'TotalITBIS',
                     'TotalITBIS1',
                     'TotalITBIS2',
@@ -1249,18 +1587,67 @@ class DGIICertificationDocumentGenerator:
                 'quantity': quantity,
                 'quantity_text': self._raw_item_text(item, f'CantidadItem[{index}]'),
                 'unit_measure': self._raw_text(item, f'UnidadMedida[{index}]', max_length=2),
+                'quantity_reference': (
+                    self._raw_decimal(item, f'CantidadReferencia[{index}]')
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_REFERENCE_TYPES
+                    else None
+                ),
+                'quantity_reference_text': (
+                    self._raw_item_text(item, f'CantidadReferencia[{index}]')
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_REFERENCE_TYPES
+                    else ''
+                ),
+                'reference_unit': (
+                    self._raw_text(item, f'UnidadReferencia[{index}]', max_length=2)
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_REFERENCE_TYPES
+                    else ''
+                ),
+                'alcohol_degrees': (
+                    self._raw_decimal(item, f'GradosAlcohol[{index}]')
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_REFERENCE_TYPES
+                    else None
+                ),
+                'alcohol_degrees_text': (
+                    self._raw_item_text(item, f'GradosAlcohol[{index}]')
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_REFERENCE_TYPES
+                    else ''
+                ),
+                'reference_unit_price': (
+                    self._raw_decimal(item, f'PrecioUnitarioReferencia[{index}]')
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_REFERENCE_TYPES
+                    else None
+                ),
+                'reference_unit_price_text': (
+                    self._raw_item_text(item, f'PrecioUnitarioReferencia[{index}]')
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_REFERENCE_TYPES
+                    else ''
+                ),
+                'manufacturing_date': (
+                    self._raw_date(item, f'FechaElaboracion[{index}]')
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_DATE_TYPES
+                    else ''
+                ),
+                'item_expiration_date': (
+                    self._raw_date(item, f'FechaVencimientoItem[{index}]')
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_DATE_TYPES
+                    else ''
+                ),
                 'unit_price': unit_price,
                 'unit_price_text': self._raw_item_text(item, f'PrecioUnitarioItem[{index}]'),
                 'discount': discount,
                 'discount_text': self._raw_text(item, f'DescuentoMonto[{index}]'),
-                'sub_discounts': self._build_item_sub_discounts(item, index)
-                if item.encf in DGII_CERTIFICATION_ITEM_SUBADJUSTMENT_ENCFS
-                else [],
+                'sub_discounts': (
+                    self._build_item_sub_discounts(item, index)
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_SUBDISCOUNT_TYPES
+                    else []
+                ),
                 'surcharge': surcharge,
                 'surcharge_text': self._raw_text(item, f'RecargoMonto[{index}]'),
-                'sub_surcharges': self._build_item_sub_surcharges(item, index)
-                if item.encf in DGII_CERTIFICATION_ITEM_SUBADJUSTMENT_ENCFS
-                else [],
+                'sub_surcharges': (
+                    self._build_item_sub_surcharges(item, index)
+                    if item.ecf_type in DGII_CERTIFICATION_ITEM_SUBDISCOUNT_TYPES
+                    else []
+                ),
                 'amount': amount,
                 'amount_text': self._raw_item_text(item, f'MontoItem[{index}]'),
                 'code': codes[0]['value'] if codes else '',
@@ -1559,8 +1946,46 @@ class DGIICertificationDocumentGenerator:
         return None
 
 
+class CertificationDocumentImmutableForSigning(CertificationMutationBlocked):
+    """The certification document cannot enter initial signing."""
+
+
+class CertificationSigningAttemptFailed(Exception):
+    """A controlled signing attempt failed without damaging the published artifact."""
+
+
+class CertificationResignAuthorizationError(CertificationMutationBlocked):
+    """The actor cannot authorize a certification re-sign operation."""
+
+
+@dataclass(frozen=True)
+class CertificationSigningSnapshot:
+    plan_id: int
+    company_id: int
+    item_id: int
+    document_id: int | None
+    group_number: int
+    encf: str
+    xml_content: str
+    xml_hash: str
+    signed_xml_path: str
+    signed_xml_hash: str
+    signed_at: object
+    is_resign: bool
+    reason: str = ''
+
+
+@dataclass(frozen=True)
+class CertificationPreparedSignature:
+    snapshot: CertificationSigningSnapshot
+    storage_path: str
+    signed_xml_hash: str
+    policy_code: str
+    warnings: tuple
+
+
 class DGIICertificationDocumentSigner:
-    """Sign DGII certification documents without touching productive e-CF runtime."""
+    """Sign certification snapshots and publish them under canonical row locks."""
 
     def __init__(
         self,
@@ -1568,203 +1993,554 @@ class DGIICertificationDocumentSigner:
         certificate_loader: PKCS12CertificateLoader | None = None,
         signer: ECFXMLSigner | None = None,
         signature_validator: ECFSignatureValidator | None = None,
+        lock_service: CertificationLockService | None = None,
     ) -> None:
         self.certificate_policy = certificate_policy or ECFCertificateSigningPolicy()
         self.certificate_loader = certificate_loader or PKCS12CertificateLoader()
         self.signer = signer or ECFXMLSigner()
         self.signature_validator = signature_validator or ECFSignatureValidator()
+        self.lock_service = lock_service or CertificationLockService()
 
     def sign_item(self, *, item: DGIICertificationItem, user=None) -> DGIICertificationDocument:
-        document = getattr(item, 'certification_document', None)
-        if not document:
-            raise ValueError('Este item todavia no tiene documento e-CF generado.')
-        if document.status not in {
-            DGIICertificationDocument.STATUS_GENERATED,
-            DGIICertificationDocument.STATUS_SIGNED,
-        } or not document.xml_content:
-            return self._mark_signing_error(
-                document=document,
-                user=user,
-                error='El documento de certificacion no tiene XML generado para firmar.',
-            )
+        snapshot = self._capture_snapshot(item_id=item.pk, plan_id=item.plan_id, is_resign=False)
+        try:
+            prepared = self._prepare_signature(snapshot)
+        except ECFError as exc:
+            return self._mark_signing_error(snapshot=snapshot, user=user, error=str(exc))
+        try:
+            return self._publish_signature(prepared=prepared, actor=user)
+        except Exception:
+            self._cleanup_unpublished_path(prepared.storage_path)
+            raise
 
-        issuer = DGIICertificationDocumentGenerator()._resolve_issuer(item.company)
+    def prepare_document(
+        self,
+        *,
+        prepared_document: PreparedCertificationDocument,
+    ) -> PreparedCertificationSignature:
+        """Sign prepared XML and store an immutable, still-unreferenced blob."""
+        fence = prepared_document.target_fence
+        snapshot = CertificationSigningSnapshot(
+            plan_id=fence.plan_id,
+            company_id=fence.company_id,
+            item_id=fence.item_id,
+            document_id=fence.document_id,
+            group_number=prepared_document.item_snapshot.dgii_group,
+            encf=prepared_document.item_snapshot.encf,
+            xml_content=prepared_document.xml_content,
+            xml_hash=prepared_document.xml_hash,
+            signed_xml_path=fence.signed_xml_path,
+            signed_xml_hash=fence.signed_xml_hash,
+            signed_at=fence.signed_at,
+            is_resign=bool(fence.signed_xml_path),
+        )
+        prepared = self._prepare_signature(snapshot)
+        return PreparedCertificationSignature(
+            prepared_document=prepared_document,
+            storage_path=prepared.storage_path,
+            signed_xml_hash=prepared.signed_xml_hash,
+            policy_code=prepared.policy_code,
+            warnings=prepared.warnings,
+        )
+
+    def resign_item(self, *, item: DGIICertificationItem, actor, reason: str) -> DGIICertificationDocument:
+        normalized_reason = (reason or '').strip()
+        if not normalized_reason:
+            raise ValueError('La razón de refirma es obligatoria.')
+        snapshot = self._capture_snapshot(
+            item_id=item.pk, plan_id=item.plan_id, is_resign=True,
+            actor=actor, reason=normalized_reason,
+        )
+        try:
+            prepared = self._prepare_signature(snapshot)
+        except ECFError as exc:
+            self._record_resign_failure(snapshot=snapshot, actor=actor, error=str(exc))
+            raise CertificationSigningAttemptFailed(str(exc)) from exc
+        try:
+            return self._publish_signature(prepared=prepared, actor=actor)
+        except Exception:
+            self._cleanup_unpublished_path(prepared.storage_path)
+            raise
+
+    def sign_group(self, *, plan: DGIICertificationPlan, group_number: int, user=None) -> dict:
+        snapshots = []
+        errors = []
+        with transaction.atomic():
+            locked_plan = self.lock_service.lock_plan(plan_id=plan.pk)
+            item_ids = list(locked_plan.items.filter(dgii_group=group_number).order_by('pk').values_list('pk', flat=True))
+            scope = self._lock_scope(locked_plan, item_ids)
+            for item_id in item_ids:
+                locked_item = scope.item(item_id)
+                try:
+                    document = scope.document_for_item(item_id)
+                    self._assert_initial_signing_mutable(document)
+                    snapshots.append(self._snapshot(locked_item, document, is_resign=False))
+                except Exception as exc:
+                    errors.append(self._group_error(locked_item, exc))
+
+        prepared = []
+        controlled_failures = []
+        for snapshot in snapshots:
+            try:
+                prepared.append(self._prepare_signature(snapshot))
+            except ECFError as exc:
+                controlled_failures.append((snapshot, str(exc)))
+            except Exception:
+                for candidate in prepared:
+                    self._cleanup_unpublished_path(candidate.storage_path)
+                raise
+
+        published, publication_errors = self._publish_group_candidates(
+            plan_id=plan.pk, prepared=prepared, actor=user,
+        )
+        errors.extend(publication_errors)
+        for snapshot, error in controlled_failures:
+            try:
+                self._mark_signing_error(snapshot=snapshot, user=user, error=error)
+                errors.append(self._group_error_by_snapshot(snapshot, error))
+            except (CertificationArtifactChanged, CertificationMutationBlocked) as exc:
+                errors.append(self._group_error_by_snapshot(snapshot, exc))
+        return {'signed': published, 'failed': len(errors), 'errors': errors}
+
+    def _capture_snapshot(self, *, item_id, plan_id, is_resign, actor=None, reason=''):
+        with transaction.atomic():
+            plan = self.lock_service.lock_plan(plan_id=plan_id)
+            scope = self._lock_scope(plan, [item_id])
+            locked_item = scope.item(item_id)
+            document = scope.document_for_item(item_id)
+            if is_resign:
+                self._assert_resign_authorized(actor, plan.company_id)
+                self._assert_resign_mutable(document)
+            else:
+                self._assert_initial_signing_mutable(document)
+            return self._snapshot(locked_item, document, is_resign=is_resign, reason=reason)
+
+    def _lock_scope(self, plan, item_ids):
+        document_ids = list(
+            DGIICertificationDocument.objects.filter(
+                plan_id=plan.pk, company_id=plan.company_id, item_id__in=item_ids,
+            ).order_by('pk').values_list('pk', flat=True)
+        )
+        return self.lock_service.lock_scope(
+            plan_id=plan.pk, item_ids=sorted(item_ids), document_ids=document_ids,
+        )
+
+    @staticmethod
+    def _snapshot(item, document, *, is_resign, reason=''):
+        return CertificationSigningSnapshot(
+            plan_id=document.plan_id, company_id=document.company_id,
+            item_id=item.pk, document_id=document.pk, group_number=item.dgii_group,
+            encf=document.encf, xml_content=document.xml_content, xml_hash=document.xml_hash,
+            signed_xml_path=document.signed_xml_path,
+            signed_xml_hash=document.signed_xml_hash, signed_at=document.signed_at,
+            is_resign=is_resign, reason=reason,
+        )
+
+    def _assert_initial_signing_mutable(self, document):
+        self._assert_submission_mutable(document)
+        if document.status == DGIICertificationDocument.STATUS_SIGNED or self._has_signed_evidence(document):
+            raise CertificationDocumentImmutableForSigning('El documento ya posee una firma; use la operación explícita de refirma.')
+        if document.status != DGIICertificationDocument.STATUS_GENERATED or not document.xml_content or not document.xml_hash:
+            raise CertificationDocumentImmutableForSigning('El documento no tiene una versión generada firmable.')
+
+    def _assert_resign_mutable(self, document):
+        self._assert_submission_mutable(document)
+        if document.status != DGIICertificationDocument.STATUS_SIGNED:
+            raise CertificationDocumentImmutableForSigning('Solo un documento firmado puede entrar en refirma.')
+        if not all((document.signed_xml_path, document.signed_xml_hash, document.signed_at)):
+            raise CertificationDocumentImmutableForSigning('La firma anterior está incompleta.')
+        if not default_storage.exists(document.signed_xml_path):
+            raise CertificationDocumentImmutableForSigning('El artefacto firmado anterior no está disponible.')
+
+    def _assert_submission_mutable(self, document):
+        if document.submission_outcome != DGIICertificationDocument.SUBMISSION_OUTCOME_NOT_STARTED:
+            raise CertificationMutationBlocked(
+                f'{document.encf or document.pk}: submission_outcome={document.submission_outcome} bloquea firma.'
+            )
+        if self._has_dgii_delivery_evidence(document):
+            raise CertificationMutationBlocked(f'{document.encf or document.pk}: existe evidencia de entrega DGII.')
+
+    @staticmethod
+    def _has_dgii_delivery_evidence(document):
+        return bool(document.dgii_track_id or document.submitted_at or document.accepted_at or document.rejected_at)
+
+    @staticmethod
+    def _has_signed_evidence(document):
+        return bool(document.signed_xml_path or document.signed_xml_hash or document.signed_at)
+
+    @staticmethod
+    def _assert_resign_authorized(actor, company_id):
+        if actor and actor.is_authenticated and actor.is_superuser:
+            return
+        if actor and actor.is_authenticated and CompanyMembership.objects.filter(
+            user=actor, company_id=company_id, is_active=True,
+            role__in=(CompanyMembership.ROLE_OWNER, CompanyMembership.ROLE_ADMIN),
+        ).exists():
+            return
+        raise CertificationResignAuthorizationError('Solo un owner, admin o superusuario puede autorizar una refirma.')
+
+    def _prepare_signature(self, snapshot):
+        company = Company.objects.get(pk=snapshot.company_id)
+        issuer = DGIICertificationDocumentGenerator()._resolve_issuer(company)
         policy_result = self.certificate_policy.evaluate(issuer)
         issuer.refresh_from_db()
         if policy_result.blocked:
-            return self._mark_signing_error(
-                document=document,
-                user=user,
-                error=policy_result.reason,
-                payload={'policy_code': policy_result.code, 'warnings': policy_result.warnings},
-            )
-
+            raise ECFValidationError(policy_result.reason)
         certificate_path, certificate_password = resolve_certificate_credentials(issuer)
         if not certificate_path:
-            return self._mark_signing_error(
-                document=document,
-                user=user,
-                error='El emisor fiscal no tiene certificado DGII disponible para firmar.',
-                payload={'policy_code': policy_result.code, 'warnings': policy_result.warnings},
-            )
-
-        try:
-            certificate = self.certificate_loader.load(certificate_path, certificate_password)
-            signed_xml = self.signer.sign(document.xml_content, certificate)
-            self.signature_validator.validate(signed_xml, certificate)
-        except ECFError as exc:
-            return self._mark_signing_error(document=document, user=user, error=str(exc))
-
+            raise ECFValidationError('El emisor fiscal no tiene certificado DGII disponible para firmar.')
+        certificate = self.certificate_loader.load(certificate_path, certificate_password)
+        signed_xml = self.signer.sign(snapshot.xml_content, certificate)
+        self.signature_validator.validate(signed_xml, certificate)
         encoded = signed_xml.encode('utf-8')
         digest = hashlib.sha256(encoded).hexdigest()
-        storage_path = default_storage.save(self._signed_filename_for(document), ContentFile(encoded))
+        path = default_storage.save(
+            self._signed_filename_for(snapshot=snapshot, signed_xml_hash=digest),
+            ContentFile(encoded),
+        )
+        return CertificationPreparedSignature(
+            snapshot=snapshot, storage_path=path, signed_xml_hash=digest,
+            policy_code=policy_result.code, warnings=tuple(policy_result.warnings),
+        )
 
+    def _publish_signature(self, *, prepared, actor):
+        snapshot = prepared.snapshot
+        with transaction.atomic():
+            plan = self.lock_service.lock_plan(plan_id=snapshot.plan_id)
+            scope = self._lock_scope(plan, [snapshot.item_id])
+            item = scope.item(snapshot.item_id)
+            document = scope.document(snapshot.document_id)
+            self._assert_snapshot_current(document, snapshot)
+            if snapshot.is_resign:
+                self._assert_resign_authorized(actor, plan.company_id)
+                self._assert_resign_mutable(document)
+            else:
+                self._assert_initial_signing_mutable(document)
+            return self._publish_locked(item=item, document=document, prepared=prepared, actor=actor)
+
+    def _publish_group_candidates(self, *, plan_id, prepared, actor):
+        if not prepared:
+            return 0, []
+        cleanup = []
+        errors = []
+        published = 0
+        try:
+            with transaction.atomic():
+                plan = self.lock_service.lock_plan(plan_id=plan_id)
+                scope = self._lock_scope(plan, [candidate.snapshot.item_id for candidate in prepared])
+                for candidate in prepared:
+                    snapshot = candidate.snapshot
+                    try:
+                        with transaction.atomic():
+                            item = scope.item(snapshot.item_id)
+                            document = scope.document(snapshot.document_id)
+                            self._assert_snapshot_current(document, snapshot)
+                            self._assert_initial_signing_mutable(document)
+                            self._publish_locked(item=item, document=document, prepared=candidate, actor=actor)
+                        published += 1
+                    except (
+                        CertificationArtifactChanged,
+                        CertificationMutationBlocked,
+                        CertificationDocumentImmutableForSigning,
+                    ) as exc:
+                        cleanup.append(candidate.storage_path)
+                        errors.append(self._group_error_by_snapshot(snapshot, exc))
+        except Exception:
+            cleanup.extend(candidate.storage_path for candidate in prepared)
+            for path in set(cleanup):
+                self._cleanup_unpublished_path(path)
+            raise
+        for path in cleanup:
+            self._cleanup_unpublished_path(path)
+        return published, errors
+
+    @staticmethod
+    def _publish_locked(*, item, document, prepared, actor):
+        snapshot = prepared.snapshot
+        previous_path = document.signed_xml_path
+        previous_hash = document.signed_xml_hash
         document.status = DGIICertificationDocument.STATUS_SIGNED
-        document.signed_xml_path = storage_path
-        document.signed_xml_hash = digest
+        document.signed_xml_path = prepared.storage_path
+        document.signed_xml_hash = prepared.signed_xml_hash
         document.signed_at = timezone.now()
         document.signing_error = ''
-        document.accepted_stale = False
-        document.stale_reason = ''
-        document.stale_at = None
-        document.dgii_track_id = ''
-        document.dgii_status = ''
-        document.dgii_response_code = ''
-        document.dgii_response_message = ''
-        document.submitted_at = None
-        document.accepted_at = None
-        document.rejected_at = None
-        document.submit_error = ''
-        document.save(update_fields=[
-            'status',
-            'signed_xml_path',
-            'signed_xml_hash',
-            'signed_at',
-            'signing_error',
-            'accepted_stale',
-            'stale_reason',
-            'stale_at',
-            'dgii_track_id',
-            'dgii_status',
-            'dgii_response_code',
-            'dgii_response_message',
-            'submitted_at',
-            'accepted_at',
-            'rejected_at',
-            'submit_error',
-            'updated_at',
-        ])
+        document.save(update_fields=['status', 'signed_xml_path', 'signed_xml_hash', 'signed_at', 'signing_error', 'updated_at'])
         item.status = DGIICertificationItem.STATUS_SIGNED
         item.generation_error = ''
         item.save(update_fields=['status', 'generation_error', 'updated_at'])
         DGIICertificationEvent.objects.create(
-            company=item.company,
-            plan=item.plan,
-            item=item,
+            company=item.company, plan=item.plan, item=item,
             event_type=DGIICertificationEvent.EVENT_DOCUMENT_SIGNED,
-            message='Documento e-CF de certificacion firmado.',
+            message='Documento e-CF de certificacion refirmado.' if snapshot.is_resign else 'Documento e-CF de certificacion firmado.',
             payload={
-                'certification_document_id': document.id,
-                'ecf_type': item.ecf_type,
-                'dgii_group': item.dgii_group,
-                'encf': item.encf,
-                'sha256': digest,
-                'policy_code': policy_result.code,
-                'warnings': policy_result.warnings,
-            },
-            created_by=user,
+                'certification_document_id': document.pk, 'encf': document.encf,
+                'sha256': prepared.signed_xml_hash, 'signed_xml_path': prepared.storage_path,
+                'previous_signed_xml_path': previous_path, 'previous_signed_xml_hash': previous_hash,
+                'resign': snapshot.is_resign, 'reason': snapshot.reason,
+                'policy_code': prepared.policy_code, 'warnings': list(prepared.warnings),
+            }, created_by=actor,
         )
         return document
 
-    def sign_group(self, *, plan: DGIICertificationPlan, group_number: int, user=None) -> dict:
-        signed = 0
-        failed = 0
-        errors = []
-        queryset = plan.items.filter(dgii_group=group_number).select_related('certification_document').order_by(
-            'source_sheet',
-            'source_row',
+    @staticmethod
+    def _assert_snapshot_current(document, snapshot):
+        current = (
+            document.xml_content, document.xml_hash, document.signed_xml_path,
+            document.signed_xml_hash, document.signed_at,
         )
-        for item in queryset:
-            document = getattr(item, 'certification_document', None)
-            if item.status == DGIICertificationItem.STATUS_GENERATION_ERROR or not document:
-                failed += 1
-                errors.append({
-                    'item_id': item.id,
-                    'ecf_type': item.ecf_type,
-                    'source_sheet': item.source_sheet,
-                    'source_row': item.source_row,
-                    'error': item.generation_error or 'El item no tiene documento generado.',
-                })
-                continue
-            document = self.sign_item(item=item, user=user)
-            if document.status == DGIICertificationDocument.STATUS_SIGNED:
-                signed += 1
-            else:
-                failed += 1
-                errors.append({
-                    'item_id': item.id,
-                    'ecf_type': item.ecf_type,
-                    'source_sheet': item.source_sheet,
-                    'source_row': item.source_row,
-                    'error': document.signing_error,
-                })
-        return {'signed': signed, 'failed': failed, 'errors': errors}
+        expected = (
+            snapshot.xml_content, snapshot.xml_hash, snapshot.signed_xml_path,
+            snapshot.signed_xml_hash, snapshot.signed_at,
+        )
+        if current != expected:
+            raise CertificationArtifactChanged('El artefacto cambió mientras se preparaba la firma.')
 
     def _mark_signing_error(
         self,
         *,
-        document: DGIICertificationDocument,
+        snapshot: CertificationSigningSnapshot,
         user=None,
         error: str,
-        payload: dict | None = None,
     ) -> DGIICertificationDocument:
-        item = document.item
-        document.status = DGIICertificationDocument.STATUS_SIGNING_ERROR
-        document.signing_error = error
-        document.signed_xml_path = ''
-        document.signed_xml_hash = ''
-        document.signed_at = None
-        document.save(update_fields=[
-            'status',
-            'signing_error',
-            'signed_xml_path',
-            'signed_xml_hash',
-            'signed_at',
-            'updated_at',
-        ])
-        item.status = DGIICertificationItem.STATUS_GENERATION_ERROR
-        item.generation_error = error
-        item.save(update_fields=['status', 'generation_error', 'updated_at'])
+        with transaction.atomic():
+            plan = self.lock_service.lock_plan(plan_id=snapshot.plan_id)
+            scope = self._lock_scope(plan, [snapshot.item_id])
+            item = scope.item(snapshot.item_id)
+            document = scope.document(snapshot.document_id)
+            self._assert_initial_signing_mutable(document)
+            self._assert_snapshot_current(document, snapshot)
+            document.status = DGIICertificationDocument.STATUS_SIGNING_ERROR
+            document.signing_error = error
+            document.save(update_fields=['status', 'signing_error', 'updated_at'])
+            item.status = DGIICertificationItem.STATUS_SIGNING_ERROR
+            item.generation_error = error
+            item.save(update_fields=['status', 'generation_error', 'updated_at'])
+            self._record_signing_event(item=item, document=document, actor=user, error=error, resign=False)
+            return document
+
+    def _record_resign_failure(self, *, snapshot, actor, error):
+        with transaction.atomic():
+            plan = self.lock_service.lock_plan(plan_id=snapshot.plan_id)
+            scope = self._lock_scope(plan, [snapshot.item_id])
+            item = scope.item(snapshot.item_id)
+            document = scope.document(snapshot.document_id)
+            self._assert_resign_mutable(document)
+            self._assert_snapshot_current(document, snapshot)
+            self._record_signing_event(item=item, document=document, actor=actor, error=error, resign=True, reason=snapshot.reason)
+
+    @staticmethod
+    def _record_signing_event(*, item, document, actor, error, resign, reason=''):
         DGIICertificationEvent.objects.create(
-            company=item.company,
-            plan=item.plan,
-            item=item,
+            company=item.company, plan=item.plan, item=item,
             event_type=DGIICertificationEvent.EVENT_DOCUMENT_SIGNING_ERROR,
             message=error,
             payload={
-                'certification_document_id': document.id,
-                'ecf_type': item.ecf_type,
-                'dgii_group': item.dgii_group,
-                'encf': item.encf,
-                **(payload or {}),
-            },
-            created_by=user,
+                'certification_document_id': document.pk, 'ecf_type': item.ecf_type,
+                'dgii_group': item.dgii_group, 'encf': item.encf,
+                'resign': resign, 'reason': reason,
+                'preserved_signed_xml_path': document.signed_xml_path,
+                'preserved_signed_xml_hash': document.signed_xml_hash,
+            }, created_by=actor,
         )
+
+    @staticmethod
+    def _signed_filename_for(*, snapshot, signed_xml_hash):
+        encf = snapshot.encf or f'item-{snapshot.item_id}'
+        return (
+            f'dgii_certification/company-{snapshot.company_id}/plan-{snapshot.plan_id}/'
+            f'grupo-{snapshot.group_number}/signed/{encf}/xml-{snapshot.xml_hash[:16]}/'
+            f'attempt-{uuid4().hex}-{signed_xml_hash}.xml'
+        )
+
+    def _cleanup_unpublished_path(self, path):
+        if not path:
+            return
+        try:
+            if DGIICertificationDocument.objects.filter(signed_xml_path=path).exists():
+                return
+            if default_storage.exists(path):
+                default_storage.delete(path)
+        except Exception:
+            logger.exception('No se pudo limpiar artefacto de firma de certificación no publicado: %s', path)
+
+    @staticmethod
+    def _group_error(item, error):
+        return {
+            'item_id': item.pk, 'ecf_type': item.ecf_type,
+            'source_sheet': item.source_sheet, 'source_row': item.source_row,
+            'error': str(error),
+        }
+
+    @staticmethod
+    def _group_error_by_snapshot(snapshot, error):
+        item = DGIICertificationItem.objects.only('pk', 'ecf_type', 'source_sheet', 'source_row').get(pk=snapshot.item_id)
+        return DGIICertificationDocumentSigner._group_error(item, error)
+
+
+class CertificationPreparedArtifactPublisher:
+    """Publish prepared XML and signature together after canonical fencing."""
+
+    mutable_statuses = {
+        DGIICertificationDocument.STATUS_PENDING,
+        DGIICertificationDocument.STATUS_GENERATED,
+        DGIICertificationDocument.STATUS_GENERATION_ERROR,
+        DGIICertificationDocument.STATUS_SIGNING_ERROR,
+        DGIICertificationDocument.STATUS_SIGNED,
+    }
+
+    def __init__(self, lock_service=None):
+        self.lock_service = lock_service or CertificationLockService()
+
+    def publish_document_and_signature(self, *, prepared_document, prepared_signature, actor=None):
+        if prepared_signature.prepared_document != prepared_document:
+            raise CertificationArtifactChanged('La firma preparada no corresponde al documento preparado.')
+        path = prepared_signature.storage_path
+        try:
+            with transaction.atomic():
+                fence = prepared_document.target_fence
+                plan = self.lock_service.lock_plan(plan_id=fence.plan_id)
+                item_ids = sorted({fence.item_id, *(dependency.item_id for dependency in prepared_document.dependency_fences)})
+                items = self.lock_service.lock_items(plan=plan, item_ids=item_ids)
+                current_target = DGIICertificationDocument.objects.filter(item_id=fence.item_id).first()
+                document_ids = [dependency.document_id for dependency in prepared_document.dependency_fences]
+                if current_target is not None:
+                    document_ids.append(current_target.pk)
+                documents = self.lock_service.lock_documents(
+                    plan=plan, document_ids=sorted(set(document_ids)), locked_item_ids=item_ids,
+                )
+                scope = CertificationLockedScope.build(plan=plan, items=items, documents=documents)
+                scope.assert_company_consistency()
+                target = self._validate_target(scope=scope, fence=fence, current_target=current_target)
+                self._validate_dependencies(scope=scope, dependencies=prepared_document.dependency_fences)
+                self._validate_prepared_blob(prepared_signature)
+                if target is None:
+                    item = scope.item(fence.item_id)
+                    target = DGIICertificationDocument.objects.create(
+                        item=item, company=item.company, plan=item.plan,
+                        ecf_type=item.ecf_type, encf=item.encf,
+                    )
+                item = scope.item(fence.item_id)
+                now = timezone.now()
+                target.status = DGIICertificationDocument.STATUS_SIGNED
+                target.xml_content = prepared_document.xml_content
+                target.xml_hash = prepared_document.xml_hash
+                target.generated_at = prepared_document.generated_at
+                target.generation_error = ''
+                target.signed_xml_path = path
+                target.signed_xml_hash = prepared_signature.signed_xml_hash
+                target.signed_at = now
+                target.signing_error = ''
+                target.save(update_fields=[
+                    'status', 'xml_content', 'xml_hash', 'generated_at', 'generation_error',
+                    'signed_xml_path', 'signed_xml_hash', 'signed_at', 'signing_error', 'updated_at',
+                ])
+                item.status = DGIICertificationItem.STATUS_SIGNED
+                item.generation_error = ''
+                item.save(update_fields=['status', 'generation_error', 'updated_at'])
+                dependency_payload = [
+                    {
+                        'document_id': dependency.document_id,
+                        'xml_hash': dependency.xml_hash,
+                        'signed_xml_path': dependency.signed_xml_path,
+                        'signed_xml_hash': dependency.signed_xml_hash,
+                        'signed_at': dependency.signed_at.isoformat() if dependency.signed_at else None,
+                    }
+                    for dependency in prepared_document.dependency_fences
+                ]
+                DGIICertificationEvent.objects.create(
+                    company=item.company, plan=item.plan, item=item,
+                    event_type=DGIICertificationEvent.EVENT_XML_GENERATED,
+                    message='Documento e-CF preparado publicado conjuntamente con su firma.',
+                    payload={'certification_document_id': target.pk, 'sha256': target.xml_hash, 'dependencies': dependency_payload},
+                    created_by=actor,
+                )
+                DGIICertificationEvent.objects.create(
+                    company=item.company, plan=item.plan, item=item,
+                    event_type=DGIICertificationEvent.EVENT_DOCUMENT_SIGNED,
+                    message='Firma preparada publicada conjuntamente con el documento e-CF.',
+                    payload={
+                        'certification_document_id': target.pk,
+                        'sha256': target.signed_xml_hash,
+                        'signed_xml_path': target.signed_xml_path,
+                        'dependencies': dependency_payload,
+                    },
+                    created_by=actor,
+                )
+                return target
+        except Exception:
+            self.cleanup_unreferenced(path)
+            raise
+
+    def _validate_target(self, *, scope, fence, current_target):
+        if fence.expected_document_absent:
+            if current_target is not None:
+                raise CertificationArtifactChanged('Apareció un documento target después del snapshot de ausencia.')
+            return None
+        if current_target is None or current_target.pk != fence.document_id:
+            raise CertificationArtifactChanged('El documento target ya no coincide con el snapshot.')
+        document = scope.document(fence.document_id)
+        self._assert_target_mutable(document)
+        current = (
+            document.status, document.xml_content, document.xml_hash, document.signed_xml_path,
+            document.signed_xml_hash, document.signed_at, document.submission_outcome,
+        )
+        expected = (
+            fence.status, fence.xml_content, fence.xml_hash, fence.signed_xml_path,
+            fence.signed_xml_hash, fence.signed_at, fence.submission_outcome,
+        )
+        if current != expected:
+            raise CertificationArtifactChanged('El documento target cambió después del snapshot.')
         return document
 
-    def _signed_filename_for(self, document: DGIICertificationDocument) -> str:
-        encf = document.encf or f'item-{document.item_id}'
-        path = (
-            f'dgii_certification/company-{document.company_id}/plan-{document.plan_id}/'
-            f'grupo-{document.item.dgii_group}/signed/{encf}.xml'
-        )
-        if default_storage.exists(path):
-            default_storage.delete(path)
-        return path
+    def _validate_dependencies(self, *, scope, dependencies):
+        for fence in dependencies:
+            document = scope.document(fence.document_id)
+            current = (
+                document.plan_id, document.company_id, document.item_id, document.xml_hash,
+                document.signed_xml_path, document.signed_xml_hash, document.signed_at,
+            )
+            expected = (
+                fence.plan_id, fence.company_id, fence.item_id, fence.xml_hash,
+                fence.signed_xml_path, fence.signed_xml_hash, fence.signed_at,
+            )
+            if current != expected:
+                raise CertificationArtifactChanged('Una dependencia cambió después del snapshot.')
+
+    def _assert_target_mutable(self, document):
+        if document.submission_outcome != DGIICertificationDocument.SUBMISSION_OUTCOME_NOT_STARTED:
+            raise CertificationMutationBlocked(
+                f'{document.encf or document.pk}: submission_outcome={document.submission_outcome} bloquea publicación.'
+            )
+        if document.dgii_track_id or document.submitted_at or document.accepted_at or document.rejected_at:
+            raise CertificationMutationBlocked(f'{document.encf or document.pk}: existe evidencia de entrega DGII.')
+        if document.status not in self.mutable_statuses:
+            raise CertificationMutationBlocked(f'{document.encf or document.pk}: status={document.status} bloquea publicación.')
+
+    @staticmethod
+    def _validate_prepared_blob(prepared_signature):
+        path = prepared_signature.storage_path
+        if not path or not default_storage.exists(path):
+            raise CertificationArtifactChanged('El archivo de firma preparado no está disponible.')
+        with default_storage.open(path, 'rb') as signed_file:
+            actual_hash = hashlib.sha256(signed_file.read()).hexdigest()
+        if actual_hash != prepared_signature.signed_xml_hash:
+            raise CertificationArtifactChanged('El archivo de firma preparado no coincide con su hash.')
+
+    @staticmethod
+    def cleanup_unreferenced(path):
+        if not path:
+            return
+        try:
+            if DGIICertificationDocument.objects.filter(signed_xml_path=path).exists():
+                return
+            if default_storage.exists(path):
+                default_storage.delete(path)
+        except Exception:
+            logger.exception('No se pudo limpiar artefacto preparado no referenciado: %s', path)
 
 
 class DGIICertificationRFCERebuilder:
-    """Rebuild signed E32 <250k XMLs before regenerating linked RFCE."""
+    """Safely rebuild signed E32 <250k XMLs and their linked RFCE."""
 
     stale_reason = (
         'XML integros de facturas consumo <250K regenerados. '
@@ -1776,63 +2552,208 @@ class DGIICertificationRFCERebuilder:
         *,
         generator: DGIICertificationDocumentGenerator | None = None,
         signer: DGIICertificationDocumentSigner | None = None,
+        publisher: CertificationPreparedArtifactPublisher | None = None,
+        lock_service: CertificationLockService | None = None,
     ) -> None:
         self.generator = generator or DGIICertificationDocumentGenerator()
         self.signer = signer or DGIICertificationDocumentSigner()
+        self.lock_service = lock_service or CertificationLockService()
+        self.publisher = publisher or CertificationPreparedArtifactPublisher(
+            lock_service=self.lock_service,
+        )
 
     def rebuild(self, *, plan: DGIICertificationPlan, user=None) -> dict:
-        generated_integral = self.generator.generate_group(plan=plan, group_number=4, user=user)
-        signed_integral = {'signed': 0, 'failed': 0, 'errors': []}
-        generated_rfce = {'generated': 0, 'failed': 0, 'errors': []}
-        signed_rfce = {'signed': 0, 'failed': 0, 'errors': []}
+        summaries = {
+            'generated_integral': self._empty_generation_summary(),
+            'signed_integral': self._empty_signing_summary(),
+            'generated_rfce': self._empty_generation_summary(),
+            'signed_rfce': self._empty_signing_summary(),
+        }
         source_documents: list[dict] = []
+        try:
+            group_snapshots = self._capture_rebuild_targets(plan_id=plan.pk)
+        except Exception as exc:
+            error = self._error_payload(None, exc)
+            summaries['generated_integral']['failed'] = 1
+            summaries['generated_integral']['errors'].append(error)
+            return self._response(summaries, source_documents)
 
-        if not generated_integral.get('failed'):
-            signed_integral = self.signer.sign_group(plan=plan, group_number=4, user=user)
-        if not signed_integral.get('failed') and signed_integral.get('signed'):
-            source_documents = self._source_documents(plan)
-            generated_rfce = self.generator.generate_group(plan=plan, group_number=3, user=user)
-        if not generated_rfce.get('failed') and generated_rfce.get('generated'):
-            signed_rfce = self.signer.sign_group(plan=plan, group_number=3, user=user)
+        integral_by_encf = {}
+        for item, fence in group_snapshots[4]:
+            prepared_document = None
+            prepared_signature = None
+            try:
+                prepared_document = self.generator.prepare_item(
+                    item_snapshot=item,
+                    target_fence=fence,
+                )
+                summaries['generated_integral']['generated'] += 1
+                prepared_signature = self.signer.prepare_document(
+                    prepared_document=prepared_document,
+                )
+                published = self.publisher.publish_document_and_signature(
+                    prepared_document=prepared_document,
+                    prepared_signature=prepared_signature,
+                    actor=user,
+                )
+                summaries['signed_integral']['signed'] += 1
+                integral_by_encf[published.encf] = published.pk
+                source_documents.append(self._source_document(published))
+            except Exception as exc:
+                if prepared_signature is not None:
+                    self.publisher.cleanup_unreferenced(prepared_signature.storage_path)
+                self._record_pipeline_failure(
+                    summaries=summaries,
+                    phase='integral',
+                    item=item,
+                    error=exc,
+                    generation_prepared=prepared_document is not None,
+                )
 
-        rfce_marked = 0
-        if not signed_rfce.get('failed') and signed_rfce.get('signed'):
-            rfce_marked = self._mark_rfce_for_resubmit(plan, user)
+        if summaries['generated_integral']['failed'] or summaries['signed_integral']['failed']:
+            return self._response(summaries, source_documents)
 
+        for item, initial_fence in group_snapshots[3]:
+            prepared_document = None
+            prepared_signature = None
+            try:
+                source_id = integral_by_encf.get(item.encf)
+                if source_id is None:
+                    raise CertificationArtifactChanged(
+                        f'{item.encf}: no existe integral firmado vigente para construir RFCE.'
+                    )
+                item_snapshot, target_fence, source_fence, signature_value = self._capture_rfce_snapshot(
+                    plan_id=plan.pk,
+                    target_item_id=item.pk,
+                    source_document_id=source_id,
+                    initial_target_fence=initial_fence,
+                )
+                prepared_document = self.generator.prepare_item(
+                    item_snapshot=item_snapshot,
+                    target_fence=target_fence,
+                    dependency_fences=(source_fence,),
+                    integral_signature_value=signature_value,
+                )
+                summaries['generated_rfce']['generated'] += 1
+                prepared_signature = self.signer.prepare_document(
+                    prepared_document=prepared_document,
+                )
+                self.publisher.publish_document_and_signature(
+                    prepared_document=prepared_document,
+                    prepared_signature=prepared_signature,
+                    actor=user,
+                )
+                summaries['signed_rfce']['signed'] += 1
+            except Exception as exc:
+                if prepared_signature is not None:
+                    self.publisher.cleanup_unreferenced(prepared_signature.storage_path)
+                self._record_pipeline_failure(
+                    summaries=summaries,
+                    phase='rfce',
+                    item=item,
+                    error=exc,
+                    generation_prepared=prepared_document is not None,
+                )
+
+        return self._response(summaries, source_documents)
+
+    def _response(self, summaries, source_documents):
         return {
-            'generated_integral': generated_integral,
-            'signed_integral': signed_integral,
-            'generated_rfce': generated_rfce,
-            'signed_rfce': signed_rfce,
+            'generated_integral': summaries['generated_integral'],
+            'signed_integral': summaries['signed_integral'],
+            'generated_rfce': summaries['generated_rfce'],
+            'signed_rfce': summaries['signed_rfce'],
             'source_documents': source_documents,
-            'rfce_marked_for_resubmit': rfce_marked,
-            'failed': bool(
-                generated_integral.get('failed')
-                or signed_integral.get('failed')
-                or generated_rfce.get('failed')
-                or signed_rfce.get('failed')
-            ),
+            'rfce_marked_for_resubmit': 0,
+            'failed': any(summary['failed'] for summary in summaries.values()),
         }
 
-    def _source_documents(self, plan: DGIICertificationPlan) -> list[dict]:
-        result = []
-        documents = (
-            DGIICertificationDocument.objects
-            .select_related('item')
-            .filter(plan=plan, company=plan.company, item__dgii_group=4)
-            .order_by('item__source_row', 'id')
-        )
-        for document in documents:
-            signature_value, actual_hash = self._signature_and_hash(document)
-            result.append({
-                'encf': document.encf,
-                'signed_xml_path': document.signed_xml_path,
-                'signed_xml_hash': document.signed_xml_hash,
-                'actual_sha256': actual_hash,
-                'hash_matches_storage': actual_hash == document.signed_xml_hash,
-                'signature_prefix': signature_value[:6],
-            })
-        return result
+    def _capture_rebuild_targets(self, *, plan_id):
+        with transaction.atomic():
+            plan = self.lock_service.lock_plan(plan_id=plan_id)
+            items = list(
+                plan.items.filter(dgii_group__in=(3, 4)).order_by('pk')
+            )
+            item_ids = [item.pk for item in items]
+            locked_items = self.lock_service.lock_items(plan=plan, item_ids=item_ids)
+            documents_by_item = {
+                document.item_id: document
+                for document in DGIICertificationDocument.objects.filter(
+                    plan=plan, company=plan.company, item_id__in=item_ids,
+                ).order_by('pk')
+            }
+            locked_documents = self.lock_service.lock_documents(
+                plan=plan,
+                document_ids=[document.pk for document in documents_by_item.values()],
+                locked_item_ids=item_ids,
+            )
+            locked_by_item = {document.item_id: document for document in locked_documents}
+            snapshots = {3: [], 4: []}
+            for item in locked_items:
+                document = locked_by_item.get(item.pk)
+                if document is not None:
+                    self.publisher._assert_target_mutable(document)
+                snapshots[item.dgii_group].append((
+                    copy.deepcopy(item),
+                    self.generator.document_fence(item=item, document=document),
+                ))
+            return snapshots
+
+    def _capture_rfce_snapshot(
+        self, *, plan_id, target_item_id, source_document_id, initial_target_fence,
+    ):
+        with transaction.atomic():
+            plan = self.lock_service.lock_plan(plan_id=plan_id)
+            source = DGIICertificationDocument.objects.only('item_id').get(pk=source_document_id)
+            item_ids = sorted({target_item_id, source.item_id})
+            items = self.lock_service.lock_items(plan=plan, item_ids=item_ids)
+            current_target = DGIICertificationDocument.objects.filter(item_id=target_item_id).first()
+            document_ids = [source_document_id]
+            if current_target is not None:
+                document_ids.append(current_target.pk)
+            documents = self.lock_service.lock_documents(
+                plan=plan, document_ids=document_ids, locked_item_ids=item_ids,
+            )
+            scope = CertificationLockedScope.build(plan=plan, items=items, documents=documents)
+            scope.assert_company_consistency()
+            source = scope.document(source_document_id)
+            target = self.publisher._validate_target(
+                scope=scope,
+                fence=initial_target_fence,
+                current_target=current_target,
+            )
+            if source.status != DGIICertificationDocument.STATUS_SIGNED:
+                raise CertificationArtifactChanged(f'{source.encf}: integral fuente no está firmado.')
+            self.publisher._assert_target_mutable(source)
+            signature_value, actual_hash = self._signature_and_hash(source)
+            if actual_hash != source.signed_xml_hash:
+                raise CertificationArtifactChanged(
+                    f'{source.encf}: hash físico del integral no coincide con la evidencia persistida.'
+                )
+            source_fence = CertificationArtifactFence(
+                plan_id=source.plan_id,
+                company_id=source.company_id,
+                item_id=source.item_id,
+                document_id=source.pk,
+                xml_hash=source.xml_hash,
+                signed_xml_path=source.signed_xml_path,
+                signed_xml_hash=source.signed_xml_hash,
+                signed_at=source.signed_at,
+            )
+            target_item = scope.item(target_item_id)
+            target_fence = self.generator.document_fence(item=target_item, document=target)
+            return copy.deepcopy(target_item), target_fence, source_fence, signature_value
+
+    def _source_document(self, document):
+        signature_value, actual_hash = self._signature_and_hash(document)
+        return {
+            'encf': document.encf,
+            'signed_xml_path': document.signed_xml_path,
+            'signed_xml_hash': document.signed_xml_hash,
+            'actual_sha256': actual_hash,
+            'hash_matches_storage': actual_hash == document.signed_xml_hash,
+            'signature_prefix': signature_value[:6],
+        }
 
     def _signature_and_hash(self, document: DGIICertificationDocument) -> tuple[str, str]:
         if not document.signed_xml_path or not default_storage.exists(document.signed_xml_path):
@@ -1848,60 +2769,37 @@ class DGIICertificationRFCERebuilder:
         return signature_value, actual_hash
 
     def _mark_rfce_for_resubmit(self, plan: DGIICertificationPlan, user) -> int:
-        now = timezone.now()
-        updated = 0
-        documents = (
-            DGIICertificationDocument.objects
-            .select_related('item')
-            .filter(plan=plan, company=plan.company, item__dgii_group=3)
-        )
-        for document in documents:
-            document.accepted_stale = True
-            document.stale_reason = self.stale_reason
-            document.stale_at = now
-            document.dgii_track_id = ''
-            document.dgii_status = 'Requiere reenvio'
-            document.dgii_response_code = ''
-            document.dgii_response_message = self.stale_reason
-            document.dgii_response = None
-            document.submitted_at = None
-            document.accepted_at = None
-            document.rejected_at = None
-            document.submit_error = ''
-            document.save(update_fields=[
-                'accepted_stale',
-                'stale_reason',
-                'stale_at',
-                'dgii_track_id',
-                'dgii_status',
-                'dgii_response_code',
-                'dgii_response_message',
-                'dgii_response',
-                'submitted_at',
-                'accepted_at',
-                'rejected_at',
-                'submit_error',
-                'updated_at',
-            ])
-            document.item.status = DGIICertificationItem.STATUS_SIGNED
-            document.item.save(update_fields=['status', 'updated_at'])
-            DGIICertificationEvent.objects.create(
-                company=document.company,
-                plan=document.plan,
-                item=document.item,
-                event_type=DGIICertificationEvent.EVENT_DOCUMENT_STATUS_CHECKED,
-                message='RFCE marcado para reenvio por regeneracion de XML integro firmado.',
-                payload={
-                    'certification_document_id': document.id,
-                    'ecf_type': document.ecf_type,
-                    'dgii_group': document.item.dgii_group,
-                    'encf': document.encf,
-                    'reason': self.stale_reason,
-                },
-                created_by=user,
-            )
-            updated += 1
-        return updated
+        """Legacy compatibility hook; fiscal evidence is never reset by rebuild."""
+        return 0
+
+    @staticmethod
+    def _empty_generation_summary():
+        return {'generated': 0, 'failed': 0, 'errors': []}
+
+    @staticmethod
+    def _empty_signing_summary():
+        return {'signed': 0, 'failed': 0, 'errors': []}
+
+    @staticmethod
+    def _error_payload(item, error):
+        return {
+            'item_id': item.pk if item else None,
+            'ecf_type': item.ecf_type if item else None,
+            'source_sheet': item.source_sheet if item else None,
+            'source_row': item.source_row if item else None,
+            'error': str(error),
+        }
+
+    def _record_pipeline_failure(self, *, summaries, phase, item, error, generation_prepared):
+        payload = self._error_payload(item, error)
+        generation = summaries[f'generated_{phase}']
+        signing = summaries[f'signed_{phase}']
+        if not generation_prepared:
+            generation['failed'] += 1
+            generation['errors'].append(payload)
+        else:
+            signing['failed'] += 1
+            signing['errors'].append(payload)
 
 
 class DGIICertificationDataTestsRunner:

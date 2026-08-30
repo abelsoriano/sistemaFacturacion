@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import logging
 
+import redis
 from celery import shared_task
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
+from django.utils import timezone
 
 from facturacion.ecf.exceptions import ECFPermanentError
+from facturacion.ecf.services.dgii_reconciliation import DGIIReconciliationService
 from facturacion.ecf.services.dgii_status import DGIIStatusService
 from facturacion.ecf.services.dgii_submission import DGIISubmissionService
 from facturacion.ecf.workers.base import ECFTask
@@ -99,6 +102,49 @@ def retry_submission(self, document_id: int, user_id: int | None = None, environ
         self.fail_or_retry(exc, document_id, "retry_submission")
 
 
+@shared_task(name="facturacion.ecf.tasks.dgii.schedule_stale_reconciliations")
+def schedule_stale_reconciliations(environment: str | None = None):
+    """Queue eligible uncertain e-CF documents once per Beat interval."""
+    if not _acquire_reconciliation_sweep_lock():
+        return {"scheduled": 0, "skipped": "sweep_locked"}
+
+    now = timezone.now()
+    grace_cutoff = now - DGIIReconciliationService.grace_period
+    candidates = (
+        ElectronicFiscalDocument.objects
+        .filter(
+            Q(reconciliation_lease_until__isnull=True)
+            | Q(reconciliation_lease_until__lte=now),
+            Q(
+                submission_outcome="in_flight",
+                submission_started_at__lte=grace_cutoff,
+            )
+            | (
+                Q(
+                    submission_outcome="unknown",
+                    reconciliation_attempts__lt=DGIIReconciliationService.max_attempts,
+                )
+                & (Q(next_retry_at__isnull=True) | Q(next_retry_at__lte=now))
+            ),
+        )
+        .order_by("submission_started_at", "pk")
+        .values_list("pk", flat=True)[:100]
+    )
+    document_ids = list(candidates)
+    for document_id in document_ids:
+        reconcile_submission.apply_async(args=[document_id], kwargs={"environment": environment})
+    return {"scheduled": len(document_ids)}
+
+
+@shared_task(name="facturacion.ecf.tasks.dgii.reconcile_submission")
+def reconcile_submission(document_id: int, environment: str | None = None):
+    """Reconcile an uncertain submission without resending its XML."""
+    result = DGIIReconciliationService().reconcile(document_id, environment=environment)
+    if result is None:
+        return {"document_id": document_id, "skipped": True}
+    return {"document_id": document_id, "outcome": result.outcome, "track_id": result.track_id}
+
+
 @transaction.atomic
 def _submission_preflight(document_id: int, user, task_id: str, force: bool = False):
     document = ElectronicFiscalDocument.objects.select_for_update().get(pk=document_id)
@@ -132,3 +178,14 @@ def _user(user_id: int | None):
     if not user_id:
         return None
     return get_user_model().objects.filter(pk=user_id).first()
+
+
+def _acquire_reconciliation_sweep_lock() -> bool:
+    try:
+        client = redis.Redis.from_url(getattr(settings, "CELERY_BROKER_URL"))
+        return bool(client.set("ecf:reconciliation:sweep", "1", nx=True, ex=55))
+    except redis.RedisError:
+        logging.getLogger("facturacion.ecf.tasks").warning(
+            "No se pudo adquirir lock Redis para barrido de reconciliación."
+        )
+        return False

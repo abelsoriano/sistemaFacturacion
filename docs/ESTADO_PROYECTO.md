@@ -11,11 +11,15 @@
 ### 1.1 Backend - Núcleo Fiscal
 - [x] **Modelo de Datos**: Invoices, Quotations, CreditNotes, Products
 - [x] **E-CF Generación**: XML válido XSD para E31, E32, E34
-- [x] **Firma Digital**: XMLDSig con certificados PKCS#12
+- [x] **Firma/refirma segura de certificación**: XMLDSig con certificados PKCS#12, locks canónicos, snapshots con fencing, autorización explícita de refirma y artefactos firmados inmutables/versionados
 - [x] **Comunicación DGII**: Cliente SOAP funcional (testing/production endpoints)
 - [x] **Secuencias e-NCF**: Allocate transaccional con concurrencia (no duplica)
 - [x] **Máquina de Estados**: Transitions explícitas (draft → xml_generated → signed → submitted → processing → accepted|rejected)
 - [x] **Auditoria**: ECFEventLog con trazabilidad completa
+- [x] **Reconciliación TrackID ante timeout DGII**: fingerprint + lease y consulta de reconciliación, sin reenvío automático
+- [x] **Bloqueo de certificado vencido**: protección en política, loader y task; verificación final pre-persistencia y sincronización de metadata desincronizada
+- [x] **Validación XSD E32/E34**: `FechaVencimientoSecuencia` se mapea solo para E31; retirado el parche que enmascaraba XML inválido de E34
+- [x] **Concurrencia de inventario**: causa raíz fue falta de orden consistente en `select_for_update()` sobre `Product`; helper reutilizable de locks ordenados aplicado a creación/cobro de facturas y restauración/compensación E34
 - [x] **Certificados**: Almacenamiento, validación, gestión de vigencia
 - [x] **Multi-empresa**: SaaS con Company/CompanyMembership isolation
 
@@ -32,7 +36,8 @@
 ### 1.3 Backend - Infraestructura Async
 - [x] **Celery 5.4.0**: Procesamiento async de tareas ECF
 - [x] **Redis**: Broker y result backend
-- [x] **Colas Dedicadas**: ecf.xml, ecf.signing, ecf.dgii, ecf.status, ecf.retry
+- [x] **Colas Dedicadas**: ecf.xml, ecf.signing, ecf.dgii, ecf.status, ecf.retry, ecf.reconciliation
+- [x] **Celery Beat**: Servicio de barrido periódico para reconciliación de TrackID
 - [x] **Flower UI**: Monitoreo Celery en `docker-compose.ecf.yml`
 - [x] **Reintentos**: Exponential backoff para fallos temporales
 - [x] **Idempotencia**: select_for_update() evita race conditions
@@ -67,6 +72,12 @@
 - [x] **Stress Testing CLI**: `stress_ecf_core --invoices 200 --workers 16 --enqueue`
 - [x] **Concurrency Hardening**: `ECFConcurrencyHardeningTests`
 - [x] **E34 Validations**: `E34FiscalValidationTests`
+- [x] **Cobertura TrackID/timeout**: 18 pruebas nuevas para envío, reintentos HTTP y reconciliación
+- [x] **Regresión de vigencia de certificado**: certificado vencido entre firma y persistencia no deja XML firmado ni cambia el estado fiscal
+- [x] **Cobertura XSD E32/E34**: mapper condicionado por `ecf_type` y validación E34 contra el XSD oficial sin parche semántico
+- [x] **Auditoría de normalizaciones XSD**: los parches restantes en `_load_schema()` (E31 y RFCE 32) corrigen erratas del XSD oficial publicado por DGII; no enmascaran XML inválido ni requieren acción
+- [x] **Validación de deadlock de inventario**: `stress_ecf_core --invoices 50 --workers 8 --enqueue` completó 50/50 facturas sin errores (antes: 9/50 abortadas por deadlock)
+- [x] **Cobertura de locks de inventario**: 4 pruebas concurrentes con productos en orden inverso para creación, cobro, restauración y compensación E34
 
 ### 1.7 Documentación
 - [x] **ARCHITECTURE_ASYNC.md**: Flujo procesamiento async
@@ -117,9 +128,7 @@
 
 | Bug | Severidad | Status | Nota |
 |-----|-----------|--------|------|
-| XSD validation falla con atributos opcionales en E34 | 🔴 CRÍTICA | ABIERTO | Afecta notas de crédito; requiere actualizar parser XSD |
-| Certificado expirado no previene firma (solo warning log) | 🔴 CRÍTICA | ABIERTO | Debe rechazar pre-firma; agregar validación en ECFSigningService |
-| TrackID no persiste en DB si DGII timeout | 🔴 CRÍTICA | ABIERTO | Riesgo de reenvíos duplicados; implementar retry idempotente |
+| Fingerprint SHA-256 del certificado no se verifica al firmar | 🟠 ALTA | ABIERTO | No bloquea el flujo funcional de firma/envío: RNC y vigencia ya se validan. Es una capa de integridad adicional recomendada antes de producción, no antes de homologación. |
 
 ### 3.2 Altos (Afectan UX)
 
@@ -325,4 +334,17 @@ d3a38d7                   Agregando cambio etiqueta completo
 **Próxima Revisión**: 2026-08-03 (1 semana)  
 **Responsable**: Equipo de Ingeniería Fiscalizadora  
 **Contacto**: [maintainer email]
-  
+
+---
+
+## Generación segura de documentos de certificación DGII
+
+- La generación documental adquiere locks en orden canónico: plan, items por PK y documentos por PK.
+- La generación de un grupo publica todos sus documentos atómicamente o revierte el grupo completo.
+- Una regeneración fallida conserva íntegros el XML, hash, fecha y estado de la versión publicada anterior; el diagnóstico se persiste después del rollback del savepoint.
+- Los documentos firmados, con evidencia de firma, con evidencia remota DGII o con un `submission_outcome` distinto de `not_started` no pueden regenerarse.
+- La regeneración de artefactos firmados permanece bloqueada; la refirma se realiza exclusivamente mediante su operación explícita, con razón y autorización owner/admin/superuser.
+- La firma y refirma preparan la criptografía fuera de los locks y revalidan el snapshot bajo locks canónicos antes de publicar.
+- Cada firma usa un path nuevo e inmutable; un intento fallido conserva la firma anterior y limpia únicamente archivos nuevos no referenciados.
+- La firma grupal conserva resultados parciales compatibles, pero cada documento se publica de manera atómica y cercada contra cambios concurrentes.
+- Este bloque no conecta ni activa el nuevo flujo de submission real a DGII.

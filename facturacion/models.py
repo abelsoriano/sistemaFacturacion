@@ -1297,6 +1297,14 @@ class ECFSequence(models.Model):
 class ElectronicFiscalDocument(models.Model):
     """Estado y trazabilidad DGII de una factura emitida como e-CF."""
 
+    SUBMISSION_OUTCOME_CHOICES = [
+        ('not_started', 'No iniciado'),
+        ('in_flight', 'Envío en curso'),
+        ('unknown', 'Resultado de envío desconocido'),
+        ('confirmed', 'Envío confirmado por DGII'),
+        ('manual_review', 'Revisión manual requerida'),
+    ]
+
     STATUS_CHOICES = [
         ('draft', 'Borrador'),
         ('queued', 'En Cola'),
@@ -1391,6 +1399,55 @@ class ElectronicFiscalDocument(models.Model):
     async_task_id = models.CharField(max_length=255, blank=True, null=True, db_index=True, verbose_name="Task Celery Actual")
     idempotency_key = models.CharField(max_length=120, blank=True, null=True, db_index=True, verbose_name="Clave Idempotencia")
     submission_attempts = models.PositiveIntegerField(default=0, verbose_name="Intentos de Envío")
+    submission_outcome = models.CharField(
+        max_length=20,
+        choices=SUBMISSION_OUTCOME_CHOICES,
+        default='not_started',
+        db_index=True,
+        verbose_name="Resultado de Envío DGII",
+    )
+    submission_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name="Huella SHA-256 del Envío",
+    )
+    submission_started_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Inicio de Envío DGII",
+    )
+    reconciliation_attempts = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Intentos de Reconciliación DGII",
+    )
+    last_reconciled_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Última Reconciliación DGII",
+    )
+    reconciliation_lease_until = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Lease de Reconciliación Hasta",
+    )
+    reconciliation_lease_token = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name="Token de Lease de Reconciliación",
+    )
+    requires_manual_review = models.BooleanField(
+        default=False,
+        verbose_name="Requiere Revisión Manual",
+    )
+    manual_reviewed_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name="Fecha Revisión Manual",
+    )
     status_check_attempts = models.PositiveIntegerField(default=0, verbose_name="Intentos Consulta Estado")
     next_retry_at = models.DateTimeField(blank=True, null=True, verbose_name="Próximo Reintento")
     last_error = models.TextField(blank=True, null=True, verbose_name="Último Error")
@@ -1484,6 +1541,7 @@ class ECFEventLog(models.Model):
         ('inventory_restored', 'Inventario Restaurado'),
         ('inventory_compensated', 'Inventario Compensado'),
         ('manual_review', 'Revision Manual'),
+        ('multiple_track_ids_detected', 'Múltiples TrackID Detectados'),
         ('accepted', 'Aceptado'),
         ('rejected', 'Rechazado'),
         ('cancelled', 'Anulado'),
@@ -1640,6 +1698,19 @@ class DGIICertificationItem(models.Model):
 class DGIICertificationDocument(models.Model):
     """Documento e-CF generado para certificacion DGII, aislado del negocio productivo."""
 
+    SUBMISSION_OUTCOME_NOT_STARTED = 'not_started'
+    SUBMISSION_OUTCOME_IN_FLIGHT = 'in_flight'
+    SUBMISSION_OUTCOME_CONFIRMED = 'confirmed'
+    SUBMISSION_OUTCOME_UNKNOWN = 'unknown'
+    SUBMISSION_OUTCOME_MANUAL_REVIEW = 'manual_review'
+    SUBMISSION_OUTCOME_CHOICES = [
+        (SUBMISSION_OUTCOME_NOT_STARTED, 'No iniciado'),
+        (SUBMISSION_OUTCOME_IN_FLIGHT, 'Envío en curso'),
+        (SUBMISSION_OUTCOME_CONFIRMED, 'Envío confirmado'),
+        (SUBMISSION_OUTCOME_UNKNOWN, 'Resultado desconocido'),
+        (SUBMISSION_OUTCOME_MANUAL_REVIEW, 'Revisión manual'),
+    ]
+
     STATUS_PENDING = 'pending'
     STATUS_GENERATED = 'generated'
     STATUS_GENERATION_ERROR = 'generation_error'
@@ -1707,6 +1778,18 @@ class DGIICertificationDocument(models.Model):
     stale_reason = models.TextField(blank=True, default='')
     stale_at = models.DateTimeField(null=True, blank=True)
     submit_error = models.TextField(blank=True, default='')
+    submission_outcome = models.CharField(
+        max_length=20,
+        choices=SUBMISSION_OUTCOME_CHOICES,
+        default=SUBMISSION_OUTCOME_NOT_STARTED,
+    )
+    submission_started_at = models.DateTimeField(null=True, blank=True)
+    submission_fingerprint = models.CharField(max_length=64, blank=True, default='')
+    reconciliation_attempts = models.PositiveIntegerField(default=0)
+    next_retry_at = models.DateTimeField(null=True, blank=True)
+    reconciliation_lease_until = models.DateTimeField(null=True, blank=True)
+    reconciliation_lease_token = models.CharField(max_length=64, blank=True, default='')
+    last_error = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1714,6 +1797,56 @@ class DGIICertificationDocument(models.Model):
         verbose_name = 'Documento de certificacion DGII'
         verbose_name_plural = 'Documentos de certificacion DGII'
         ordering = ['plan_id', 'item__dgii_group', 'item__source_sheet', 'item__source_row']
+        indexes = [
+            models.Index(
+                fields=['submission_outcome', 'next_retry_at'],
+                name='cert_sub_out_retry_idx',
+            ),
+            models.Index(
+                fields=['submission_outcome', 'submission_started_at'],
+                name='cert_sub_out_start_idx',
+            ),
+            models.Index(
+                fields=['plan', 'submission_outcome', 'next_retry_at'],
+                name='cert_plan_out_retry_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(submission_outcome='in_flight')
+                    | (
+                        models.Q(submission_started_at__isnull=False)
+                        & ~models.Q(submission_fingerprint='')
+                    )
+                ),
+                name='cert_inflight_has_metadata',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    (
+                        models.Q(reconciliation_lease_until__isnull=True)
+                        & models.Q(reconciliation_lease_token='')
+                    )
+                    | (
+                        models.Q(reconciliation_lease_until__isnull=False)
+                        & ~models.Q(reconciliation_lease_token='')
+                    )
+                ),
+                name='cert_lease_fields_consistent',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(submission_outcome='manual_review')
+                    | (
+                        models.Q(next_retry_at__isnull=True)
+                        & models.Q(reconciliation_lease_until__isnull=True)
+                        & models.Q(reconciliation_lease_token='')
+                    )
+                ),
+                name='cert_manual_review_not_queued',
+            ),
+        ]
 
     def clean(self):
         if self.item_id:

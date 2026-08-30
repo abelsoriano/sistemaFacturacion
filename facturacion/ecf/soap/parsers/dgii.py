@@ -8,7 +8,11 @@ from typing import Any
 from lxml import etree
 from zeep.helpers import serialize_object
 
-from facturacion.ecf.soap.responses.dgii import DGIIStatusResponse, DGIISubmissionResponse
+from facturacion.ecf.soap.responses.dgii import (
+    DGIIStatusResponse,
+    DGIISubmissionResponse,
+    DGIITrackIdsResponse,
+)
 
 
 class DGIISOAPResponseParser:
@@ -51,6 +55,23 @@ class DGIISOAPResponseParser:
             encf=self._first_deep(data, "eNCF", "encf", "ncfElectronico", "eNCFEnviado"),
             sequence_used=self._bool_or_none(self._first_deep(data, "secuenciaUtilizada")),
             received_at=self._first_deep(data, "fechaRecepcion"),
+            messages=self._messages(data),
+            raw=data,
+        )
+
+    def parse_trackids(self, response: Any) -> DGIITrackIdsResponse:
+        """Parse a TrackID lookup without treating an empty list as success."""
+        data = self._to_data(response)
+        status = str(self._first_deep(data, "estado", "Estado", "status", "Status", default="pending"))
+        code = self._first_deep(data, "codigo", "code", "Codigo", "codigoEstado")
+        normalized_code = self._int_or_none(code)
+        return DGIITrackIdsResponse(
+            track_ids=self._track_ids(data),
+            status=status,
+            code=normalized_code,
+            rnc=self._first_deep(data, "rnc", "rncEmisor", "RNCEmisor"),
+            encf=self._first_deep(data, "eNCF", "encf", "ncfElectronico", "eNCFEnviado"),
+            is_not_found=(status.strip().lower() in self.not_found_values or normalized_code == 0),
             messages=self._messages(data),
             raw=data,
         )
@@ -143,6 +164,33 @@ class DGIISOAPResponseParser:
         if isinstance(messages, list):
             return [msg if isinstance(msg, dict) else {"valor": str(msg)} for msg in messages]
         return [{"valor": str(messages)}]
+
+    def _track_ids(self, data: Any) -> list[str]:
+        values: list[str] = []
+
+        def collect_track_value(value: Any) -> None:
+            if isinstance(value, list):
+                for child in value:
+                    collect_track_value(child)
+            elif isinstance(value, dict):
+                collect(value)
+            elif value is not None and str(value).strip():
+                values.append(str(value).strip())
+
+        def collect(value: Any) -> None:
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    normalized_key = str(key).lower()
+                    if normalized_key in {"trackid", "trackids", "track_id", "track_ids"}:
+                        collect_track_value(child)
+                    else:
+                        collect(child)
+            elif isinstance(value, list):
+                for child in value:
+                    collect(child)
+
+        collect(data)
+        return list(dict.fromkeys(values))
 
     def _int_or_none(self, value: Any) -> int | None:
         try:

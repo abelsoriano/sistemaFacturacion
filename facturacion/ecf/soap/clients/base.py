@@ -48,17 +48,40 @@ class BaseZeepSOAPClient:
             plugins=[self.history],
         )
 
-    def call(self, operation_name: str, **payload) -> SOAPCallResult:
+    def call(self, operation_name: str, *, allow_retries: bool = True, **payload) -> SOAPCallResult:
         """Call a SOAP operation and capture envelopes for persistence."""
         try:
             operation = getattr(self.client.service, operation_name)
         except AttributeError as exc:
             raise ECFValidationError(f"Operación SOAP no disponible en WSDL: {operation_name}") from exc
 
+        previous_adapters = None
+        if not allow_retries:
+            previous_adapters = {
+                "http://": self.session.get_adapter("http://"),
+                "https://": self.session.get_adapter("https://"),
+            }
+            no_retry_adapter = HTTPAdapter(
+                max_retries=Retry(
+                    total=0,
+                    connect=0,
+                    read=0,
+                    status=0,
+                    redirect=0,
+                    raise_on_status=False,
+                )
+            )
+            self.session.mount("http://", no_retry_adapter)
+            self.session.mount("https://", no_retry_adapter)
+
         try:
             result = operation(**payload)
         except (requests.RequestException, ZeepError, Exception) as exc:
             raise ECFValidationError(f"Error invocando SOAP DGII operación {operation_name}.") from exc
+        finally:
+            if previous_adapters:
+                self.session.mount("http://", previous_adapters["http://"])
+                self.session.mount("https://", previous_adapters["https://"])
 
         return SOAPCallResult(
             result=result,
@@ -105,4 +128,3 @@ class BaseZeepSOAPClient:
             xml_declaration=True,
             pretty_print=True,
         ).decode("utf-8")
-

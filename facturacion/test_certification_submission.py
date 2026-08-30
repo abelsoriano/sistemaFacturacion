@@ -1,0 +1,260 @@
+import hashlib
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
+
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.db import close_old_connections, connection, transaction
+from django.test import TransactionTestCase
+
+from facturacion.models import Company, DGIICertificationDocument, DGIICertificationItem, DGIICertificationPlan
+from facturacion.ecf.services.dgii_submission import DGIISubmissionService
+from facturacion.ecf.utils.fingerprint import submission_fingerprint
+from facturacion.services.certification_submission import (
+    CertificationRemoteSubmissionResponse,
+    CertificationSubmissionBlocked,
+    CertificationSubmissionFencingConflict,
+    CertificationSubmissionService,
+    CertificationSubmissionUnknown,
+)
+
+
+class CountingRemoteSubmitter:
+    def __init__(self, *, error=None):
+        self.calls = 0
+        self.error = error
+        self.lock = threading.Lock()
+
+    def __call__(self, prepared):
+        with self.lock:
+            self.calls += 1
+        if self.error:
+            raise self.error
+        return CertificationRemoteSubmissionResponse(
+            track_id=f"TRACK-{prepared.document_id}",
+            raw={"track_id": f"TRACK-{prepared.document_id}"},
+        )
+
+
+class CertificationSubmissionServiceTests(TransactionTestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="Empresa Submit", rnc="101000001")
+        self.plan = DGIICertificationPlan.objects.create(
+            company=self.company,
+            source_filename="submit.xlsx",
+            file_sha256="6" * 64,
+        )
+        self.paths = []
+
+    def tearDown(self):
+        for path in self.paths:
+            if default_storage.exists(path):
+                default_storage.delete(path)
+
+    def _create_document(self, encf, *, modified_encf="", status="signed", with_document=True):
+        item = DGIICertificationItem.objects.create(
+            plan=self.plan,
+            company=self.company,
+            ecf_type=encf[1:3],
+            dgii_group=2 if modified_encf else 1,
+            encf=encf,
+            source_sheet="ECF",
+            source_row=self.plan.items.count() + 1,
+            raw_data={"NCFModificado": "WRONG-RAW-DATA"},
+        )
+        if not with_document:
+            return item, None
+        reference = (
+            f"<InformacionReferencia><NCFModificado>{modified_encf}</NCFModificado>"
+            "<FechaNCFModificado>01-01-2020</FechaNCFModificado>"
+            "<CodigoModificacion>1</CodigoModificacion></InformacionReferencia>"
+            if modified_encf else ""
+        )
+        xml = f"<ECF><Encabezado><Emisor><RNCEmisor>{self.company.rnc}</RNCEmisor>" \
+              f"<eNCF>{encf}</eNCF></Emisor></Encabezado>{reference}</ECF>"
+        path = default_storage.save(
+            f"tests/certification-submission/{self.plan.pk}-{encf}-{item.pk}.xml",
+            ContentFile(xml.encode()),
+        )
+        self.paths.append(path)
+        document = DGIICertificationDocument.objects.create(
+            plan=self.plan,
+            company=self.company,
+            item=item,
+            ecf_type=item.ecf_type,
+            encf=encf,
+            status=status,
+            signed_xml_path=path,
+            signed_xml_hash=hashlib.sha256(xml.encode()).hexdigest(),
+        )
+        return item, document
+
+    def test_suite_runs_against_postgresql(self):
+        self.assertEqual(connection.vendor, "postgresql")
+
+    def test_productive_service_uses_the_shared_fingerprint_algorithm(self):
+        document = SimpleNamespace(
+            issuer=SimpleNamespace(rnc="101-00000-1"),
+            encf="E310000000001",
+            signed_xml_content="<ECF>firmado</ECF>",
+        )
+        expected = submission_fingerprint(
+            issuer_rnc=document.issuer.rnc,
+            encf=document.encf,
+            signed_xml=document.signed_xml_content,
+        )
+        self.assertEqual(DGIISubmissionService()._submission_fingerprint(document), expected)
+
+    def test_successful_submission_without_dependency_is_confirmed(self):
+        _item, document = self._create_document("E310000000001")
+        remote = CountingRemoteSubmitter()
+
+        result = CertificationSubmissionService(remote_submitter=remote).submit(
+            plan_id=self.plan.pk, document_id=document.pk
+        )
+
+        self.assertEqual(remote.calls, 1)
+        self.assertEqual(result.submission_outcome, "confirmed")
+        self.assertEqual(result.dgii_track_id, f"TRACK-{document.pk}")
+
+    def test_internal_dependency_with_accepted_original_is_submitted(self):
+        _item, original = self._create_document("E310000000001", status="accepted")
+        _item, dependent = self._create_document("E340000000002", modified_encf=original.encf)
+        remote = CountingRemoteSubmitter()
+
+        result = CertificationSubmissionService(remote_submitter=remote).submit(
+            plan_id=self.plan.pk, document_id=dependent.pk
+        )
+
+        self.assertEqual(remote.calls, 1)
+        self.assertEqual(result.submission_outcome, "confirmed")
+
+    def test_internal_dependency_without_accepted_original_does_not_post(self):
+        _item, original = self._create_document("E310000000001")
+        _item, dependent = self._create_document("E340000000002", modified_encf=original.encf)
+        remote = CountingRemoteSubmitter()
+
+        with self.assertRaises(CertificationSubmissionBlocked):
+            CertificationSubmissionService(remote_submitter=remote).submit(
+                plan_id=self.plan.pk, document_id=dependent.pk
+            )
+        self.assertEqual(remote.calls, 0)
+
+    def test_missing_internal_does_not_post(self):
+        self._create_document("E310000000001", with_document=False)
+        _item, dependent = self._create_document("E340000000002", modified_encf="E310000000001")
+        remote = CountingRemoteSubmitter()
+
+        with self.assertRaises(CertificationSubmissionBlocked):
+            CertificationSubmissionService(remote_submitter=remote).submit(
+                plan_id=self.plan.pk, document_id=dependent.pk
+            )
+        self.assertEqual(remote.calls, 0)
+
+    def test_ambiguous_duplicate_does_not_post(self):
+        self._create_document("E310000000001")
+        self._create_document("E310000000001")
+        _item, dependent = self._create_document("E340000000002", modified_encf="E310000000001")
+        remote = CountingRemoteSubmitter()
+
+        with self.assertRaises(CertificationSubmissionBlocked):
+            CertificationSubmissionService(remote_submitter=remote).submit(
+                plan_id=self.plan.pk, document_id=dependent.pk
+            )
+        self.assertEqual(remote.calls, 0)
+
+    def test_remote_timeout_marks_outcome_unknown(self):
+        _item, document = self._create_document("E310000000001")
+        remote = CountingRemoteSubmitter(error=TimeoutError("timeout"))
+
+        with self.assertRaises(CertificationSubmissionUnknown):
+            CertificationSubmissionService(remote_submitter=remote).submit(
+                plan_id=self.plan.pk, document_id=document.pk
+            )
+
+        document.refresh_from_db()
+        self.assertEqual(remote.calls, 1)
+        self.assertEqual(document.submission_outcome, "unknown")
+        self.assertTrue(document.submission_fingerprint)
+        self.assertIn("timeout", document.last_error)
+
+    def test_two_concurrent_attempts_only_one_posts(self):
+        _item, document = self._create_document("E310000000001")
+        remote = CountingRemoteSubmitter()
+        barrier = threading.Barrier(2)
+
+        def worker():
+            close_old_connections()
+            try:
+                barrier.wait(timeout=5)
+                try:
+                    return CertificationSubmissionService(remote_submitter=remote).submit(
+                        plan_id=self.plan.pk, document_id=document.pk
+                    ).submission_outcome
+                except CertificationSubmissionBlocked:
+                    return "blocked"
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = [future.result(timeout=15) for future in (pool.submit(worker), pool.submit(worker))]
+
+        self.assertEqual(remote.calls, 1)
+        self.assertEqual(sorted(results), ["blocked", "confirmed"])
+
+    def test_fingerprint_mismatch_records_conflict_without_overwrite(self):
+        _item, document = self._create_document("E310000000001")
+        service = CertificationSubmissionService(remote_submitter=CountingRemoteSubmitter())
+        snapshots = service._snapshot_plan(self.plan.pk)
+        prepared = service.prepare_certification_submission(
+            plan_id=self.plan.pk, document_id=document.pk, snapshots=snapshots
+        )
+
+        with self.assertRaises(CertificationSubmissionFencingConflict):
+            service.persist_submission_response(
+                document.pk,
+                "different-fingerprint",
+                CertificationRemoteSubmissionResponse(track_id="ORPHAN-TRACK"),
+                None,
+            )
+
+        document.refresh_from_db()
+        self.assertEqual(document.submission_outcome, "in_flight")
+        self.assertEqual(document.submission_fingerprint, prepared.fingerprint)
+        self.assertEqual(document.dgii_track_id, "")
+        self.assertTrue(
+            self.plan.events.filter(item=document.item, payload__stage="persist_response").exists()
+        )
+
+    def test_stale_snapshot_of_non_candidate_invalidates_whole_preflight(self):
+        _item, candidate = self._create_document("E310000000001")
+        _item, other = self._create_document("E320000000002")
+        remote = CountingRemoteSubmitter()
+        service = CertificationSubmissionService(remote_submitter=remote)
+        snapshots = service._snapshot_plan(self.plan.pk)
+        other.signed_xml_hash = "0" * 64
+        other.save(update_fields=["signed_xml_hash", "updated_at"])
+
+        with self.assertRaises(CertificationSubmissionBlocked):
+            service.prepare_certification_submission(
+                plan_id=self.plan.pk,
+                document_id=candidate.pk,
+                snapshots=snapshots,
+            )
+        self.assertEqual(remote.calls, 0)
+
+    def test_missing_non_candidate_snapshot_invalidates_without_raw_data_fallback(self):
+        _item, candidate = self._create_document("E310000000001")
+        _item, other = self._create_document("E320000000002")
+        service = CertificationSubmissionService(remote_submitter=CountingRemoteSubmitter())
+        snapshots = service._snapshot_plan(self.plan.pk)
+        snapshots.pop(other.pk)
+
+        with self.assertRaises(CertificationSubmissionBlocked) as raised:
+            service.prepare_certification_submission(
+                plan_id=self.plan.pk,
+                document_id=candidate.pk,
+                snapshots=snapshots,
+            )
+        self.assertIn("artifact_missing", str(raised.exception))

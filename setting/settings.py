@@ -234,6 +234,14 @@ CELERY_TASK_ROUTES = {
     'facturacion.ecf.tasks.dgii.submit_dgii': {'queue': 'ecf.dgii'},
     'facturacion.ecf.tasks.dgii.check_status': {'queue': 'ecf.status'},
     'facturacion.ecf.tasks.dgii.retry_submission': {'queue': 'ecf.retry'},
+    'facturacion.ecf.tasks.dgii.schedule_stale_reconciliations': {'queue': 'ecf.reconciliation'},
+    'facturacion.ecf.tasks.dgii.reconcile_submission': {'queue': 'ecf.reconciliation'},
+}
+CELERY_BEAT_SCHEDULE = {
+    'ecf-reconciliation-sweep': {
+        'task': 'facturacion.ecf.tasks.dgii.schedule_stale_reconciliations',
+        'schedule': 60.0,
+    },
 }
 ECF_TASK_MAX_RETRIES = int(os.environ.get('ECF_TASK_MAX_RETRIES', '5'))
 ECF_TASK_RETRY_BACKOFF_SECONDS = int(os.environ.get('ECF_TASK_RETRY_BACKOFF_SECONDS', '60'))

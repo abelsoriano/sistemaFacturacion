@@ -25,7 +25,7 @@ from facturacion.api.serializers.ecf_config import (
 from facturacion.ecf.certificates.loader import PKCS12CertificateLoader
 from facturacion.ecf.certificates.metadata import ECFCertificateMetadataService
 from facturacion.ecf.certificates.resolver import resolve_certificate_credentials
-from facturacion.ecf.exceptions import ECFError
+from facturacion.ecf.exceptions import ECFError, ECFValidationError
 from facturacion.ecf.services.certificate_policy import ECFCertificateSigningPolicy
 from facturacion.ecf.signer.xml_signer import ECFXMLSigner
 from facturacion.models import CompanyMembership, ECFCertificate, ECFEventLog, ECFIssuerConfig, ECFSequence
@@ -92,6 +92,13 @@ class ECFIssuerConfigViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet):
             return Response({'certificate': ['Debe cargar un archivo .p12.']}, status=status.HTTP_400_BAD_REQUEST)
         if Path(uploaded_file.name).suffix.lower() != '.p12':
             return Response({'certificate': ['El certificado debe ser un archivo .p12.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        certificate_bytes = uploaded_file.read()
+        try:
+            ECFCertificateMetadataService().validate_upload(certificate_bytes, password)
+        except ECFValidationError as exc:
+            return Response({'certificate': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        uploaded_file.seek(0)
 
         filename = f"{uuid4().hex}.p12"
         relative_path = f"ecf_certificates/company_{company.id}/issuer_{issuer.id}/{filename}"

@@ -18,6 +18,20 @@ class DGIISubmissionResponse:
 
 
 @dataclass(frozen=True)
+class DGIITrackIdsResponse:
+    """Normalized response from DGII TrackID lookup."""
+
+    track_ids: list[str] = field(default_factory=list)
+    status: str = "pending"
+    code: int | None = None
+    rnc: str | None = None
+    encf: str | None = None
+    is_not_found: bool = False
+    messages: list[dict[str, Any]] = field(default_factory=list)
+    raw: Any = None
+
+
+@dataclass(frozen=True)
 class DGIIStatusResponse:
     """Normalized response from DGII result/status query."""
 
@@ -31,4 +45,3 @@ class DGIIStatusResponse:
     received_at: str | None = None
     messages: list[dict[str, Any]] = field(default_factory=list)
     raw: Any = None
-

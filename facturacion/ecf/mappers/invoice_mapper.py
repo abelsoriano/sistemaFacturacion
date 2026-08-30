@@ -10,7 +10,7 @@ from typing import Any
 from django.conf import settings
 
 from facturacion.models import ElectronicFiscalDocument, InvoiceDetail
-from facturacion.ecf.constants import PAYMENT_METHOD_TO_DGII
+from facturacion.ecf.constants import PAYMENT_METHOD_TO_DGII, should_include_buyer
 from facturacion.ecf.utils.dates import format_dgii_date, format_dgii_datetime
 from facturacion.ecf.utils.decimals import quantize_money
 from facturacion.ecf.utils.tax import infer_itbis_rate, indicator_for_rate, taxable_base_from_total
@@ -59,18 +59,23 @@ class InvoiceECFMapper:
         taxable = taxable_base > 0 and tax > 0
         indicator = indicator_for_rate(itbis_rate, taxable=taxable)
 
+        buyer = self._map_buyer(document)
         return ECFPayload(
             ecf_type=document.ecf_type,
             encf=document.encf,
             issue_date=format_dgii_date(source.created_at),
             signature_datetime=format_dgii_datetime(),
-            sequence_expiration_date=format_dgii_date(document.sequence.expiration_date),
+            sequence_expiration_date=(
+                format_dgii_date(document.sequence.expiration_date)
+                if document.ecf_type == "31"
+                else None
+            ),
             income_type=getattr(settings, "ECF_DEFAULT_INCOME_TYPE", "01"),
             payment_type=self._map_payment_type(getattr(source, "status", "paid")),
             payment_form=PAYMENT_METHOD_TO_DGII.get(getattr(source, "payment_method", "cash"), "8"),
             credit_note_indicator=self._map_credit_note_indicator(document),
             issuer=self._map_issuer(document),
-            buyer=self._map_buyer(document),
+            buyer=buyer,
             totals=self._map_totals(taxable_base, tax, source.total, itbis_rate, taxable),
             items=self._map_items(details, indicator, discount, subtotal),
             internal_invoice_number=clean_text(
@@ -78,6 +83,7 @@ class InvoiceECFMapper:
                 20,
             ) or str(source.id),
             modified_document=self._map_modified_document(document),
+            include_buyer=should_include_buyer(document.ecf_type, bool(buyer)),
         )
 
     def _map_issuer(self, document: ElectronicFiscalDocument) -> dict[str, Any]:

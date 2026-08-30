@@ -9,6 +9,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from facturacion.models import CreditNote, ECFEventLog, ElectronicFiscalDocument, InvoiceDetail, Product, SaleDetail
+from facturacion.services.inventory_locking import lock_products_for_inventory
 
 
 @dataclass(frozen=True)
@@ -132,7 +133,9 @@ class CreditNoteReconciliationService:
             )
             raise ValueError("No se puede compensar automaticamente: " + " ".join(issues))
 
-        for detail in note.details.select_related("product").all():
+        details = list(note.details.select_related("product").all())
+        lock_products_for_inventory(detail.product_id for detail in details)
+        for detail in sorted(details, key=lambda detail: detail.product_id):
             Product.objects.filter(pk=detail.product_id).update(stock=F("stock") - detail.quantity)
 
         now = timezone.now()

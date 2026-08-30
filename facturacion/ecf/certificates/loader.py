@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
 from django.utils import timezone
 
-from facturacion.ecf.exceptions import ECFValidationError
+from facturacion.ecf.exceptions import CertificateExpiredError, ECFValidationError
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,11 @@ class PKCS12CertificateLoader:
         if self._not_valid_before(certificate) > now:
             raise ECFValidationError("El certificado digital aún no es válido.")
         if self._not_valid_after(certificate) <= now:
-            raise ECFValidationError("El certificado digital está vencido.")
+            raise CertificateExpiredError("El certificado digital está vencido.")
+
+    def validate_loaded_certificate(self, certificate: LoadedCertificate) -> None:
+        """Revalidate an already loaded certificate immediately before persistence."""
+        self._validate_expiration(certificate.certificate)
 
     def _not_valid_before(self, certificate: x509.Certificate):
         if hasattr(certificate, "not_valid_before_utc"):

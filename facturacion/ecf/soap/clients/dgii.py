@@ -22,6 +22,7 @@ class DGIISOAPClient:
         client = self._client(self.environment.reception_wsdl)
         return client.call(
             self.environment.submit_operation,
+            allow_retries=False,
             xml=signed_xml_content,
             encf=encf,
             rncEmisor=issuer_rnc,
@@ -54,4 +55,3 @@ class DGIISOAPClient:
             verify_tls=self.environment.verify_tls,
             headers=self.headers,
         )
-

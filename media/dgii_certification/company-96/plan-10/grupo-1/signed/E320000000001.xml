@@ -41,7 +41,7 @@
       <MontoItem>300000.00</MontoItem>
     </Item>
   </DetallesItems>
-  <FechaHoraFirma>12-07-2026 00:35:14</FechaHoraFirma>
+  <FechaHoraFirma>12-08-2026 09:43:43</FechaHoraFirma>
   <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
     <ds:SignedInfo>
       <ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
@@ -52,29 +52,29 @@
           <ds:Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
         </ds:Transforms>
         <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
-        <ds:DigestValue>qUW4in+64HrnK9WPofXwgj5VGmWwhBQe6yig2AkLVtI=</ds:DigestValue>
+        <ds:DigestValue>flDA7l87PiwPI1zMS3Lhn+l0jZTEX6DoU2CAUCcgRO4=</ds:DigestValue>
       </ds:Reference>
     </ds:SignedInfo>
-    <ds:SignatureValue>Vy+XIwkTLMTZx9tDoI1Th7Xc57JMgNJqSHQCQ5MOTKRe5jG6+itY6joVPoPlXVvqM0VR5+p1Wf0gcRFOrUyg0O9tKx9PuT5oHkDV55sR3AEBhA7Dnmy2/EbXa96oYX8deB5zkOFrxl6BkruGMWwEXjovwnHC5VwMKYjWx0pXLDBZJ5WlJCOEMeKTk/4lsAFCMxRankvFi+V/fltWkF3yAEf2Q/ciAztHN4z7hm3idz4f6u1xnmrve73K5TCQ508y/QT7KOYO7VZAi2wd+B9icVxvHUnorDbdbF9kjQ5oqpLQCbal7t4OdM94XbihkLXE+MQwwf4L6RtX6k3O22Os/Q==</ds:SignatureValue>
+    <ds:SignatureValue>NtgM1kRkzdRjnuRXmtmv7zC8B+lNvpJIGT4Q98MCoAIPICXwn99iJb4+4BTUdZuwPXf7wUqlLxGgAlOElTjp+7W9MfuFip5LAqAYPFfs5IGNDqsFLwsftzYUIOIuoAOAz5TrcUcbLViwJASLZLhEXoYRxc8d7y5nGR6gJUJ2MNO2ha2ZeVhm469N6p6A6Tpk4yhp7RU8iJ3X+HEWz+6IQA7uU8wB8mNqrOH573jIi4EmonrHoZOChRFeDLz0cuJQk+yr8FgqqUpzoV1Go/Cgoaw06j/aFGeAFNfhRg8E/N6FOZCcEe6dJwDjvu9N5ri4KYpmsXX+iaUVNpLQ19wJSg==</ds:SignatureValue>
     <ds:KeyInfo>
       <ds:X509Data>
-        <ds:X509Certificate>MIIDEjCCAfqgAwIBAgIURtbhqrGQPBsLEuA9nT+OeVE2FKowDQYJKoZIhvcNAQEL
+        <ds:X509Certificate>MIIDEjCCAfqgAwIBAgIUaHOJoekuI7E3oEysVqCnfs+4f84wDQYJKoZIhvcNAQEL
 BQAwQzELMAkGA1UEBhMCRE8xEjAQBgNVBAoMCURHSUkgVGVzdDEgMB4GA1UEAwwX
-REdJSSBDZXJ0aWZpY2F0aW9uIFRlc3QwHhcNMjYwNzExMDQzNTE0WhcNMjcwNzEy
-MDQzNTE0WjBDMQswCQYDVQQGEwJETzESMBAGA1UECgwJREdJSSBUZXN0MSAwHgYD
+REdJSSBDZXJ0aWZpY2F0aW9uIFRlc3QwHhcNMjYwODExMTM0MzQ0WhcNMjcwODEy
+MTM0MzQ0WjBDMQswCQYDVQQGEwJETzESMBAGA1UECgwJREdJSSBUZXN0MSAwHgYD
 VQQDDBdER0lJIENlcnRpZmljYXRpb24gVGVzdDCCASIwDQYJKoZIhvcNAQEBBQAD
-ggEPADCCAQoCggEBALzF5mNFFDCX8qW0x2LEFXbvXNe3tYHNMIjlxy5o3pQy+kcl
-X7LUL0YubNK+1++jBy6LkIZ+VKblBx79+yC0OT1Zv7fcy1P3RN6tGEH0VgG4a+wd
-e75XeT0gjDvYw7j11VAN2UUCWyRtf/SDSSje2xsYzGcH3NWR0GthWqyjfcPElY7h
-imqDcqV1dl3TFcQ82UYUUKiUR8i8Rc7lAYQ0mqmbJ521buIRXnZ2VYnaSzOeT2v8
-WcSpXAVJY2oHQrIKTQbW8BlE+LxgmQXAr+MqI8YAQq00UglKf2SNmi3VUV7poRA+
-qJpor7q06kwOsginB4motNzJ+mmYHMRmugNyxAsCAwEAATANBgkqhkiG9w0BAQsF
-AAOCAQEAkFqndOT2XzzOhlNfdkhOViYohIUnZO2nGrAaLEKhDmfpKwXPTsknKlVX
-3JtOO4owRjm7/tsb75QjneunpLLJRKuSdaiko0AoeBaULWP6dsaf3jocn/uKCdB2
-wEb9P8rbUR7wkMY79Mh1BtPI02l/9sVS3rN+S/BoVAdNWEkskfdoGgJ43n3xN0iU
-RUNlK3sHouQSYkRtP4B4GCVF4ZVJqbvOKsk0fv631Bn9Ind1CPWKAqOfZ6Zqh8yt
-wyT4uyPOJxVbzDrsS/nPIj9P7VULProiM/+FpU+n36U2RNrxw+CTYdZpFh3ekBQM
-YaQx1cDGeS2l3El8zDF0BjcDQ2N93w==
+ggEPADCCAQoCggEBAMKQB6bmrgmshL4lJDp4kK2Y0o6siLoSQA1v73i8grjoJQnG
+HSTVWkcjlFZJoIjVAulaQY4ZnFIlgKlsvqGaIOLgzXDgOhBkhAUjOYir7r2mo11B
+qopO/K3rnOnn5ViKDUU48AE/rO3Pdde+qWkaVhSvus7ZVBRLN51/yWbRT5BKZK4F
+nHssR2+5ua4iMhAL/koIBHg0m4XHZGlFKOVVEswqt5SWUkGH4C/f3DX1E8AB5AiA
+jVg6ZuoI5TdPQgrMUcUErzf/gRWyiT36ZLmpiAKTCkW7xGtP3MWdlott1cmjDRfv
+rf+IAhKS8XqSCkIw2dRW5KRDvS7ROzoY5FCw4esCAwEAATANBgkqhkiG9w0BAQsF
+AAOCAQEAStvulC3sazqqBOqpAFX9b2ya0onFCJ9jJR6FTC6Z0IFhh9WdQhbkApxI
+7Dg1v4NPqIV9eLnK/SrVoC78/Y1Gm9TPsAEzGpUrpJBjGyHbWUopg0RM14N1Hf0O
+DDLMiPuY4nF16iRO88RpOQ9ijG8h5rRVWBTG0qdvWV0yobxb6qUaE3X8UKDwL5w0
+fOICC4bEZ+mTJzniV/H7eSnAcSCek0ONJzOKayPrBxax0sGTVf1sjBUwK0NBeokp
+S+Z212RazLbBokKRigMKa98KQlCQTCsS1HFWLXadl+7R+vELNgcwdANHu3xe8kZB
+LpLjec7dv2zRIht5WTjAXyjr+m0N9A==
 </ds:X509Certificate>
       </ds:X509Data>
     </ds:KeyInfo>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timezone as datetime_timezone
+import logging
 from pathlib import Path
 import re
 
@@ -14,10 +15,12 @@ from cryptography.x509.oid import NameOID
 from django.db import transaction
 from django.utils import timezone
 
+from facturacion.ecf.exceptions import ECFValidationError
 from facturacion.models import ECFIssuerConfig
 
 
 RNC_CANDIDATE_RE = re.compile(r"(?<!\d)(?:\d[\s-]?){9}(?:(?:\d[\s-]?){2})?(?!\d)")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,10 @@ class ECFCertificateMetadataService:
     """Refresh non-secret certificate metadata on an issuer config."""
 
     EXPIRING_SOON_DAYS = 30
+
+    def validate_upload(self, certificate_bytes: bytes, password: str | bytes | None) -> None:
+        """Validate PKCS#12 integrity and password without persisting metadata."""
+        self._load_certificate_bytes(certificate_bytes, password)
 
     def refresh(self, issuer: ECFIssuerConfig) -> CertificateMetadataResult:
         with transaction.atomic():
@@ -97,12 +104,23 @@ class ECFCertificateMetadataService:
         path = Path(certificate_path)
         if not path.exists() or not path.is_file():
             raise ValueError("Certificate file does not exist.")
-        private_key, certificate, _additional = pkcs12.load_key_and_certificates(
-            path.read_bytes(),
-            self._password_bytes(password),
-        )
+        return self._load_certificate_bytes(path.read_bytes(), password)
+
+    def _load_certificate_bytes(self, certificate_bytes: bytes, password: str | bytes | None):
+        try:
+            private_key, certificate, _additional = pkcs12.load_key_and_certificates(
+                certificate_bytes,
+                self._password_bytes(password),
+            )
+        except Exception as exc:
+            logger.exception("No fue posible abrir el certificado PKCS#12 durante la validación de carga.")
+            raise ECFValidationError(
+                "No fue posible abrir el certificado .p12. Verifique el archivo y la contraseña."
+            ) from exc
         if private_key is None or certificate is None:
-            raise ValueError("PKCS#12 file does not contain a private key and certificate.")
+            raise ECFValidationError(
+                "El archivo .p12 no contiene una llave privada y un certificado X509 válidos."
+            )
         return certificate
 
     def _status_for_dates(self, now, not_valid_before, not_valid_after) -> str:

@@ -15,6 +15,7 @@ from facturacion.ecf.queues import enqueue_submission_pipeline
 from facturacion.ecf.services.document_factory import ECFDocumentFactoryService
 from facturacion.models import Client, Company, ECFEventLog, ElectronicFiscalDocument, Invoice, InvoiceDetail, Product, Sale, SaleDetail
 from facturacion.services.fiscal_rules import FiscalCalculationService
+from facturacion.services.inventory_locking import lock_products_for_inventory
 
 
 @dataclass(frozen=True)
@@ -326,10 +327,7 @@ class InvoiceCreationService:
             raise ValueError("Debe incluir al menos un producto.")
         normalized = []
         product_ids = [self._product_id(detail) for detail in details]
-        product_queryset = Product.objects.select_for_update().filter(id__in=product_ids)
-        if company:
-            product_queryset = product_queryset.filter(company=company)
-        products = {product.id: product for product in product_queryset}
+        products = lock_products_for_inventory(product_ids, company=company)
 
         for detail in details:
             product_id = self._product_id(detail)
@@ -366,13 +364,7 @@ class InvoiceCreationService:
             raise ValueError("La factura no tiene productos para cobrar.")
 
         product_ids = [detail.product_id for detail in details]
-        products = {
-            product.id: product
-            for product in Product.objects.select_for_update().filter(
-                id__in=product_ids,
-                company=invoice.company,
-            )
-        }
+        products = lock_products_for_inventory(product_ids, company=invoice.company)
 
         for detail in details:
             product = products.get(detail.product_id)

@@ -9,6 +9,10 @@ class ECFValidationError(ECFError):
     """Raised when an e-CF document does not pass business or XML validation."""
 
 
+class CertificateExpiredError(ECFValidationError):
+    """Raised when a PKCS#12 certificate is no longer valid for signing."""
+
+
 class ECFTemporaryError(ECFError):
     """Raised when an external condition can succeed on retry."""
 

@@ -8,7 +8,7 @@ from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from facturacion.ecf.exceptions import ECFPermanentError
+from facturacion.ecf.exceptions import CertificateExpiredError, ECFPermanentError
 from facturacion.ecf.certificates.resolver import resolve_certificate_credentials
 from facturacion.ecf.services.certificate_policy import ECFCertificateSigningPolicy
 from facturacion.ecf.services.signing import ECFSigningService
@@ -20,9 +20,10 @@ from facturacion.models import ECFEventLog, ElectronicFiscalDocument
 def sign_xml(self, document_id: int, user_id: int | None = None, validate_xsd: bool = True):
     """Sign generated XML idempotently."""
     user = _user(user_id)
+    certificate_path = None
+    certificate_policy = ECFCertificateSigningPolicy()
     self.mark_started(document_id, "sign_xml")
     try:
-        certificate_policy = ECFCertificateSigningPolicy()
         with transaction.atomic():
             document = ElectronicFiscalDocument.objects.select_for_update().select_related("issuer").get(pk=document_id)
             if document.signed_xml_content and document.fiscal_status in {"signed", "submitted", "accepted", "rejected"}:
@@ -74,6 +75,12 @@ def sign_xml(self, document_id: int, user_id: int | None = None, validate_xsd: b
             "xsd_validated": result.xsd_validated,
         }
     except Exception as exc:
+        if isinstance(exc, CertificateExpiredError):
+            certificate_policy.record_loader_expiration(
+                document_id,
+                certificate_path,
+                user=user,
+            )
         self.fail_or_retry(exc, document_id, "sign_xml")
 
 

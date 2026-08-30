@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timedelta, timezone
+import threading
+from dataclasses import replace
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO, StringIO
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
@@ -15,6 +18,7 @@ from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 from openpyxl import Workbook
+from lxml import etree
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -39,14 +43,18 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from facturacion.ecf.certificates.loader import PKCS12CertificateLoader
 from facturacion.ecf.certificates.metadata import ECFCertificateMetadataService, extract_rnc_candidates_from_certificate
 from facturacion.ecf.certificates.resolver import resolve_certificate_credentials
-from facturacion.ecf.exceptions import ECFValidationError
+from facturacion.ecf.exceptions import CertificateExpiredError, ECFValidationError
 from facturacion.ecf.services.dgii_status import DGIIStatusService
 from facturacion.ecf.services.dgii_submission import DGIISubmissionService
+from facturacion.ecf.services.dgii_reconciliation import DGIIReconciliationService
 from facturacion.ecf.services.document_factory import ECFDocumentFactoryService
 from facturacion.ecf.services.job_reconciliation import ECFJobStatusReconciliationService
 from facturacion.ecf.services.certificate_policy import ECFCertificateSigningPolicy
 from facturacion.ecf.services.signing import ECFSigningService
 from facturacion.ecf.services.xml_generation import ECFXMLGenerationService
+from facturacion.ecf.constants import ECF_TYPE_RULES, should_include_buyer
+from facturacion.ecf.mappers.invoice_mapper import ECFPayload, InvoiceECFMapper
+from facturacion.ecf.xml.serializers.e_cf_serializer import ECFXMLSerializer
 from facturacion.ecf.queues.ecf import enqueue_generate_xml, enqueue_submission_pipeline
 from facturacion.ecf.rest.auth import DGIIRESTAuthClient
 from facturacion.ecf.rest.clients import DGIIRESTClient
@@ -54,7 +62,8 @@ from facturacion.ecf.rest.environments import DGIIRESTEnvironment, DGIIRESTEnvir
 from facturacion.ecf.rest.responses import DGIIRESTToken
 from facturacion.ecf.signer.xml_signer import ECFXMLSigner
 from facturacion.ecf.soap.auth import DGIIBearerToken
-from facturacion.ecf.soap.clients.base import SOAPCallResult
+from facturacion.ecf.soap.clients.base import BaseZeepSOAPClient, SOAPCallResult
+from facturacion.ecf.soap.clients.dgii import DGIISOAPClient
 from facturacion.ecf.soap.environments import DGIISOAPEnvironment
 from facturacion.ecf.soap.parsers.dgii import DGIISOAPResponseParser
 from facturacion.ecf.validators.signature import ECFSignatureValidator
@@ -68,6 +77,7 @@ from facturacion.models import (
     Company,
     CompanyMembership,
     CreditNote,
+    CreditNoteDetail,
     DGIICertificationDocument,
     DGIICertificationCommercialApprovalEvent,
     DGIICertificationCommercialApprovalItem,
@@ -116,7 +126,7 @@ from facturacion.api.views.quotations import QuotationViewSet
 from facturacion.api.views.reports import DashboardView
 from facturacion.api.views.sales_legacy import SaleCreateView, SaleListView, SalesUpdateDeleteView
 from facturacion.api.views.auth import GroupViewSet, PermissionListView, RegisterView, UserViewSet
-from facturacion.ecf.tasks.dgii import check_status, submit_dgii
+from facturacion.ecf.tasks.dgii import check_status, schedule_stale_reconciliations, submit_dgii
 from facturacion.ecf.tasks.signing import sign_xml as sign_xml_task
 from facturacion.ecf.tasks.xml import generate_xml as generate_xml_task
 from facturacion.api.company_context import (
@@ -1376,6 +1386,247 @@ class DGIICertificationPlanTests(TestCase):
         self.assertNotIn("<TablaFormasPago>", xml)
         self.assertNotIn("<MontoPago>", xml)
 
+    def test_certification_item_reference_fields_reach_payload_xml_and_xsd(self):
+        from facturacion.services.dgii_certification import DGIICertificationDocumentGenerator
+
+        user, company, plan = self._create_plan_with_items([{
+            "ecf_type": "31",
+            "dgii_group": 1,
+            "encf": "E310000000002",
+            "amount": Decimal("3811.40"),
+            "raw_data": {
+                "FechaVencimientoSecuencia": "31-12-2028",
+                "MontoGravadoTotal": "3230.00",
+                "MontoGravadoI1": "3230.00",
+                "ITBIS1": "18",
+                "TotalITBIS": "581.40",
+                "TotalITBIS1": "581.40",
+                "MontoTotal": "3811.40",
+                "IndicadorFacturacion[1]": "1",
+                "NombreItem[1]": "PTE. CJ 24/12OZ",
+                "CantidadItem[1]": "2.00",
+                "UnidadMedida[1]": "6",
+                "CantidadReferencia[1]": "24",
+                "UnidadReferencia[1]": "5",
+                "GradosAlcohol[1]": "5.00",
+                "PrecioUnitarioReferencia[1]": "65.00",
+                "PrecioUnitarioItem[1]": "1615.00",
+                "MontoItem[1]": "3230.00",
+            },
+        }])
+        issuer = self._create_certification_issuer(company)
+        item = plan.items.get()
+        generator = DGIICertificationDocumentGenerator()
+
+        payload = generator._build_payload(item=item, issuer=issuer)
+        document = generator.generate_item(item=item, user=user)
+        xml = document.xml_content
+
+        self.assertEqual(payload.items[0]["quantity_reference"], Decimal("24.00"))
+        self.assertEqual(payload.items[0]["reference_unit"], "5")
+        self.assertEqual(payload.items[0]["alcohol_degrees"], Decimal("5.00"))
+        self.assertEqual(payload.items[0]["reference_unit_price"], Decimal("65.00"))
+        self.assertIn("<CantidadReferencia>24</CantidadReferencia>", xml)
+        self.assertIn("<UnidadReferencia>5</UnidadReferencia>", xml)
+        self.assertIn("<GradosAlcohol>5.00</GradosAlcohol>", xml)
+        self.assertIn("<PrecioUnitarioReferencia>65.00</PrecioUnitarioReferencia>", xml)
+        self.assertLess(xml.index("<UnidadMedida>"), xml.index("<CantidadReferencia>"))
+        self.assertLess(xml.index("<PrecioUnitarioReferencia>"), xml.index("<PrecioUnitarioItem>"))
+        ECFXSDValidator().validate("31", xml)
+
+    def test_certification_item_dates_reach_payload_xml_in_xsd_order(self):
+        from facturacion.services.dgii_certification import DGIICertificationDocumentGenerator
+
+        user, company, plan = self._create_plan_with_items([{
+            "ecf_type": "31",
+            "dgii_group": 1,
+            "encf": "E310000000008",
+            "amount": Decimal("118.00"),
+            "raw_data": {
+                "FechaVencimientoSecuencia": "31-12-2028",
+                "MontoGravadoTotal": "100.00",
+                "MontoGravadoI1": "100.00",
+                "ITBIS1": "18",
+                "TotalITBIS": "18.00",
+                "TotalITBIS1": "18.00",
+                "MontoTotal": "118.00",
+                "IndicadorFacturacion[1]": "1",
+                "NombreItem[1]": "Producto fechado",
+                "CantidadItem[1]": "1.00",
+                "FechaElaboracion[1]": "20-12-2019",
+                "FechaVencimientoItem[1]": "10-10-2020",
+                "PrecioUnitarioItem[1]": "100.00",
+                "MontoItem[1]": "100.00",
+            },
+        }])
+        issuer = self._create_certification_issuer(company)
+        item = plan.items.get()
+        generator = DGIICertificationDocumentGenerator()
+
+        payload = generator._build_payload(item=item, issuer=issuer)
+        document = generator.generate_item(item=item, user=user)
+        xml = document.xml_content
+
+        self.assertEqual(payload.items[0]["manufacturing_date"], "20-12-2019")
+        self.assertEqual(payload.items[0]["item_expiration_date"], "10-10-2020")
+        self.assertIn("<FechaElaboracion>20-12-2019</FechaElaboracion>", xml)
+        self.assertIn("<FechaVencimientoItem>10-10-2020</FechaVencimientoItem>", xml)
+        self.assertLess(xml.index("<CantidadItem>"), xml.index("<FechaElaboracion>"))
+        self.assertLess(xml.index("<FechaElaboracion>"), xml.index("<FechaVencimientoItem>"))
+        self.assertLess(xml.index("<FechaVencimientoItem>"), xml.index("<PrecioUnitarioItem>"))
+        ECFXSDValidator().validate("31", xml)
+
+    def test_certification_explicit_zero_base_itbis_rates_preserve_presence(self):
+        from facturacion.services.dgii_certification import DGIICertificationDocumentGenerator
+
+        user, company, plan = self._create_plan_with_items([
+            {
+                "ecf_type": "45",
+                "dgii_group": 1,
+                "encf": "E450000000008",
+                "amount": Decimal("118.00"),
+                "raw_data": {
+                    "FechaVencimientoSecuencia": "31-12-2028",
+                    "MontoGravadoTotal": "100.00",
+                    "MontoGravadoI1": "100.00",
+                    "MontoGravadoI2": "0.00",
+                    "MontoGravadoI3": "0.00",
+                    "ITBIS1": "18",
+                    "ITBIS2": "16",
+                    "ITBIS3": "0",
+                    "TotalITBIS": "18.00",
+                    "TotalITBIS1": "18.00",
+                    "MontoTotal": "118.00",
+                    "IndicadorFacturacion[1]": "1",
+                    "MontoItem[1]": "100.00",
+                    "PrecioUnitarioItem[1]": "100.00",
+                },
+            },
+            {
+                "ecf_type": "45",
+                "dgii_group": 1,
+                "encf": "E450000000009",
+                "amount": Decimal("118.00"),
+                "raw_data": {
+                    "FechaVencimientoSecuencia": "31-12-2028",
+                    "MontoGravadoTotal": "100.00",
+                    "MontoGravadoI1": "100.00",
+                    "ITBIS1": "18",
+                    "TotalITBIS": "18.00",
+                    "TotalITBIS1": "18.00",
+                    "MontoTotal": "118.00",
+                    "IndicadorFacturacion[1]": "1",
+                    "MontoItem[1]": "100.00",
+                    "PrecioUnitarioItem[1]": "100.00",
+                },
+            },
+        ])
+        self._create_certification_issuer(company)
+        generator = DGIICertificationDocumentGenerator()
+
+        explicit = generator.generate_item(item=plan.items.get(encf="E450000000008"), user=user).xml_content
+        absent = generator.generate_item(item=plan.items.get(encf="E450000000009"), user=user).xml_content
+
+        self.assertIn("<ITBIS2>16</ITBIS2>", explicit)
+        self.assertIn("<ITBIS3>0</ITBIS3>", explicit)
+        self.assertNotIn("<ITBIS2>", absent)
+        self.assertNotIn("<ITBIS3>", absent)
+        ECFXSDValidator().validate("45", explicit)
+        ECFXSDValidator().validate("45", absent)
+
+    def test_certification_subdiscounts_are_data_driven_and_xsd_valid(self):
+        from facturacion.services.dgii_certification import DGIICertificationDocumentGenerator
+
+        user, company, plan = self._create_plan_with_items([{
+            "ecf_type": "41",
+            "dgii_group": 1,
+            "encf": "E410000000008",
+            "amount": Decimal("7422.20"),
+            "raw_data": {
+                "FechaVencimientoSecuencia": "31-12-2028",
+                "MontoGravadoTotal": "6290.00",
+                "MontoGravadoI1": "6290.00",
+                "ITBIS1": "18",
+                "TotalITBIS": "1132.20",
+                "TotalITBIS1": "1132.20",
+                "MontoTotal": "7422.20",
+                "IndicadorFacturacion[1]": "1",
+                "IndicadorAgenteRetencionoPercepcion[1]": "1",
+                "MontoITBISRetenido[1]": "0.00",
+                "MontoISRRetenido[1]": "0.00",
+                "NombreItem[1]": "Servicio legal",
+                "CantidadItem[1]": "15.00",
+                "PrecioUnitarioItem[1]": "385.00",
+                "DescuentoMonto[1]": "385.00",
+                "TipoSubDescuento[1][1]": "$",
+                "MontoSubDescuento[1][1]": "385.00",
+                "MontoItem[1]": "5390.00",
+                "IndicadorFacturacion[2]": "1",
+                "IndicadorAgenteRetencionoPercepcion[2]": "1",
+                "MontoITBISRetenido[2]": "0.00",
+                "MontoISRRetenido[2]": "0.00",
+                "NombreItem[2]": "Servicio multiple",
+                "CantidadItem[2]": "10.00",
+                "PrecioUnitarioItem[2]": "100.00",
+                "DescuentoMonto[2]": "100.00",
+                "TipoSubDescuento[2][1]": "$",
+                "MontoSubDescuento[2][1]": "50.00",
+                "TipoSubDescuento[2][2]": "%",
+                "SubDescuentoPorcentaje[2][2]": "5.00",
+                "MontoSubDescuento[2][2]": "50.00",
+                "MontoItem[2]": "900.00",
+            },
+        }])
+        issuer = self._create_certification_issuer(company)
+        item = plan.items.get()
+        generator = DGIICertificationDocumentGenerator()
+
+        payload = generator._build_payload(item=item, issuer=issuer)
+        document = generator.generate_item(item=item, user=user)
+        xml = document.xml_content
+
+        self.assertEqual(len(payload.items[0]["sub_discounts"]), 1)
+        self.assertEqual(len(payload.items[1]["sub_discounts"]), 2)
+        self.assertIn("<DescuentoMonto>385.00</DescuentoMonto>", xml)
+        self.assertIn("<TipoSubDescuento>$</TipoSubDescuento>", xml)
+        self.assertIn("<SubDescuentoPorcentaje>5.00</SubDescuentoPorcentaje>", xml)
+        self.assertEqual(xml.count("<TablaSubDescuento>"), 2)
+        self.assertLess(xml.index("<DescuentoMonto>"), xml.index("<TablaSubDescuento>"))
+        ECFXSDValidator().validate("41", xml)
+
+    def test_certification_item_without_subdiscounts_omits_table(self):
+        from facturacion.services.dgii_certification import DGIICertificationDocumentGenerator
+
+        user, company, plan = self._create_plan_with_items([{
+            "ecf_type": "41",
+            "dgii_group": 1,
+            "encf": "E410000000009",
+            "amount": Decimal("118.00"),
+            "raw_data": {
+                "FechaVencimientoSecuencia": "31-12-2028",
+                "MontoGravadoTotal": "100.00",
+                "MontoGravadoI1": "100.00",
+                "ITBIS1": "18",
+                "TotalITBIS": "18.00",
+                "TotalITBIS1": "18.00",
+                "MontoTotal": "118.00",
+                "IndicadorFacturacion[1]": "1",
+                "IndicadorAgenteRetencionoPercepcion[1]": "1",
+                "MontoITBISRetenido[1]": "0.00",
+                "MontoISRRetenido[1]": "0.00",
+                "PrecioUnitarioItem[1]": "100.00",
+                "MontoItem[1]": "100.00",
+            },
+        }])
+        self._create_certification_issuer(company)
+
+        xml = DGIICertificationDocumentGenerator().generate_item(
+            item=plan.items.get(), user=user
+        ).xml_content
+
+        self.assertNotIn("<TablaSubDescuento>", xml)
+        ECFXSDValidator().validate("41", xml)
+
     def test_generate_document_rejects_inconsistent_fiscal_totals(self):
         user, company, plan = self._create_plan_with_items([
             {
@@ -1578,7 +1829,7 @@ class DGIICertificationPlanTests(TestCase):
             rfce_document = DGIICertificationDocument.objects.get(plan=plan, encf=encf, ecf_type="RFCE")
             self.assertIn(f"<CodigoSeguridadeCF>{expected_code}</CodigoSeguridadeCF>", rfce_document.xml_content)
 
-    def test_rebuild_low_consumption_rfce_regenerates_integral_xml_and_marks_rfce_for_resubmit(self):
+    def test_rebuild_low_consumption_rfce_publishes_fenced_pairs_without_fiscal_reset(self):
         rfce_items = [
             {"ecf_type": "RFCE", "dgii_group": 3, "encf": "E320000000012", "amount": Decimal("47200.00")},
             {"ecf_type": "RFCE", "dgii_group": 3, "encf": "E320000000014", "amount": Decimal("11918.00")},
@@ -1608,7 +1859,7 @@ class DGIICertificationPlanTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["summary"]["signed_integral"]["signed"], 4)
         self.assertEqual(response.data["summary"]["signed_rfce"]["signed"], 4)
-        self.assertEqual(response.data["summary"]["rfce_marked_for_resubmit"], 4)
+        self.assertEqual(response.data["summary"]["rfce_marked_for_resubmit"], 0)
         for rfce_document in DGIICertificationDocument.objects.filter(plan=plan, ecf_type="RFCE"):
             source = DGIICertificationDocument.objects.get(plan=plan, item__dgii_group=4, encf=rfce_document.encf)
             with default_storage.open(source.signed_xml_path, "rb") as source_file:
@@ -1622,8 +1873,10 @@ class DGIICertificationPlanTests(TestCase):
             code = ET.fromstring(rfce_document.xml_content.encode("utf-8")).findtext(".//CodigoSeguridadeCF")
             self.assertEqual(actual_source_hash, source.signed_xml_hash)
             self.assertEqual(code, signature_value[:6])
-            self.assertTrue(rfce_document.accepted_stale)
-            self.assertIn("Debe reenviar los RFCE", rfce_document.stale_reason)
+            self.assertFalse(rfce_document.accepted_stale)
+            self.assertEqual(rfce_document.stale_reason, "")
+            self.assertEqual(rfce_document.submission_outcome, "not_started")
+            self.assertEqual(rfce_document.dgii_track_id, "")
 
     def test_generate_document_is_tenant_scoped(self):
         user = get_user_model().objects.create_user(username="dgii-cert-tenant-document", password="pass")
@@ -3855,13 +4108,16 @@ class DGIIRESTClientTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("certificate", response.data)
 
-    def test_certificate_upload_wrong_password_marks_metadata_invalid(self):
+    @patch("facturacion.api.views.ecf_config.default_storage.save")
+    def test_certificate_upload_wrong_password_is_rejected_without_persistence(self, storage_save):
         user = get_user_model().objects.create_user(username="issuer-upload-wrong-password", password="pass")
         company = Company.objects.create(name="Empresa Cert Password", rnc="401010124")
         CompanyMembership.objects.create(user=user, company=company, role=CompanyMembership.ROLE_OWNER)
         with TemporaryDirectory() as temp_dir:
             certificate_path = self._write_manual_pkcs12(Path(temp_dir) / "wrong-password.p12")
             issuer = self._manual_issuer(company=company, rnc="101010124")
+            original_certificate_path = issuer.certificate_path
+            original_certificate_password = issuer.certificate_password
             request = APIRequestFactory().post(
                 f"/ecf/issuers/{issuer.id}/certificate/",
                 {
@@ -3880,10 +4136,14 @@ class DGIIRESTClientTests(TestCase):
             response = ECFIssuerConfigViewSet.as_view({"post": "upload_certificate"})(request, pk=issuer.id)
 
         issuer.refresh_from_db()
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["certificate_status"], ECFIssuerConfig.CERTIFICATE_STATUS_INVALID)
-        self.assertEqual(issuer.certificate_status, ECFIssuerConfig.CERTIFICATE_STATUS_INVALID)
-        self.assertIsNotNone(issuer.certificate_status_updated_at)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("certificate", response.data)
+        self.assertIn("Verifique el archivo y la contraseña", response.data["certificate"][0])
+        self.assertEqual(issuer.certificate_path, original_certificate_path)
+        self.assertEqual(issuer.certificate_password, original_certificate_password)
+        self.assertEqual(issuer.certificate_status, ECFIssuerConfig.CERTIFICATE_STATUS_MISSING)
+        self.assertFalse(ECFCertificate.objects.filter(issuer=issuer).exists())
+        storage_save.assert_not_called()
 
     def test_ecf_certificate_allows_only_one_active_per_issuer_environment(self):
         issuer = self._manual_issuer(rnc="101010125")
@@ -5919,9 +6179,162 @@ class DGIIServicesTests(TestCase):
         self.assertEqual(document.track_id, "track-001")
         self.assertEqual(document.status, "submitted")
         self.assertEqual(document.fiscal_status, "submitted")
+        self.assertEqual(document.submission_outcome, "confirmed")
         self.assertEqual(document.job_status, "idle")
         self.assertIn("SubmitRequest", document.dgii_request_xml)
         self.assertIn("SubmitResponse", document.dgii_response_xml)
+
+    @override_settings(ECF_DGII_MOCK_ENABLED=False)
+    def test_submit_timeout_marks_unknown_and_preserves_existing_artifacts(self):
+        document = self._document(signed_xml_content="<ECF />")
+        document.dgii_request_xml = "<PreviousRequest />"
+        document.dgii_response_xml = "<PreviousResponse />"
+        document.save(update_fields=["dgii_request_xml", "dgii_response_xml", "updated_at"])
+
+        class TimeoutClient:
+            def __init__(self, environment, token):
+                pass
+
+            def submit_ecf(self, **kwargs):
+                raise ECFValidationError("Timeout invocando SOAP DGII")
+
+        with self.assertRaises(ECFValidationError):
+            DGIISubmissionService(
+                environment_resolver=FakeEnvironmentResolver(),
+                token_provider=FakeTokenProvider(),
+                soap_client_class=TimeoutClient,
+            ).submit(document)
+
+        document.refresh_from_db()
+        self.assertEqual(document.submission_outcome, "unknown")
+        self.assertEqual(document.fiscal_status, "signed")
+        self.assertEqual(document.dgii_request_xml, "<PreviousRequest />")
+        self.assertEqual(document.dgii_response_xml, "<PreviousResponse />")
+        self.assertTrue(
+            ECFEventLog.objects.filter(
+                electronic_document=document,
+                event_type="error",
+                message__contains="Resultado de envío DGII desconocido",
+            ).exists()
+        )
+
+    @override_settings(ECF_DGII_MOCK_ENABLED=False)
+    def test_submit_response_without_track_id_requires_manual_review(self):
+        document = self._document(signed_xml_content="<ECF />")
+
+        class MissingTrackIdClient:
+            def __init__(self, environment, token):
+                pass
+
+            def submit_ecf(self, **kwargs):
+                return SOAPCallResult(
+                    result={"estado": "Recibido", "codigo": 3, "mensajes": [{"valor": "Sin TrackID"}]},
+                    request_xml="<SubmitRequest />",
+                    response_xml="<SubmitResponse />",
+                )
+
+        with self.assertRaises(ECFValidationError):
+            DGIISubmissionService(
+                environment_resolver=FakeEnvironmentResolver(),
+                token_provider=FakeTokenProvider(),
+                soap_client_class=MissingTrackIdClient,
+            ).submit(document)
+
+        document.refresh_from_db()
+        self.assertEqual(document.submission_outcome, "manual_review")
+        self.assertTrue(document.requires_manual_review)
+        self.assertEqual(document.fiscal_status, "signed")
+        self.assertTrue(
+            ECFEventLog.objects.filter(
+                electronic_document=document,
+                event_type="manual_review",
+                message__contains="sin TrackID",
+            ).exists()
+        )
+
+    @override_settings(ECF_DGII_MOCK_ENABLED=False)
+    def test_submit_rejects_in_flight_or_unknown_document_without_calling_dgii(self):
+        document = self._document(signed_xml_content="<ECF />")
+        for outcome in ("in_flight", "unknown"):
+            with self.subTest(outcome=outcome):
+                ElectronicFiscalDocument.objects.filter(pk=document.pk).update(
+                    submission_outcome=outcome,
+                    submission_fingerprint="existing-fingerprint",
+                )
+                calls = []
+
+                class CountingClient:
+                    def __init__(self, environment, token):
+                        pass
+
+                    def submit_ecf(self, **kwargs):
+                        calls.append(kwargs)
+                        return SOAPCallResult(result={}, request_xml=None, response_xml=None)
+
+                with self.assertRaises(ECFValidationError):
+                    DGIISubmissionService(
+                        environment_resolver=FakeEnvironmentResolver(),
+                        token_provider=FakeTokenProvider(),
+                        soap_client_class=CountingClient,
+                    ).submit(document)
+                self.assertEqual(calls, [])
+
+    @override_settings(ECF_DGII_MOCK_ENABLED=False)
+    def test_force_does_not_allow_submit_when_fiscal_document_is_not_signed(self):
+        document = self._document(signed_xml_content="<ECF />", status="xml_generated")
+        calls = []
+
+        class CountingClient:
+            def __init__(self, environment, token):
+                pass
+
+            def submit_ecf(self, **kwargs):
+                calls.append(kwargs)
+                return SOAPCallResult(result={}, request_xml=None, response_xml=None)
+
+        with self.assertRaises(ECFValidationError):
+            DGIISubmissionService(
+                environment_resolver=FakeEnvironmentResolver(),
+                token_provider=FakeTokenProvider(),
+                soap_client_class=CountingClient,
+            ).submit(document, force=True)
+        self.assertEqual(calls, [])
+
+    @override_settings(ECF_DGII_MOCK_ENABLED=False)
+    def test_submit_logs_orphaned_track_id_when_fingerprint_changes_before_persist(self):
+        document = self._document(signed_xml_content="<ECF />")
+
+        class FingerprintChangingClient:
+            def __init__(self, environment, token):
+                pass
+
+            def submit_ecf(self, **kwargs):
+                ElectronicFiscalDocument.objects.filter(pk=document.pk).update(
+                    submission_fingerprint="different-fingerprint"
+                )
+                return SOAPCallResult(
+                    result={"trackId": "track-orphaned", "estado": "Recibido", "codigo": 3},
+                    request_xml="<SubmitRequest />",
+                    response_xml="<SubmitResponse />",
+                )
+
+        with self.assertRaises(ECFValidationError):
+            DGIISubmissionService(
+                environment_resolver=FakeEnvironmentResolver(),
+                token_provider=FakeTokenProvider(),
+                soap_client_class=FingerprintChangingClient,
+            ).submit(document)
+
+        document.refresh_from_db()
+        self.assertIsNone(document.track_id)
+        self.assertNotEqual(document.submission_fingerprint, "")
+        orphan_events = ECFEventLog.objects.filter(
+            electronic_document=document,
+            event_type="error",
+            message__contains="TrackID real recibido",
+        )
+        self.assertEqual(orphan_events.count(), 1)
+        self.assertEqual(orphan_events.first().payload["track_id"], "track-orphaned")
 
     def test_status_check_persists_accepted_state(self):
         document = self._document(signed_xml_content="<ECF />", track_id="track-001", status="pending")
@@ -6048,6 +6461,292 @@ class FakeDGIISOAPClient:
             result={"trackId": track_id, "estado": "Aceptado", "codigo": 1},
             request_xml="<StatusRequest />",
             response_xml="<StatusResponse />",
+        )
+
+
+class DGIIReconciliationTests(TestCase):
+    """Cover recovery of uncertain DGII receptions without resending XML."""
+
+    def _document(self):
+        return DGIIServicesTests._document(self, signed_xml_content="<ECF />")
+
+    def _set_reconcilable(self, document, *, outcome="unknown", attempts=0, started_at=None, lease_until=None):
+        ElectronicFiscalDocument.objects.filter(pk=document.pk).update(
+            submission_outcome=outcome,
+            submission_fingerprint="reconciliation-fingerprint",
+            submission_started_at=started_at,
+            reconciliation_attempts=attempts,
+            reconciliation_lease_until=lease_until,
+            reconciliation_lease_token="expired-lease" if lease_until else "",
+            next_retry_at=None,
+        )
+        document.refresh_from_db()
+        return document
+
+    def _service(self, result=None, error=None):
+        class QueryClient:
+            def __init__(self, environment, token):
+                pass
+
+            def query_trackids(self, **kwargs):
+                if error:
+                    raise error
+                return SOAPCallResult(
+                    result=result,
+                    request_xml="<TrackIdsRequest />",
+                    response_xml="<TrackIdsResponse />",
+                )
+
+        return DGIIReconciliationService(
+            environment_resolver=FakeEnvironmentResolver(),
+            token_provider=FakeTokenProvider(),
+            soap_client_class=QueryClient,
+        )
+
+    def _matching_response(self, document, **extra):
+        return {
+            "rncEmisor": document.issuer.rnc,
+            "eNCF": document.encf,
+            **extra,
+        }
+
+    @patch("facturacion.ecf.tasks.dgii.reconcile_submission.apply_async")
+    @patch("facturacion.ecf.tasks.dgii._acquire_reconciliation_sweep_lock", return_value=True)
+    def test_sweep_selects_expired_in_flight_but_not_recent_one(self, _lock, apply_async):
+        # The shared DGII fixture uses a fixed issuer RNC; make this case's
+        # two documents distinct because ECFIssuerConfig enforces RNC uniqueness.
+        first_document = self._document()
+        first_document.issuer.rnc = "101010102"
+        first_document.issuer.save(update_fields=["rnc", "updated_at"])
+        old_document = self._set_reconcilable(
+            first_document, outcome="in_flight",
+            started_at=django_timezone.now() - timedelta(minutes=6),
+        )
+        self._set_reconcilable(
+            self._document(), outcome="in_flight",
+            started_at=django_timezone.now() - timedelta(minutes=4),
+        )
+
+        result = schedule_stale_reconciliations()
+
+        self.assertEqual(result, {"scheduled": 1})
+        apply_async.assert_called_once_with(args=[old_document.pk], kwargs={"environment": None})
+
+    def test_reconciliation_recovers_a_single_matching_track_id(self):
+        document = self._set_reconcilable(self._document())
+        service = self._service(self._matching_response(document, trackIds=["track-recovered"]))
+
+        result = service.reconcile(document.pk)
+
+        document.refresh_from_db()
+        self.assertEqual(result.outcome, "confirmed")
+        self.assertEqual(document.track_id, "track-recovered")
+        self.assertEqual(document.submission_outcome, "confirmed")
+        self.assertEqual(document.fiscal_status, "submitted")
+        self.assertIsNone(document.reconciliation_lease_until)
+
+    def test_reconciliation_not_found_enables_only_manual_resubmission(self):
+        document = self._set_reconcilable(self._document())
+        service = self._service(self._matching_response(document, estado="No encontrado", codigo=0))
+
+        result = service.reconcile(document.pk)
+
+        document.refresh_from_db()
+        self.assertEqual(result.outcome, "not_found")
+        self.assertEqual(document.submission_outcome, "not_started")
+        self.assertIsNone(document.next_retry_at)
+        self.assertTrue(ECFEventLog.objects.filter(
+            electronic_document=document, payload__stage="dgii_reconciliation_not_found",
+        ).exists())
+
+    def test_ambiguous_response_increments_attempts_and_schedules_retry(self):
+        document = self._set_reconcilable(self._document())
+        service = self._service(self._matching_response(document, estado="Pendiente"))
+
+        result = service.reconcile(document.pk)
+
+        document.refresh_from_db()
+        self.assertEqual(result.outcome, "unknown")
+        self.assertEqual(document.reconciliation_attempts, 1)
+        self.assertEqual(document.submission_outcome, "unknown")
+        self.assertGreater(document.next_retry_at, django_timezone.now())
+        self.assertIsNone(document.reconciliation_lease_until)
+
+    def test_fifth_ambiguous_attempt_escalates_to_manual_review(self):
+        document = self._set_reconcilable(self._document(), attempts=4)
+        service = self._service(self._matching_response(document, estado="Pendiente"))
+
+        result = service.reconcile(document.pk)
+
+        document.refresh_from_db()
+        self.assertEqual(result.outcome, "manual_review")
+        self.assertEqual(document.reconciliation_attempts, 5)
+        self.assertTrue(document.requires_manual_review)
+        self.assertIsNone(document.next_retry_at)
+        self.assertTrue(ECFEventLog.objects.filter(
+            electronic_document=document, event_type="manual_review",
+        ).exists())
+
+    def test_multiple_matching_track_ids_escalates_without_consuming_attempt(self):
+        document = self._set_reconcilable(self._document(), attempts=2)
+        service = self._service(self._matching_response(document, trackIds=["track-a", "track-b"]))
+
+        result = service.reconcile(document.pk)
+
+        document.refresh_from_db()
+        self.assertEqual(result.outcome, "manual_review")
+        self.assertEqual(document.reconciliation_attempts, 2)
+        self.assertTrue(document.requires_manual_review)
+        event = ECFEventLog.objects.get(
+            electronic_document=document, event_type="multiple_track_ids_detected",
+        )
+        self.assertEqual(event.payload["track_ids"], ["track-a", "track-b"])
+        self.assertIsNone(document.reconciliation_lease_until)
+
+    def test_multiple_track_ids_with_mismatched_scope_retries_as_ambiguous(self):
+        document = self._set_reconcilable(self._document(), attempts=2)
+        service = self._service({
+            "rncEmisor": "999999999",
+            "eNCF": "E310000009999",
+            "trackIds": ["untrusted-track-a", "untrusted-track-b"],
+        })
+
+        result = service.reconcile(document.pk)
+
+        document.refresh_from_db()
+        self.assertEqual(result.outcome, "unknown")
+        self.assertEqual(document.submission_outcome, "unknown")
+        self.assertEqual(document.reconciliation_attempts, 3)
+        self.assertFalse(document.requires_manual_review)
+        self.assertFalse(ECFEventLog.objects.filter(
+            electronic_document=document, event_type="multiple_track_ids_detected",
+        ).exists())
+        retry_event = ECFEventLog.objects.get(
+            electronic_document=document, event_type="retry_scheduled",
+        )
+        self.assertIn("no asociada al RNC/e-NCF", retry_event.payload["error"])
+
+    def test_only_one_reconciliation_claim_can_hold_the_document_lease(self):
+        document = self._set_reconcilable(self._document())
+        service = self._service()
+
+        first_claim = service._claim(document.pk)
+        second_claim = service._claim(document.pk)
+
+        self.assertIsNotNone(first_claim)
+        self.assertIsNone(second_claim)
+        self.assertEqual(ECFEventLog.objects.filter(
+            electronic_document=document, payload__stage="dgii_reconciliation_claim",
+        ).count(), 1)
+
+    @patch("facturacion.ecf.tasks.dgii.reconcile_submission.apply_async")
+    @patch("facturacion.ecf.tasks.dgii._acquire_reconciliation_sweep_lock", return_value=True)
+    def test_sweep_reselects_document_when_previous_lease_expired(self, _lock, apply_async):
+        document = self._set_reconcilable(
+            self._document(),
+            lease_until=django_timezone.now() - timedelta(seconds=1),
+        )
+
+        result = schedule_stale_reconciliations()
+
+        self.assertEqual(result, {"scheduled": 1})
+        apply_async.assert_called_once_with(args=[document.pk], kwargs={"environment": None})
+
+    @patch("facturacion.ecf.tasks.dgii.reconcile_submission.apply_async")
+    @patch("facturacion.ecf.tasks.dgii._acquire_reconciliation_sweep_lock", return_value=True)
+    def test_sweep_never_selects_not_started_even_with_expired_operational_residue(self, _lock, apply_async):
+        document = self._set_reconcilable(
+            self._document(), outcome="not_started",
+            lease_until=django_timezone.now() - timedelta(seconds=1),
+        )
+        ElectronicFiscalDocument.objects.filter(pk=document.pk).update(
+            next_retry_at=django_timezone.now() - timedelta(minutes=1),
+        )
+
+        result = schedule_stale_reconciliations()
+
+        self.assertEqual(result, {"scheduled": 0})
+        apply_async.assert_not_called()
+
+
+class DGIISOAPRetryTests(SimpleTestCase):
+    """Verify unsafe reception disables retries without affecting read operations."""
+
+    def _start_retry_server(self):
+        class RetryHandler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.server.request_count += 1
+                self.send_response(503)
+                self.end_headers()
+
+            def log_message(self, format, *args):
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), RetryHandler)
+        server.request_count = 0
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        return server, thread, f"http://127.0.0.1:{server.server_address[1]}/soap"
+
+    def _base_client_for_operation(self, operation):
+        client = BaseZeepSOAPClient.__new__(BaseZeepSOAPClient)
+        client.history = SimpleNamespace(last_sent=None, last_received=None)
+        client.session = client._build_session(
+            retries=3,
+            retry_backoff=0,
+            verify_tls=True,
+            headers=None,
+        )
+        client.client = SimpleNamespace(service=SimpleNamespace(Invoke=operation))
+        return client
+
+    def test_unsafe_submit_call_does_not_retry_and_restores_normal_adapter(self):
+        server, thread, url = self._start_retry_server()
+        try:
+            client = None
+
+            def operation():
+                response = client.session.post(url)
+                response.raise_for_status()
+
+            client = self._base_client_for_operation(operation)
+            original_adapter = client.session.get_adapter(url)
+
+            with self.assertRaises(ECFValidationError):
+                client.call("Invoke", allow_retries=False)
+            self.assertEqual(server.request_count, 1)
+            self.assertIs(client.session.get_adapter(url), original_adapter)
+
+            with self.assertRaises(ECFValidationError):
+                client.call("Invoke")
+            self.assertGreater(server.request_count, 2)
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
+
+    def test_dgii_facade_disables_only_submit_retries(self):
+        calls = []
+
+        class RecordingBaseClient:
+            def call(self, operation_name, *, allow_retries=True, **payload):
+                calls.append((operation_name, allow_retries, payload))
+                return SOAPCallResult(result={}, request_xml=None, response_xml=None)
+
+        environment = FakeEnvironmentResolver().resolve()
+        client = DGIISOAPClient(environment, DGIIBearerToken("token"))
+        with patch.object(client, "_client", return_value=RecordingBaseClient()):
+            client.submit_ecf("<ECF />", "E310000000001", "101010101")
+            client.query_status("track-001")
+            client.query_trackids("101010101", "E310000000001")
+
+        self.assertEqual(
+            [(operation, allow_retries) for operation, allow_retries, _payload in calls],
+            [
+                (environment.submit_operation, False),
+                (environment.status_operation, True),
+                (environment.trackids_operation, True),
+            ],
         )
 
 
@@ -6504,6 +7203,206 @@ class ECFStatusRuntimeTransitionTests(TestCase):
         self.assertEqual(document.job_status, "idle")
         self.assertTrue(ECFStatusEvent.objects.filter(document=document, source="xml_signing").exists())
 
+    def test_e32_generation_omits_sequence_expiration_date_and_validates_official_schema(self):
+        document = self._document(status="draft", fiscal_status="draft")
+        document.sequence.expiration_date = date(2026, 12, 31)
+        document.sequence.save(update_fields=["expiration_date", "updated_at"])
+
+        result = ECFXMLGenerationService().generate(document, validate_xsd=True)
+
+        self.assertNotIn("<FechaVencimientoSecuencia>", result.xml_content)
+        ECFXSDValidator().validate("32", result.xml_content)
+
+    def test_e31_payload_preserves_sequence_expiration_date(self):
+        document = self._document(status="draft", fiscal_status="draft")
+        document.ecf_type = "31"
+        document.encf = f"E31{document.encf[3:]}"
+        document.save(update_fields=["ecf_type", "encf", "updated_at"])
+        document.sequence.ecf_type = "31"
+        document.sequence.expiration_date = date(2026, 12, 31)
+        document.sequence.save(update_fields=["ecf_type", "expiration_date", "updated_at"])
+
+        payload = InvoiceECFMapper().map(document)
+        xml = etree.tostring(ECFXMLSerializer().serialize(payload), encoding="unicode")
+
+        self.assertEqual(payload.sequence_expiration_date, "31-12-2026")
+        self.assertIn("<FechaVencimientoSecuencia>31-12-2026</FechaVencimientoSecuencia>", xml)
+
+    def test_ecf_serializer_preserves_id_doc_order_for_all_supported_types(self):
+        issuer = {
+            "rnc": "101010101",
+            "business_name": "Empresa Prueba",
+            "trade_name": "Comercial Prueba",
+            "address": "Calle Falsa 123",
+            "municipality": "Santo Domingo",
+            "province": "Santo Domingo",
+            "phones": ["8095551234"],
+            "phone": "8095551234",
+            "email": "emisor@example.com",
+        }
+        buyer = {
+            "rnc": "40222797082",
+            "business_name": "Cliente Prueba",
+            "email": "cliente@example.com",
+            "address": "Av. Siempre Viva 742",
+        }
+
+        expected_types = {"31", "32", "33", "34", "41", "43", "44", "45", "46", "47"}
+        self.assertEqual(set(ECF_TYPE_RULES), expected_types)
+
+        for ecf_type in sorted(expected_types):
+            payload = ECFPayload(
+                ecf_type=ecf_type,
+                encf=f"E{ecf_type}0000000001",
+                issue_date="01-01-2026",
+                signature_datetime="01-01-2026 12:00:00",
+                sequence_expiration_date="31-12-2026",
+                income_type="01",
+                payment_type="1",
+                payment_form="1",
+                credit_note_indicator=None,
+                issuer=issuer,
+                buyer=buyer,
+                totals={"amount_total": Decimal("100.00"), "taxable_amount": Decimal("100.00"), "itbis_rate": Decimal("18.00"), "total_itbis": Decimal("18.00"), "exempt_amount": Decimal("0.00")},
+                items=[{
+                    "line_number": 1,
+                    "billing_indicator": "1",
+                    "name": "Item Prueba",
+                    "is_good_or_service": "1",
+                    "quantity": Decimal("1.00"),
+                    "unit_price": Decimal("100.00"),
+                    "amount": Decimal("100.00"),
+                }],
+                internal_invoice_number="1001",
+                modified_document=None,
+                include_signature_placeholder=False,
+                payment_forms=None,
+                discounts_or_surcharges=None,
+                id_doc_fields={},
+                use_issuer_location_emisor_tags=False,
+                include_buyer=True,
+            )
+            xml = etree.tostring(ECFXMLSerializer().serialize(payload), encoding="unicode")
+            root = etree.fromstring(xml.encode("utf-8"))
+            encabezado = root.find("Encabezado")
+            child_names = [child.tag for child in encabezado]
+            id_doc = encabezado.find("IdDoc")
+            expected_buyer = ECF_TYPE_RULES[ecf_type]["include_buyer"] is not False
+
+            with self.subTest(ecf_type=ecf_type):
+                self.assertEqual(child_names[0], "Version")
+                self.assertEqual(child_names[1], "IdDoc")
+                self.assertLess(child_names.index("IdDoc"), child_names.index("Emisor"))
+                self.assertLess(child_names.index("IdDoc"), child_names.index("Totales"))
+                self.assertEqual(encabezado.find("Comprador") is not None, expected_buyer)
+                self.assertEqual(
+                    id_doc.find("FechaVencimientoSecuencia") is not None,
+                    ECF_TYPE_RULES[ecf_type]["allow_sequence_expiration_date"],
+                )
+
+                if ECF_TYPE_RULES[ecf_type]["include_buyer"] is None:
+                    without_buyer = replace(payload, include_buyer=False)
+                    without_buyer_root = ECFXMLSerializer().serialize(without_buyer)
+                    self.assertIsNone(without_buyer_root.find("Encabezado/Comprador"))
+
+    def test_ecf_serializer_applies_confirmed_id_doc_rules_for_all_types(self):
+        expected = {
+            "31": (True, True, True, True),
+            "32": (True, True, True, True),
+            "33": (True, True, True, True),
+            "34": (True, False, False, True),
+            "41": (False, False, True, False),
+            "43": (False, False, False, False),
+            "44": (True, True, True, True),
+            "45": (True, True, True, True),
+            "46": (True, False, True, False),
+            "47": (False, False, True, False),
+        }
+        issuer = {
+            "rnc": "101010101", "business_name": "Empresa Prueba",
+            "address": "Calle Falsa 123", "municipality": "010100",
+            "province": "010100", "phone": "8095551234",
+        }
+        buyer = {"rnc": "40222797082", "business_name": "Cliente Prueba"}
+
+        for ecf_type, (income, default_payments, payment_term, service_indicator) in expected.items():
+            payload = ECFPayload(
+                ecf_type=ecf_type,
+                encf=f"E{ecf_type}0000000001",
+                issue_date="01-01-2026",
+                signature_datetime="01-01-2026 12:00:00",
+                sequence_expiration_date="31-12-2026",
+                income_type="01",
+                payment_type="1",
+                payment_form="1",
+                credit_note_indicator="0" if ecf_type == "34" else None,
+                issuer=issuer,
+                buyer=buyer,
+                totals={"amount_total": Decimal("100.00"), "taxable_amount": Decimal("100.00"), "itbis_rate": Decimal("18.00"), "total_itbis": Decimal("18.00"), "exempt_amount": Decimal("0.00")},
+                items=[{
+                    "line_number": 1, "billing_indicator": "1", "name": "Item Prueba",
+                    "is_good_or_service": "1", "quantity": Decimal("1.00"),
+                    "unit_price": Decimal("100.00"), "amount": Decimal("100.00"),
+                }],
+                internal_invoice_number="1001",
+                modified_document=None,
+                include_signature_placeholder=False,
+                payment_forms=None,
+                discounts_or_surcharges=None,
+                id_doc_fields={
+                    "TerminoPago": "NET30",
+                    "IndicadorServicioTodoIncluido": "1",
+                },
+                use_issuer_location_emisor_tags=False,
+                include_buyer=True,
+            )
+            root = ECFXMLSerializer().serialize(payload)
+            id_doc = root.find("Encabezado/IdDoc")
+
+            with self.subTest(ecf_type=ecf_type):
+                self.assertEqual(id_doc.find("TipoIngresos") is not None, income)
+                self.assertEqual(id_doc.find("TablaFormasPago") is not None, default_payments)
+                self.assertEqual(id_doc.find("TerminoPago") is not None, payment_term)
+                self.assertEqual(
+                    id_doc.find("IndicadorServicioTodoIncluido") is not None,
+                    service_indicator,
+                )
+                self.assertEqual(
+                    id_doc.find("IndicadorNotaCredito") is not None,
+                    ecf_type == "34",
+                )
+
+    def test_signing_does_not_persist_when_certificate_expires_before_final_check(self):
+        document = self._document(status="xml_generated", fiscal_status="xml_generated", xml_content="<ECF />")
+
+        class ExpiringBeforePersistenceLoader:
+            def load(self, certificate_path, certificate_password):
+                return FakeCertificate()
+
+            def validate_loaded_certificate(self, certificate):
+                raise CertificateExpiredError("El certificado digital está vencido.")
+
+        with self.assertRaises(CertificateExpiredError):
+            ECFSigningService(
+                certificate_loader=ExpiringBeforePersistenceLoader(),
+                signer=FakeXMLSigner(),
+                signature_validator=FakeValidator(),
+                xsd_validator=FakeValidator(),
+            ).sign(document, certificate_path="fake.p12", certificate_password="secret", validate_xsd=True)
+
+        document.refresh_from_db()
+        self.assertEqual(document.fiscal_status, "xml_generated")
+        self.assertEqual(document.status, "xml_generated")
+        self.assertFalse(document.signed_xml_content)
+        self.assertFalse(ECFEventLog.objects.filter(
+            electronic_document=document, event_type="signed",
+        ).exists())
+        self.assertTrue(ECFEventLog.objects.filter(
+            electronic_document=document,
+            event_type="error",
+            message__contains="certificado digital está vencido",
+        ).exists())
+
     @patch("facturacion.ecf.queues.ecf.generate_xml.apply_async")
     def test_enqueue_changes_only_job_status(self, apply_async):
         apply_async.return_value = SimpleNamespace(id="task-generate")
@@ -6662,6 +7561,74 @@ class ECFStatusRuntimeTransitionTests(TestCase):
 
                 self.assertTrue(result.blocked)
                 self.assertEqual(result.code, code)
+
+    @override_settings(DEBUG=False, ECF_DGII_MOCK_ENABLED=False, ECF_DGII_ENVIRONMENT="production")
+    def test_sign_task_blocks_active_certificate_marked_expired_in_database(self):
+        document = self._document(status="xml_generated", fiscal_status="xml_generated", xml_content="<ECF />")
+        self._set_certificate_state(
+            document,
+            ECFIssuerConfig.CERTIFICATE_STATUS_ACTIVE,
+            ECFIssuerConfig.CERTIFICATE_RNC_MATCH_MATCHED,
+        )
+        ECFCertificate.objects.create(
+            company=document.company,
+            issuer=document.issuer,
+            environment=document.issuer.environment,
+            status=ECFIssuerConfig.CERTIFICATE_STATUS_EXPIRED,
+            storage_backend=ECFCertificate.STORAGE_BACKEND_LEGACY_LOCAL,
+            certificate_reference="expired-active.p12",
+            password_secret_reference="secret",
+            rnc_match_status=ECFIssuerConfig.CERTIFICATE_RNC_MATCH_MATCHED,
+            is_active=True,
+        )
+
+        result = sign_xml_task.apply(args=[document.id], kwargs={"validate_xsd": False}).get()
+
+        document.refresh_from_db()
+        self.assertEqual(document.fiscal_status, "xml_generated")
+        self.assertEqual(document.job_status, "failed")
+        self.assertEqual(result["error"], "El certificado DGII está vencido. Renueve el certificado antes de firmar e-CF.")
+        self.assertTrue(ECFEventLog.objects.filter(
+            electronic_document=document,
+            payload__stage="certificate_policy",
+            payload__certificate_status=ECFIssuerConfig.CERTIFICATE_STATUS_EXPIRED,
+        ).exists())
+
+    @override_settings(DEBUG=False, ECF_DGII_MOCK_ENABLED=False, ECF_DGII_ENVIRONMENT="production")
+    def test_expired_active_certificate_file_corrects_stale_active_metadata_after_sign_attempt(self):
+        document = self._document(status="xml_generated", fiscal_status="xml_generated", xml_content="<ECF />")
+        self._set_certificate_state(
+            document,
+            ECFIssuerConfig.CERTIFICATE_STATUS_ACTIVE,
+            ECFIssuerConfig.CERTIFICATE_RNC_MATCH_MATCHED,
+        )
+        with TemporaryDirectory() as temp_dir:
+            certificate_path = ECFSigningTests._write_pkcs12(
+                SimpleNamespace(password="secret"),
+                Path(temp_dir) / "stale-active-expired.p12",
+                expired=True,
+            )
+            active_certificate = ECFCertificate.objects.create(
+                company=document.company,
+                issuer=document.issuer,
+                environment=document.issuer.environment,
+                status=ECFIssuerConfig.CERTIFICATE_STATUS_ACTIVE,
+                storage_backend=ECFCertificate.STORAGE_BACKEND_LEGACY_LOCAL,
+                certificate_reference=str(certificate_path),
+                password_secret_reference="secret",
+                rnc_match_status=ECFIssuerConfig.CERTIFICATE_RNC_MATCH_MATCHED,
+                is_active=True,
+            )
+
+            with self.assertRaises(ECFValidationError) as raised:
+                sign_xml_task.apply(args=[document.id], kwargs={"validate_xsd": False}).get()
+
+        document.refresh_from_db()
+        active_certificate.refresh_from_db()
+        self.assertEqual(document.fiscal_status, "xml_generated")
+        self.assertEqual(document.job_status, "failed")
+        self.assertIn("vencido", str(raised.exception).lower())
+        self.assertEqual(active_certificate.status, ECFIssuerConfig.CERTIFICATE_STATUS_EXPIRED)
 
     @override_settings(DEBUG=False, ECF_DGII_MOCK_ENABLED=False, ECF_DGII_ENVIRONMENT="production")
     def test_certificate_policy_production_blocks_rnc_mismatch(self):
@@ -6984,6 +7951,9 @@ class FakeCertificate:
 class FakeCertificateLoader:
     def load(self, certificate_path, certificate_password):
         return FakeCertificate()
+
+    def validate_loaded_certificate(self, certificate):
+        return None
 
 
 class FakeXMLSigner:
@@ -8255,6 +9225,7 @@ class E34FiscalValidationTests(TestCase):
             start_number=1,
             end_number=20,
             next_number=1,
+            expiration_date=date(2026, 12, 31),
         )
 
         with patch("facturacion.services.credit_notes.enqueue_submission_pipeline") as enqueue:
@@ -8273,7 +9244,19 @@ class E34FiscalValidationTests(TestCase):
         self.assertIn("<IndicadorNotaCredito>0</IndicadorNotaCredito>", xml_result.xml_content)
         self.assertIn("<InformacionReferencia>", xml_result.xml_content)
         self.assertIn(f"<NCFModificado>{origin_document.encf}</NCFModificado>", xml_result.xml_content)
+        self.assertNotIn("<FechaVencimientoSecuencia>", xml_result.xml_content)
         ECFXSDValidator().validate("34", xml_result.xml_content)
+
+        class E34ValidatorWithoutCompatibilityPatch(ECFXSDValidator):
+            def _load_schema(self, schema_path, parser):
+                content = schema_path.read_text(encoding="utf-8")
+                content = content.replace('name=" IndicadorServicioTodoIncluidoType"', 'name="IndicadorServicioTodoIncluidoType"')
+                content = content.replace('[12][$0-9]', '[12][0-9]')
+                content = content.replace('((?:19|20)\\d{2})', '((19|20)[0-9]{2})')
+                content = content.replace('(?:.[0-9]{2})?', '(.[0-9]{2})?')
+                return etree.ElementTree(etree.fromstring(content.encode("utf-8"), parser))
+
+        E34ValidatorWithoutCompatibilityPatch().validate("34", xml_result.xml_content)
 
     def test_e34_requires_origin_invoice_accepted_by_dgii(self):
         user = get_user_model().objects.create_superuser(
@@ -8957,6 +9940,148 @@ class ECFConcurrencyHardeningTests(TransactionTestCase):
         self.assertEqual(results.count("success"), 1)
         self.assertEqual(CreditNote.objects.filter(origin_invoice=invoice).count(), 1)
         self.assertEqual(product.stock, 11)
+
+    def _inventory_products(self, *, stock=10):
+        company = Company.objects.create(name="Empresa Lock Inventory", rnc="555000177")
+        category = Category.objects.create(company=company, name="LOCK-INVENTORY")
+        products = [
+            Product.objects.create(
+                company=company,
+                name=f"Producto Lock {index}",
+                description="Prueba de orden de locks",
+                price=Decimal("100.00"),
+                stock=stock,
+                category=category,
+            )
+            for index in range(1, 3)
+        ]
+        return company, products
+
+    def _run_concurrently(self, operations):
+        barrier = threading.Barrier(len(operations))
+
+        def invoke(operation):
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                return operation()
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=len(operations)) as pool:
+            return [future.result() for future in as_completed(pool.submit(invoke, operation) for operation in operations)]
+
+    def _invoice_with_product_order(self, company, products):
+        invoice = Invoice.objects.create(company=company, status="pending", receipt_type="ticket")
+        details = [
+            InvoiceDetail.objects.create(
+                invoice=invoice,
+                product=product,
+                quantity=1,
+                price=product.price,
+                subtotal=product.price,
+            )
+            for product in products
+        ]
+        return invoice, details
+
+    @skipUnlessDBFeature("has_select_for_update")
+    def test_concurrent_invoice_creation_with_inverse_product_order_has_no_deadlock(self):
+        company, products = self._inventory_products()
+
+        def create(details):
+            return lambda: InvoiceCreationService().create_invoice(
+                client_id=None,
+                details=[{"product": product.id, "quantity": 1, "price": product.price} for product in details],
+                payment_method="cash",
+                receipt_type="invoice",
+                status="paid",
+                auto_ecf=False,
+                company=company,
+            )
+
+        self._run_concurrently([create(products), create(list(reversed(products)))])
+
+        for product in products:
+            product.refresh_from_db()
+            self.assertEqual(product.stock, 8)
+
+    @skipUnlessDBFeature("has_select_for_update")
+    def test_concurrent_invoice_collection_with_inverse_product_order_has_no_deadlock(self):
+        company, products = self._inventory_products()
+        first, _ = self._invoice_with_product_order(company, products)
+        second, _ = self._invoice_with_product_order(company, list(reversed(products)))
+
+        self._run_concurrently([
+            lambda: InvoiceCreationService().collect_and_issue_invoice(invoice_id=first.id),
+            lambda: InvoiceCreationService().collect_and_issue_invoice(invoice_id=second.id),
+        ])
+
+        for product in products:
+            product.refresh_from_db()
+            self.assertEqual(product.stock, 8)
+
+    def _credit_note_with_product_order(self, company, products, *, compensation_required=False):
+        invoice, origin_details = self._invoice_with_product_order(company, products)
+        note = CreditNote.objects.create(
+            company=company,
+            origin_invoice=invoice,
+            reason="Prueba de orden de locks",
+            fiscal_resolution_status="rejected" if compensation_required else "pending",
+            inventory_reconciliation_status="compensation_required" if compensation_required else "restored_pending",
+            requires_manual_review=compensation_required,
+        )
+        if compensation_required:
+            for detail in origin_details:
+                CreditNoteDetail.objects.create(
+                    credit_note=note,
+                    origin_detail=detail,
+                    product=detail.product,
+                    quantity=1,
+                    price=detail.price,
+                    subtotal=detail.subtotal,
+                )
+        return note, origin_details
+
+    @skipUnlessDBFeature("has_select_for_update")
+    def test_concurrent_e34_inventory_restore_with_inverse_product_order_has_no_deadlock(self):
+        company, products = self._inventory_products()
+        first, first_details = self._credit_note_with_product_order(company, products)
+        second, second_details = self._credit_note_with_product_order(company, list(reversed(products)))
+
+        def restore(note, details):
+            normalized = [
+                {"origin_detail": detail, "product": detail.product, "quantity": 1}
+                for detail in details
+            ]
+
+            def operation():
+                with transaction.atomic():
+                    return CreditNoteService()._restore_inventory_once(note, normalized, None)
+
+            return operation
+
+        self._run_concurrently([restore(first, first_details), restore(second, second_details)])
+
+        for product in products:
+            product.refresh_from_db()
+            self.assertEqual(product.stock, 12)
+
+    @skipUnlessDBFeature("has_select_for_update")
+    def test_concurrent_e34_inventory_compensation_with_inverse_product_order_has_no_deadlock(self):
+        company, products = self._inventory_products()
+        first, _ = self._credit_note_with_product_order(company, products, compensation_required=True)
+        second, _ = self._credit_note_with_product_order(company, list(reversed(products)), compensation_required=True)
+
+        with patch.object(CreditNoteReconciliationService, "_compensation_blockers", return_value=[]):
+            self._run_concurrently([
+                lambda: CreditNoteReconciliationService().compensate_inventory(first),
+                lambda: CreditNoteReconciliationService().compensate_inventory(second),
+            ])
+
+        for product in products:
+            product.refresh_from_db()
+            self.assertEqual(product.stock, 8)
 
 
 class NumberSequenceHardeningTests(TransactionTestCase):

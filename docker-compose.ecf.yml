@@ -9,7 +9,18 @@ services:
 
   celery-worker:
     build: .
-    command: celery -A setting worker --loglevel=INFO -Q ecf.xml,ecf.signing,ecf.dgii,ecf.status,ecf.retry,ecf.default --concurrency=4
+    command: celery -A setting worker --loglevel=INFO -Q ecf.xml,ecf.signing,ecf.dgii,ecf.status,ecf.retry,ecf.reconciliation,ecf.default --concurrency=4
+    env_file:
+      - .env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+
+  celery-beat:
+    build: .
+    command: celery -A setting beat --loglevel=INFO
     env_file:
       - .env
     environment:

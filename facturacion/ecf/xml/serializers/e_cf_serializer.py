@@ -7,9 +7,13 @@ from typing import Any
 
 from lxml import etree
 
-from facturacion.ecf.constants import ECF_VERSION, XMLDSIG_NAMESPACE
+from facturacion.ecf.constants import ECF_TYPE_RULES, ECF_VERSION, XMLDSIG_NAMESPACE, should_include_buyer
 from facturacion.ecf.mappers.invoice_mapper import ECFPayload
 from facturacion.ecf.utils.decimals import format_money, format_unit_price
+
+
+EXPLICIT_ITBIS2_TYPES = {"31", "32", "33", "34", "41", "45"}
+EXPLICIT_ITBIS3_TYPES = EXPLICIT_ITBIS2_TYPES | {"46"}
 
 
 class ECFXMLSerializer:
@@ -32,7 +36,7 @@ class ECFXMLSerializer:
         etree.SubElement(encabezado, "Version").text = ECF_VERSION
         self._append_id_doc(encabezado, payload)
         self._append_issuer(encabezado, payload)
-        if payload.include_buyer:
+        if should_include_buyer(payload.ecf_type, payload.include_buyer):
             self._append_buyer(encabezado, payload)
         self._append_totals(encabezado, payload)
 
@@ -40,20 +44,49 @@ class ECFXMLSerializer:
         id_doc = etree.SubElement(encabezado, "IdDoc")
         etree.SubElement(id_doc, "TipoeCF").text = payload.ecf_type
         etree.SubElement(id_doc, "eNCF").text = payload.encf
-        if payload.sequence_expiration_date:
+        if (
+            ECF_TYPE_RULES.get(payload.ecf_type, {}).get("allow_sequence_expiration_date", False)
+            and payload.sequence_expiration_date
+        ):
             etree.SubElement(id_doc, "FechaVencimientoSecuencia").text = payload.sequence_expiration_date
         id_doc_fields = payload.id_doc_fields or {}
-        self._text(id_doc, "IndicadorNotaCredito", payload.credit_note_indicator)
-        self._text(id_doc, "IndicadorNotaCredito", id_doc_fields.get("IndicadorNotaCredito"))
+        rules = ECF_TYPE_RULES.get(payload.ecf_type, {})
+        self._text(
+            id_doc,
+            "IndicadorNotaCredito",
+            payload.credit_note_indicator if rules.get("allow_credit_note_indicator", False) else None,
+        )
+        self._text(
+            id_doc,
+            "IndicadorNotaCredito",
+            id_doc_fields.get("IndicadorNotaCredito")
+            if rules.get("allow_credit_note_indicator", False)
+            else None,
+        )
         self._text(id_doc, "IndicadorEnvioDiferido", id_doc_fields.get("IndicadorEnvioDiferido"))
         self._text(id_doc, "IndicadorMontoGravado", id_doc_fields.get("IndicadorMontoGravado"))
-        self._text(id_doc, "TipoIngresos", payload.income_type)
+        self._text(
+            id_doc,
+            "IndicadorServicioTodoIncluido",
+            id_doc_fields.get("IndicadorServicioTodoIncluido")
+            if rules.get("allow_service_all_included_indicator", False)
+            else None,
+        )
+        self._text(
+            id_doc,
+            "TipoIngresos",
+            payload.income_type if rules.get("allow_income_type", True) else None,
+        )
         self._text(id_doc, "TipoPago", payload.payment_type)
         self._text(id_doc, "FechaLimitePago", id_doc_fields.get("FechaLimitePago"))
-        self._text(id_doc, "TerminoPago", id_doc_fields.get("TerminoPago"))
+        self._text(
+            id_doc,
+            "TerminoPago",
+            id_doc_fields.get("TerminoPago") if rules.get("allow_payment_term", True) else None,
+        )
 
         payment_forms = payload.payment_forms
-        if payment_forms is None and payload.ecf_type != "34":
+        if payment_forms is None and rules.get("allow_default_payment_forms", True):
             payment_forms = [{
                 "form": payload.payment_form,
                 "amount": payload.totals["amount_total"],
@@ -121,7 +154,7 @@ class ECFXMLSerializer:
         totals = payload.totals
         totales = etree.SubElement(encabezado, "Totales")
         if totals.get("explicit_fiscal_totals"):
-            self._append_explicit_totals(totales, totals)
+            self._append_explicit_totals(totales, totals, payload.ecf_type)
             return
 
         taxable_amount = totals["taxable_amount"]
@@ -157,7 +190,12 @@ class ECFXMLSerializer:
 
         etree.SubElement(totales, "MontoTotal").text = format_money(totals["amount_total"])
 
-    def _append_explicit_totals(self, totales: etree._Element, totals: dict[str, Decimal]) -> None:
+    def _append_explicit_totals(
+        self,
+        totales: etree._Element,
+        totals: dict[str, Decimal],
+        ecf_type: str,
+    ) -> None:
         taxable_total = totals.get("taxable_amount", Decimal("0.00"))
         exempt_amount = totals.get("exempt_amount", Decimal("0.00"))
         total_itbis = totals.get("total_itbis", Decimal("0.00"))
@@ -186,9 +224,15 @@ class ECFXMLSerializer:
 
         if taxable_i1 > 0:
             etree.SubElement(totales, "ITBIS1").text = str(totals.get("itbis_rate1") or "18")
-        if taxable_i2 > 0:
+        if (
+            ecf_type in EXPLICIT_ITBIS2_TYPES
+            and (taxable_i2 > 0 or present_fields.get("ITBIS2"))
+        ):
             etree.SubElement(totales, "ITBIS2").text = str(totals.get("itbis_rate2") or "16")
-        if taxable_i3 > 0:
+        if (
+            ecf_type in EXPLICIT_ITBIS3_TYPES
+            and (taxable_i3 > 0 or present_fields.get("ITBIS3"))
+        ):
             etree.SubElement(totales, "ITBIS3").text = str(totals.get("itbis_rate3") or "0")
         if total_itbis > 0 or present_fields.get("TotalITBIS"):
             etree.SubElement(totales, "TotalITBIS").text = format_money(total_itbis)
@@ -236,6 +280,21 @@ class ECFXMLSerializer:
             self._text(item_node, "DescripcionItem", item.get("description"))
             etree.SubElement(item_node, "CantidadItem").text = item.get("quantity_text") or format_money(item["quantity"])
             self._text(item_node, "UnidadMedida", item.get("unit_measure"))
+            if item.get("quantity_reference") is not None:
+                etree.SubElement(item_node, "CantidadReferencia").text = (
+                    item.get("quantity_reference_text") or format_money(item["quantity_reference"])
+                )
+            self._text(item_node, "UnidadReferencia", item.get("reference_unit"))
+            if item.get("alcohol_degrees") is not None:
+                etree.SubElement(item_node, "GradosAlcohol").text = (
+                    item.get("alcohol_degrees_text") or format_money(item["alcohol_degrees"])
+                )
+            if item.get("reference_unit_price") is not None:
+                etree.SubElement(item_node, "PrecioUnitarioReferencia").text = (
+                    item.get("reference_unit_price_text") or format_money(item["reference_unit_price"])
+                )
+            self._text(item_node, "FechaElaboracion", item.get("manufacturing_date"))
+            self._text(item_node, "FechaVencimientoItem", item.get("item_expiration_date"))
             etree.SubElement(item_node, "PrecioUnitarioItem").text = item.get("unit_price_text") or format_unit_price(item["unit_price"])
             if not item.get("suppress_item_adjustments"):
                 if item.get("discount") and item["discount"] > 0:

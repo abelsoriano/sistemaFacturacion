@@ -17,6 +17,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const navigate = useNavigate();
 
   const extractError = (err) => {
@@ -31,12 +32,38 @@ export default function Register() {
     return 'Revisa los datos del formulario.';
   };
 
+  const getSummaryMessage = () => {
+    // If we have field errors, prefer to show a concrete field message (password first)
+    const keys = Object.keys(fieldErrors || {});
+    if (keys.length) {
+      const priority = ['password', 'confirm_password', 'email', 'username', 'first_name'];
+      for (const k of priority) {
+        if (fieldErrors[k] && fieldErrors[k].length) return fieldErrors[k][0];
+      }
+      // fallback to first available message
+      for (const k of keys) {
+        const arr = fieldErrors[k];
+        if (Array.isArray(arr) && arr.length) return arr[0];
+      }
+    }
+    // If no field errors, return the general error (but hide the very generic backend detail)
+    if (error && error !== 'Error de validacion.') return error;
+    return null;
+  };
+
   const handleChange = (event) => {
     setFormData((current) => ({
       ...current,
       [event.target.name]: event.target.value,
     }));
     setError('');
+    // Clear field-specific error for this field when user edits it
+    setFieldErrors((prev) => {
+      if (!prev || !prev[event.target.name]) return prev;
+      const copy = { ...prev };
+      delete copy[event.target.name];
+      return copy;
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -53,11 +80,22 @@ export default function Register() {
       await authService.register(formData);
       navigate('/company-onboarding', { replace: true });
     } catch (err) {
-      setError(extractError(err));
+      // Prefer the backend detail message as summary and capture per-field errors
+      const data = err.response?.data;
+      if (data) {
+        setError(data.detail || extractError(err));
+        if (data.fields && typeof data.fields === 'object') {
+          setFieldErrors(data.fields);
+        }
+      } else {
+        setError(extractError(err));
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const summaryMessage = getSummaryMessage();
 
   return (
     <main className="login-saas-page">
@@ -90,17 +128,17 @@ export default function Register() {
       <section className="login-card-panel" aria-label="Crear cuenta">
         <div className="login-card">
           <div className="login-card-header">
-            <span>Registro</span>
+            {/* <span>Registro</span> */}
             <h2>Crear cuenta</h2>
             <p>Completa tus datos para iniciar el onboarding de empresa.</p>
           </div>
 
-          {error && (
+          {summaryMessage && (
             <div className="login-error" role="alert">
               <AlertCircle size={20} />
               <div>
-                <strong>No se pudo registrar</strong>
-                <p>{error}</p>
+                <strong>Error</strong>
+                <p>{summaryMessage}</p>
               </div>
             </div>
           )}
@@ -137,6 +175,19 @@ export default function Register() {
                   required
                 />
               </div>
+              {fieldErrors.email && (
+                (() => {
+                  const msgs = (fieldErrors.email || []).filter((m) => m !== summaryMessage);
+                  if (!msgs.length) return null;
+                  return (
+                    <div className="field-errors" aria-live="polite">
+                      {msgs.map((m, i) => (
+                        <p className="field-error" key={i}>{m}</p>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
             </div>
 
             <div className="login-field">
@@ -154,6 +205,19 @@ export default function Register() {
                   required
                 />
               </div>
+              {fieldErrors.username && (
+                (() => {
+                  const msgs = (fieldErrors.username || []).filter((m) => m !== summaryMessage);
+                  if (!msgs.length) return null;
+                  return (
+                    <div className="field-errors" aria-live="polite">
+                      {msgs.map((m, i) => (
+                        <p className="field-error" key={i}>{m}</p>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
             </div>
 
             <div className="login-field">
@@ -179,6 +243,19 @@ export default function Register() {
                   {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
                 </button>
               </div>
+              {fieldErrors.password && (
+                (() => {
+                  const msgs = (fieldErrors.password || []).filter((m) => m !== summaryMessage);
+                  if (!msgs.length) return null;
+                  return (
+                    <div className="field-errors" aria-live="polite">
+                      {msgs.map((m, i) => (
+                        <p className="field-error" key={i}>{m}</p>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
             </div>
 
             <div className="login-field">
@@ -196,6 +273,19 @@ export default function Register() {
                   required
                 />
               </div>
+              {fieldErrors.confirm_password && (
+                (() => {
+                  const msgs = (fieldErrors.confirm_password || []).filter((m) => m !== summaryMessage);
+                  if (!msgs.length) return null;
+                  return (
+                    <div className="field-errors" aria-live="polite">
+                      {msgs.map((m, i) => (
+                        <p className="field-error" key={i}>{m}</p>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
             </div>
 
             <button type="submit" className="login-submit" disabled={loading}>

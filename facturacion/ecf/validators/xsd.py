@@ -14,7 +14,7 @@ class ECFXSDValidator:
     schema_files = {
         "31": "e-CF 31 v.1.0.xsd",
         "32": "e-CF 32 v.1.0.xsd",
-        "33": "e-CF 34 v.1.0.xsd",
+        "33": "e-CF 33 v.1.0.xsd",
         "34": "e-CF 34 v.1.0.xsd",
         "41": "e-CF 41 v.1.0.xsd",
         "43": "e-CF 43 v.1.0.xsd",
@@ -59,11 +59,4 @@ class ECFXSDValidator:
         content = content.replace('[12][$0-9]', '[12][0-9]')
         content = content.replace('((?:19|20)\\d{2})', '((19|20)[0-9]{2})')
         content = content.replace('(?:.[0-9]{2})?', '(.[0-9]{2})?')
-        content = content.replace(
-            '<xs:element name="eNCF" type="eNCFValidationType" minOccurs="1" maxOccurs="1"/>\n'
-            '                    <xs:element name="IndicadorNotaCredito" type="IndicadorNotaCreditoType" minOccurs="1" maxOccurs="1" />',
-            '<xs:element name="eNCF" type="eNCFValidationType" minOccurs="1" maxOccurs="1"/>\n'
-            '                    <xs:element name="FechaVencimientoSecuencia" type="FechaValidationType" minOccurs="0" maxOccurs="1"/>\n'
-            '                    <xs:element name="IndicadorNotaCredito" type="IndicadorNotaCreditoType" minOccurs="0" maxOccurs="1" />',
-        )
         return etree.ElementTree(etree.fromstring(content.encode("utf-8"), parser))

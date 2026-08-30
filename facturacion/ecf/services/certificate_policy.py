@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from facturacion.ecf.certificates.resolver import active_certificate_for_issuer
 from facturacion.ecf.certificates.metadata import ECFCertificateMetadataService
-from facturacion.models import ECFEventLog, ECFIssuerConfig, ElectronicFiscalDocument
+from facturacion.models import ECFCertificate, ECFEventLog, ECFIssuerConfig, ElectronicFiscalDocument
 from facturacion.ecf.services.status_transitions import ECFStatusTransitionService
 
 
@@ -142,6 +143,60 @@ class ECFCertificateSigningPolicy:
             created_by=user,
         )
         return document
+
+    @transaction.atomic
+    def record_loader_expiration(
+        self,
+        document_id: int,
+        certificate_reference: str | None,
+        *,
+        user=None,
+    ) -> bool:
+        """Synchronize active certificate metadata after the loader detects expiry."""
+        if not certificate_reference:
+            return False
+        document = (
+            ElectronicFiscalDocument.objects.select_for_update()
+            .select_related("issuer")
+            .get(pk=document_id)
+        )
+        active_certificate = (
+            ECFCertificate.objects.select_for_update()
+            .filter(
+                company_id=document.issuer.company_id,
+                issuer_id=document.issuer_id,
+                environment=document.issuer.environment,
+                is_active=True,
+                certificate_reference=certificate_reference,
+            )
+            .first()
+        )
+        if active_certificate is None:
+            return False
+
+        now = timezone.now()
+        ECFCertificate.objects.filter(pk=active_certificate.pk).update(
+            status=ECFIssuerConfig.CERTIFICATE_STATUS_EXPIRED,
+            updated_at=now,
+        )
+        ECFIssuerConfig.objects.filter(pk=document.issuer_id).update(
+            certificate_status=ECFIssuerConfig.CERTIFICATE_STATUS_EXPIRED,
+            certificate_status_updated_at=now,
+            updated_at=now,
+        )
+        ECFEventLog.objects.create(
+            electronic_document=document,
+            event_type="error",
+            message="El loader detectó que el certificado activo está vencido; se actualizó su metadata.",
+            payload={
+                "stage": "certificate_loader_expiration",
+                "code": "certificate_expired",
+                "certificate_id": active_certificate.pk,
+                "certificate_status": ECFIssuerConfig.CERTIFICATE_STATUS_EXPIRED,
+            },
+            created_by=user,
+        )
+        return True
 
     def _refresh_metadata_if_needed(self, issuer: ECFIssuerConfig) -> ECFIssuerConfig:
         if not self._metadata_is_stale(issuer):

@@ -84,6 +84,10 @@ class ECFSigningService:
         if validate_xsd:
             self.xsd_validator.validate(locked_document.ecf_type, signed_xml)
 
+        # The loader checked validity before signing; check again so a certificate
+        # that expired during signing can never produce a persisted e-CF signature.
+        self.certificate_loader.validate_loaded_certificate(certificate)
+
         transition = self.status_transitions.transition(
             locked_document,
             fiscal_status="signed",

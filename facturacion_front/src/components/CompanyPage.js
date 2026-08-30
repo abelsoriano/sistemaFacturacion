@@ -907,7 +907,9 @@ function IssuerCard({ issuer, onViewDetails, onViewSequences, onConfigureCertifi
         <button type="button" onClick={onViewDetails}>Ver detalles</button>
         <button type="button" onClick={onViewSequences}>Ver secuencias</button>
         <button type="button" disabled title="Disponible en próxima fase">Refrescar metadata</button>
-        <button type="button" onClick={onConfigureCertificate}>Configurar certificado</button>
+        <button type="button" onClick={() => onConfigureCertificate(issuer)}>
+          Configurar certificado
+        </button>
       </div>
 
       <div className="certificate-panel">
