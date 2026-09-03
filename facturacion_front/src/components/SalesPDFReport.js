@@ -134,7 +134,7 @@ const SalesPDFReport = ({ sales, documentMode = false } = {}) => {
         .sr-page {
           min-height: 100vh;
           padding: 1.5rem;
-          background: #f6f7fb;
+          background: var(--saas-background);
         }
         .sr-wrap {
           max-width: 1120px;
@@ -146,11 +146,11 @@ const SalesPDFReport = ({ sales, documentMode = false } = {}) => {
           justify-content: space-between;
           gap: 1rem;
           flex-wrap: wrap;
-          background: #ffffff;
-          border: 1px solid #e6e8f0;
+          background: var(--saas-card);
+          border: 1px solid var(--saas-border);
           border-radius: 8px;
           padding: 1.25rem;
-          box-shadow: 0 12px 28px rgba(27, 26, 46, 0.06);
+          box-shadow: var(--saas-shadow);
         }
         .sr-title {
           display: flex;
@@ -164,17 +164,17 @@ const SalesPDFReport = ({ sales, documentMode = false } = {}) => {
           width: 42px;
           height: 42px;
           border-radius: 8px;
-          background: #EEEDFE;
-          color: #6C63FF;
+          background: var(--saas-primary-soft);
+          color: var(--saas-primary);
         }
         .sr-title h1 {
           margin: 0;
-          color: #1B1A2E;
+          color: var(--saas-text);
           font-size: 1.45rem;
         }
         .sr-title p {
           margin: 0.25rem 0 0;
-          color: #717184;
+          color: var(--saas-muted);
           font-size: 0.9rem;
         }
         .sr-actions {
@@ -187,19 +187,19 @@ const SalesPDFReport = ({ sales, documentMode = false } = {}) => {
           align-items: center;
           justify-content: center;
           gap: 0.5rem;
-          border: 1px solid #dfe3ee;
+          border: 1px solid var(--saas-border);
           border-radius: 8px;
           padding: 0.68rem 0.95rem;
-          color: #303044;
-          background: #ffffff;
+          color: var(--saas-text);
+          background: var(--saas-card);
           font-weight: 700;
           text-decoration: none;
         }
         .sr-btn.primary {
-          color: #ffffff;
-          background: #6C63FF;
-          border-color: #6C63FF;
-          box-shadow: 0 10px 18px rgba(108, 99, 255, 0.18);
+          color: var(--saas-primary-foreground);
+          background: var(--saas-primary);
+          border-color: var(--saas-primary);
+          box-shadow: var(--saas-shadow-primary);
         }
         .sr-grid {
           display: grid;
@@ -208,34 +208,69 @@ const SalesPDFReport = ({ sales, documentMode = false } = {}) => {
           margin-top: 1rem;
         }
         .sr-card {
-          background: #ffffff;
-          border: 1px solid #e6e8f0;
+          background: var(--saas-card);
+          border: 1px solid var(--saas-border);
           border-radius: 8px;
           padding: 1rem;
-          box-shadow: 0 8px 20px rgba(27, 26, 46, 0.04);
+          box-shadow: var(--saas-shadow-soft);
         }
         .sr-card h2 {
           display: flex;
           align-items: center;
           gap: 0.5rem;
           margin: 0 0 0.5rem;
-          color: #1B1A2E;
+          color: var(--saas-text);
           font-size: 1rem;
         }
         .sr-card p {
           margin: 0 0 1rem;
-          color: #717184;
+          color: var(--saas-muted);
           font-size: 0.88rem;
           line-height: 1.45;
         }
         .sr-note {
           margin-top: 1rem;
           padding: 0.85rem 1rem;
-          border: 1px solid #dbeafe;
+          border: 1px solid var(--saas-border);
           border-radius: 8px;
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: var(--saas-surface-soft);
+          color: var(--saas-text);
           font-size: 0.88rem;
+        }
+        :root.theme-dark .sr-page,
+        :root.theme-dark .sr-header,
+        :root.theme-dark .sr-card,
+        :root.theme-dark .sr-btn,
+        :root.theme-dark .sr-note {
+          background: var(--saas-background);
+          color: var(--saas-text);
+        }
+        :root.theme-dark .sr-header,
+        :root.theme-dark .sr-card,
+        :root.theme-dark .sr-btn,
+        :root.theme-dark .sr-note {
+          border-color: var(--saas-border);
+          box-shadow: var(--saas-shadow-soft);
+        }
+        :root.theme-dark .sr-title h1,
+        :root.theme-dark .sr-card h2,
+        :root.theme-dark .sr-btn,
+        :root.theme-dark .sr-note,
+        :root.theme-dark .sr-title p,
+        :root.theme-dark .sr-card p {
+          color: var(--saas-text);
+        }
+        :root.theme-dark .sr-title p,
+        :root.theme-dark .sr-card p {
+          color: var(--saas-muted);
+        }
+        :root.theme-dark .sr-icon {
+          background: var(--saas-primary-soft);
+          color: var(--saas-primary);
+        }
+        :root.theme-dark .sr-btn.primary {
+          background: var(--saas-primary);
+          color: var(--saas-primary-foreground);
         }
         @media (max-width: 820px) {
           .sr-page { padding: 1rem; }

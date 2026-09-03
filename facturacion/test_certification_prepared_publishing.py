@@ -1,6 +1,7 @@
 import hashlib
 import tempfile
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
@@ -224,8 +225,35 @@ class CertificationPreparedPublishingTests(TransactionTestCase):
         document = self._document(item)
         prepared_document = self._prepared_document(item, document)
         prepared_signature = self._prepared_signature(prepared_document)
+        marker = timezone.now()
         document.submission_outcome = 'unknown'
-        document.save(update_fields=['submission_outcome', 'updated_at'])
+        document.submission_started_at = marker
+        document.submission_dispatch_started_at = marker
+        document.submission_fingerprint = 'f' * 64
+        document.submission_attempt_token = uuid.uuid4()
+        document.save(update_fields=[
+            'submission_outcome', 'submission_started_at', 'submission_dispatch_started_at',
+            'submission_fingerprint', 'submission_attempt_token', 'updated_at',
+        ])
+        with self.assertRaises(CertificationMutationBlocked):
+            CertificationPreparedArtifactPublisher().publish_document_and_signature(
+                prepared_document=prepared_document, prepared_signature=prepared_signature,
+            )
+
+    def test_claimed_rejects_publication(self):
+        item = self._item()
+        document = self._document(item)
+        prepared_document = self._prepared_document(item, document)
+        prepared_signature = self._prepared_signature(prepared_document)
+        document.submission_outcome = 'claimed'
+        document.submission_started_at = timezone.now()
+        document.submission_fingerprint = 'f' * 64
+        document.submission_attempt_token = uuid.uuid4()
+        document.save(update_fields=[
+            'submission_outcome', 'submission_started_at', 'submission_fingerprint',
+            'submission_attempt_token', 'updated_at',
+        ])
+
         with self.assertRaises(CertificationMutationBlocked):
             CertificationPreparedArtifactPublisher().publish_document_and_signature(
                 prepared_document=prepared_document, prepared_signature=prepared_signature,

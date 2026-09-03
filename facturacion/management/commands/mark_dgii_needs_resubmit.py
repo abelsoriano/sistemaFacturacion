@@ -1,7 +1,8 @@
 from django.core.management.base import BaseCommand, CommandError
+from django.contrib.auth import get_user_model
 
 from facturacion.models import DGIICertificationPlan
-from facturacion.services.dgii_certification import DGIICertificationDGIISubmitter
+from facturacion.services.certification_reset import CertificationResetService
 
 
 class Command(BaseCommand):
@@ -11,6 +12,9 @@ class Command(BaseCommand):
         parser.add_argument('--plan-id', type=int, required=True)
         parser.add_argument('--data-ecf', action='store_true', help='Marca Datos e-CF: backend groups 1 + 2.')
         parser.add_argument('--rfce', action='store_true', help='Marca RFCE: backend group 3.')
+        parser.add_argument('--user-id', type=int, required=True)
+        parser.add_argument('--evidence', required=True, help='Referencia verificable del reset en DGII.')
+        parser.add_argument('--confirm', action='store_true')
         parser.add_argument(
             '--reason',
             default='El portal DGII reinicio el set de pruebas; requiere reenvio desde Assys.',
@@ -19,31 +23,36 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if not options['data_ecf'] and not options['rfce']:
             raise CommandError('Debe indicar al menos una fase: --data-ecf o --rfce.')
+        if not options['confirm']:
+            raise CommandError('Debe confirmar explícitamente el reset con --confirm.')
 
         try:
             plan = DGIICertificationPlan.objects.get(id=options['plan_id'])
         except DGIICertificationPlan.DoesNotExist as exc:
             raise CommandError(f'No existe plan DGII con id={options["plan_id"]}.') from exc
 
-        submitter = DGIICertificationDGIISubmitter()
-        data_ecf_marked = 0
-        rfce_marked = 0
-
+        try:
+            actor = get_user_model().objects.get(pk=options['user_id'])
+        except get_user_model().DoesNotExist as exc:
+            raise CommandError('El usuario autorizante no existe.') from exc
+        groups = []
         if options['data_ecf']:
-            data_ecf_marked = submitter.mark_data_ecf_acceptances_stale(
-                plan=plan,
-                reason=options['reason'],
-            )
+            groups.extend((1, 2))
         if options['rfce']:
-            rfce_marked = submitter.mark_acceptances_stale(
-                plan=plan,
-                groups=(3,),
-                reason=options['reason'],
-            )
+            groups.append(3)
+        result = CertificationResetService().apply_reset(
+            plan_id=plan.pk,
+            groups=groups,
+            source=CertificationResetService.SOURCE_MANUAL,
+            reason=options['reason'],
+            evidence=options['evidence'],
+            actor=actor,
+            confirmed=True,
+        )
 
         self.stdout.write(
             self.style.SUCCESS(
                 'Documentos marcados para reenvio: '
-                f'Datos e-CF={data_ecf_marked}, RFCE={rfce_marked}. No se envio XML.'
+                f'total={result.applied}, idempotentes={result.idempotent}. No se envio XML.'
             )
         )

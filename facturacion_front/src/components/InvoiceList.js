@@ -48,21 +48,21 @@ const STATUS_CONFIG = {
 };
 
 const ECF_STATUS_CONFIG = {
-  draft: { label: "Borrador", color: "#667085", bg: "#f2f4f7" },
-  xml_generated: { label: "XML", color: "#175cd3", bg: "#eff8ff" },
-  signed: { label: "Firmado", color: "#3538cd", bg: "#eef4ff" },
-  submitted: { label: "Enviado", color: "#0e7090", bg: "#ecfdff" },
-  accepted: { label: "Aceptado", color: "#067647", bg: "#ecfdf3" },
-  rejected: { label: "Rechazado", color: "#b42318", bg: "#fef3f2" },
-  cancelled: { label: "Anulado", color: "#475467", bg: "#f2f4f7" },
+  draft: { label: "Borrador", color: "var(--status-draft)", bg: "var(--status-draft-bg)" },
+  xml_generated: { label: "XML", color: "var(--status-xml)", bg: "var(--status-xml-bg)" },
+  signed: { label: "Firmado", color: "var(--status-signed)", bg: "var(--status-signed-bg)" },
+  submitted: { label: "Enviado", color: "var(--status-submitted)", bg: "var(--status-submitted-bg)" },
+  accepted: { label: "Aceptado", color: "var(--status-accepted)", bg: "var(--status-accepted-bg)" },
+  rejected: { label: "Rechazado", color: "var(--status-rejected)", bg: "var(--status-rejected-bg)" },
+  cancelled: { label: "Anulado", color: "var(--status-cancelled)", bg: "var(--status-cancelled-bg)" },
 };
 
 const JOB_STATUS_CONFIG = {
-  idle: { label: "Inactivo", color: "#475467", bg: "#f2f4f7" },
-  queued: { label: "En cola", color: "#175cd3", bg: "#eff8ff" },
-  running: { label: "Ejecutando", color: "#6941c6", bg: "#f4f3ff" },
-  retrying: { label: "Reintentando", color: "#b54708", bg: "#fffaeb" },
-  failed: { label: "Fallido", color: "#b42318", bg: "#fef3f2" },
+  idle: { label: "Inactivo", color: "var(--status-idle)", bg: "var(--status-idle-bg)" },
+  queued: { label: "En cola", color: "var(--status-queued)", bg: "var(--status-queued-bg)" },
+  running: { label: "Ejecutando", color: "var(--status-running)", bg: "var(--status-running-bg)" },
+  retrying: { label: "Reintentando", color: "var(--status-retrying)", bg: "var(--status-retrying-bg)" },
+  failed: { label: "Fallido", color: "var(--status-failed)", bg: "var(--status-failed-bg)" },
 };
 
 const FISCAL_ACTION_LOCKED_STATUSES = new Set([

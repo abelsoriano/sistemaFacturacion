@@ -1,8 +1,31 @@
+.almacen-page {
+  --alm-page-bg: #f6f7fb;
+  --alm-surface: #ffffff;
+  --alm-surface-soft: #f9fafb;
+  --alm-surface-variant: #fbfbff;
+  --alm-border: #e6e8f0;
+  --alm-border-strong: #dfe3ee;
+  --alm-text: #111827;
+  --alm-text-muted: #6b7280;
+  --alm-text-soft: #374151;
+  --alm-primary: #6c63ff;
+  --alm-primary-soft: #eeedfe;
+  --alm-critical: #dc2626;
+  --alm-critical-bg: #fef2f2;
+  --alm-warning: #d97706;
+  --alm-warning-bg: #fffbeb;
+  --alm-success: #059669;
+  --alm-success-bg: #ecfdf5;
+  --alm-overlay: rgba(27, 26, 46, 0.42);
+  --alm-shadow: 0 8px 20px rgba(27, 26, 46, 0.04);
+  --alm-shadow-lg: 0 24px 70px rgba(27, 26, 46, 0.22);
+}
+
 /* Estilo común para ambas pantallas */
 .pdf-config-page,
 .almacen-page {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: var(--alm-page-bg);
   padding: 2rem;
 }
 
@@ -10,7 +33,7 @@
 .almacen-content {
   max-width: 1200px;
   margin: 0 auto;
-  background: white;
+  background: var(--alm-surface);
   border-radius: 12px;
   padding: 2rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -631,8 +654,43 @@
 }
 
 /* SaaS inventory/almacen refinements */
+:root.theme-dark .almacen-page,
+:root.theme-dark .almacen-content,
+:root.theme-dark .search-section,
+:root.theme-dark .page-header,
+:root.theme-dark .stat-item,
+:root.theme-dark .table-container,
+:root.theme-dark .pagination,
+:root.theme-dark .loading-state,
+:root.theme-dark .empty-state,
+:root.theme-dark .alm-modal,
+:root.theme-dark .alm-modal-backdrop,
+:root.theme-dark .alm-detail-card,
+:root.theme-dark .alm-description-box {
+  --alm-page-bg: var(--saas-background);
+  --alm-surface: var(--saas-card);
+  --alm-surface-soft: var(--saas-surface-soft);
+  --alm-surface-variant: var(--saas-surface-variant);
+  --alm-border: var(--saas-border);
+  --alm-border-strong: var(--saas-border);
+  --alm-text: var(--saas-text);
+  --alm-text-muted: var(--saas-muted);
+  --alm-text-soft: var(--saas-text);
+  --alm-primary: var(--saas-primary);
+  --alm-primary-soft: var(--saas-primary-soft);
+  --alm-critical: var(--saas-danger);
+  --alm-critical-bg: var(--saas-danger-surface);
+  --alm-warning: var(--saas-warning);
+  --alm-warning-bg: var(--saas-warning-surface);
+  --alm-success: var(--saas-success);
+  --alm-success-bg: var(--saas-success-surface);
+  --alm-overlay: var(--saas-overlay);
+  --alm-shadow: var(--saas-shadow-soft);
+  --alm-shadow-lg: var(--saas-shadow-heavy);
+}
+
 .almacen-page {
-  background: #f6f7fb;
+  background: var(--alm-page-bg);
   padding: 1.5rem;
 }
 
@@ -644,11 +702,11 @@
 }
 
 .almacen-page .page-header {
-  background: #ffffff;
-  border: 1px solid #e6e8f0;
+  background: var(--alm-surface);
+  border: 1px solid var(--alm-border);
   border-radius: 8px;
   padding: 1.25rem;
-  box-shadow: 0 12px 28px rgba(27, 26, 46, 0.06);
+  box-shadow: var(--alm-shadow);
 }
 
 .almacen-page .header-title {
@@ -656,8 +714,8 @@
 }
 
 .almacen-page .header-icon {
-  color: #6c63ff;
-  background: #eeedfe;
+  color: var(--alm-primary);
+  background: var(--alm-primary-soft);
   border-radius: 8px;
   padding: 0.45rem;
   width: 42px;
@@ -665,34 +723,34 @@
 }
 
 .almacen-page .header-title h1 {
-  color: #1b1a2e;
+  color: var(--alm-text);
   font-size: 1.45rem;
 }
 
 .almacen-page .btn-primary {
-  background: #6c63ff;
+  background: var(--alm-primary);
   border-radius: 8px;
-  box-shadow: 0 10px 18px rgba(108, 99, 255, 0.22);
+  box-shadow: var(--saas-shadow-primary);
 }
 
 .almacen-page .btn-primary:hover:not(:disabled) {
-  background: #5b54df;
+  background: color-mix(in srgb, var(--alm-primary) 82%, black);
 }
 
 .almacen-page .btn-secondary {
-  background: #ffffff;
-  border: 1px solid #dfe3ee;
-  color: #303044;
+  background: var(--alm-surface);
+  border: 1px solid var(--alm-border);
+  color: var(--alm-text-soft);
   border-radius: 8px;
 }
 
 .almacen-page .search-section,
 .alm-form-card {
-  background: #ffffff;
-  border: 1px solid #e6e8f0;
+  background: var(--alm-surface);
+  border: 1px solid var(--alm-border);
   border-radius: 8px;
   padding: 1rem;
-  box-shadow: 0 8px 20px rgba(27, 26, 46, 0.04);
+  box-shadow: var(--alm-shadow);
 }
 
 .almacen-page .search-bar input,
@@ -701,8 +759,9 @@
 .alm-form-select,
 .alm-form-textarea {
   border-radius: 8px;
-  border-color: #dfe3ee;
-  background: #ffffff;
+  border-color: var(--alm-border-strong);
+  background: var(--alm-surface);
+  color: var(--alm-text);
 }
 
 .almacen-page .search-bar input:focus,
@@ -710,7 +769,7 @@
 .alm-form-input:focus,
 .alm-form-select:focus,
 .alm-form-textarea:focus {
-  border-color: #6c63ff;
+  border-color: var(--alm-primary);
   box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.14);
 }
 
@@ -723,34 +782,43 @@
 }
 
 .almacen-page .stat-item {
-  background: #ffffff;
-  border: 1px solid #e6e8f0;
+  background: var(--alm-surface);
+  border: 1px solid var(--alm-border);
   border-radius: 8px;
   padding: 1rem;
-  box-shadow: 0 8px 20px rgba(27, 26, 46, 0.04);
+  box-shadow: var(--alm-shadow);
 }
 
 .almacen-page .stat-number {
-  color: #1b1a2e;
+  color: var(--alm-text);
 }
 
 .almacen-page .table-container {
-  background: #ffffff;
-  border: 1px solid #e6e8f0;
+  background: var(--alm-surface);
+  border: 1px solid var(--alm-border);
   border-radius: 8px;
   box-shadow: 0 10px 24px rgba(27, 26, 46, 0.05);
 }
 
 .almacen-page .data-table thead th {
-  background: #fafafa;
-  color: #57576d;
+  background: var(--alm-surface-soft);
+  color: var(--alm-text-muted);
   text-transform: uppercase;
   font-size: 0.7rem;
   letter-spacing: 0.03em;
 }
 
+.almacen-page .data-table tbody td {
+  color: var(--alm-text-soft);
+  border-bottom: 1px solid var(--alm-border);
+}
+
+.almacen-page .data-table tbody tr {
+  background: var(--alm-surface);
+}
+
 .almacen-page .data-table tbody tr:hover {
-  background: #fbfbff;
+  background: var(--alm-surface-variant);
 }
 
 .almacen-page .category-badge,
@@ -767,31 +835,31 @@
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  border: 1px solid #e6e8f0;
-  background: #ffffff;
-  color: #494963;
+  border: 1px solid var(--alm-border);
+  background: var(--alm-surface);
+  color: var(--alm-text-soft);
 }
 
 .almacen-page .sl-act-btn:hover {
-  background: #eeedfe;
-  color: #6c63ff;
+  background: var(--alm-primary-soft);
+  color: var(--alm-primary);
 }
 
 .almacen-page .sl-act-del:hover {
-  background: #fff1f2;
-  color: #dc2626;
+  background: var(--alm-critical-bg);
+  color: var(--alm-critical);
 }
 
 .almacen-page .loading-state,
 .almacen-page .empty-state {
-  background: #ffffff;
-  border: 1px solid #e6e8f0;
+  background: var(--alm-surface);
+  border: 1px solid var(--alm-border);
   border-radius: 8px;
-  box-shadow: 0 8px 20px rgba(27, 26, 46, 0.04);
+  box-shadow: var(--alm-shadow);
 }
 
 .almacen-page .spinner {
-  border-top-color: #6c63ff;
+  border-top-color: var(--alm-primary);
 }
 
 .alm-modal-backdrop {
@@ -802,15 +870,15 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(27, 26, 46, 0.42);
+  background: var(--alm-overlay);
 }
 
 .alm-modal {
   width: min(620px, 100%);
-  background: #ffffff;
+  background: var(--alm-surface);
   border-radius: 10px;
-  border: 1px solid #e6e8f0;
-  box-shadow: 0 24px 70px rgba(27, 26, 46, 0.22);
+  border: 1px solid var(--alm-border);
+  box-shadow: var(--alm-shadow-lg);
   padding: 1.25rem;
 }
 
@@ -824,7 +892,7 @@
 
 .alm-modal-header h2 {
   margin: 0;
-  color: #1b1a2e;
+  color: var(--alm-text);
   font-size: 1.2rem;
 }
 
@@ -832,7 +900,7 @@
 .alm-description-box span,
 .alm-detail-card span {
   margin: 0 0 0.25rem;
-  color: #717184;
+  color: var(--alm-text-muted);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -842,10 +910,10 @@
 .alm-modal-close {
   width: 36px;
   height: 36px;
-  border: 1px solid #e6e8f0;
+  border: 1px solid var(--alm-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #57576d;
+  background: var(--alm-surface);
+  color: var(--alm-text-muted);
 }
 
 .alm-detail-grid {
@@ -857,31 +925,31 @@
 
 .alm-detail-card,
 .alm-description-box {
-  border: 1px solid #e6e8f0;
-  background: #fafafa;
+  border: 1px solid var(--alm-border);
+  background: var(--alm-surface-soft);
   border-radius: 8px;
   padding: 0.85rem;
 }
 
 .alm-detail-card svg {
-  color: #6c63ff;
+  color: var(--alm-primary);
   margin-bottom: 0.4rem;
 }
 
 .alm-detail-card strong {
   display: block;
-  color: #1b1a2e;
+  color: var(--alm-text);
   font-size: 0.95rem;
 }
 
 .alm-description-box p {
   margin: 0.35rem 0 0;
-  color: #303044;
+  color: var(--alm-text-soft);
 }
 
 .alm-form-shell {
   min-height: 100vh;
-  background: #f6f7fb;
+  background: var(--alm-page-bg);
   padding: 1.5rem;
 }
 
@@ -904,19 +972,19 @@
   width: 42px;
   height: 42px;
   border-radius: 8px;
-  color: #6c63ff;
-  background: #eeedfe;
+  color: var(--alm-primary);
+  background: var(--alm-primary-soft);
 }
 
 .alm-form-header h1 {
   margin: 0;
-  color: #1b1a2e;
+  color: var(--alm-text);
   font-size: 1.45rem;
 }
 
 .alm-form-header p {
   margin: 0.2rem 0 0;
-  color: #6f7082;
+  color: var(--alm-text-muted);
 }
 
 .alm-form-grid {
@@ -932,7 +1000,7 @@
 }
 
 .alm-form-group label {
-  color: #303044;
+  color: var(--alm-text-soft);
   font-size: 0.85rem;
   font-weight: 700;
 }
@@ -946,7 +1014,7 @@
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #9a9aad;
+  color: var(--alm-text-muted);
 }
 
 .alm-textarea-shell svg {
@@ -960,6 +1028,9 @@
   width: 100%;
   padding: 0.72rem 0.9rem;
   font: inherit;
+  background: var(--alm-surface);
+  color: var(--alm-text);
+  border-color: var(--alm-border-strong);
 }
 
 .alm-input-shell .alm-form-input,

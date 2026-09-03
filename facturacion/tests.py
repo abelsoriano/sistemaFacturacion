@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
+import uuid
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -101,6 +102,7 @@ from facturacion.models import (
     SaleDetail,
     ServicioManoObra,
 )
+from facturacion.api.serializers.ecf_config import DGIICertificationDocumentSerializer
 from facturacion.api.serializers.ecf_runtime import ElectronicFiscalDocumentSerializer
 from facturacion.api.serializers.clients import ClientSerializer
 from facturacion.api.serializers.sales_legacy import SaleListSerializer, SaleSerializer
@@ -2316,6 +2318,72 @@ class DGIICertificationPlanTests(TestCase):
         self.assertEqual(Sale.objects.count(), sale_count)
         self.assertEqual(ElectronicFiscalDocument.objects.count(), electronic_document_count)
 
+    @patch("facturacion.services.dgii_certification.DGIIRESTClient")
+    def test_submit_certification_item_claimed_does_not_post(self, rest_client_class):
+        user, _company, plan = self._create_signed_group_one_plan()
+        item = plan.items.filter(dgii_group=1).order_by("source_row").first()
+        document = item.certification_document
+        document.submission_outcome = "claimed"
+        document.submission_fingerprint = "f" * 64
+        document.submission_attempt_token = uuid.uuid4()
+        document.submission_started_at = django_timezone.now()
+        document.submission_dispatch_started_at = None
+        document.save(update_fields=[
+            "submission_outcome", "submission_fingerprint", "submission_attempt_token",
+            "submission_started_at", "submission_dispatch_started_at", "updated_at",
+        ])
+
+        request = APIRequestFactory().post(f"/ecf/certification-plans/{plan.id}/items/{item.id}/submit-dgii/")
+        request.session = {"active_company_id": plan.company_id}
+        force_authenticate(request, user=user)
+        response = DGIICertificationPlanViewSet.as_view({"post": "submit_item_dgii"})(
+            request, pk=plan.id, item_id=str(item.id),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        rest_client_class.assert_not_called()
+
+    @patch("facturacion.services.dgii_certification.DGIIRESTClient")
+    def test_submit_certification_group_claimed_does_not_post(self, rest_client_class):
+        user, _company, plan = self._create_signed_group_one_plan()
+        document = plan.certification_documents.filter(item__dgii_group=1).order_by("pk").first()
+        document.submission_outcome = "claimed"
+        document.submission_fingerprint = "f" * 64
+        document.submission_attempt_token = uuid.uuid4()
+        document.submission_started_at = django_timezone.now()
+        document.submission_dispatch_started_at = None
+        document.save(update_fields=[
+            "submission_outcome", "submission_fingerprint", "submission_attempt_token",
+            "submission_started_at", "submission_dispatch_started_at", "updated_at",
+        ])
+
+        request = APIRequestFactory().post(f"/ecf/certification-plans/{plan.id}/groups/1/submit-dgii/")
+        request.session = {"active_company_id": plan.company_id}
+        force_authenticate(request, user=user)
+        response = DGIICertificationPlanViewSet.as_view({"post": "submit_group_dgii"})(
+            request, pk=plan.id, group_number="1",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        rest_client_class.assert_not_called()
+
+    def test_certification_document_serializer_exposes_claimed_outcome(self):
+        _user, _company, plan = self._create_signed_group_one_plan()
+        document = plan.certification_documents.order_by("pk").first()
+        document.submission_outcome = "claimed"
+        document.submission_fingerprint = "f" * 64
+        document.submission_attempt_token = uuid.uuid4()
+        document.submission_started_at = django_timezone.now()
+        document.save(update_fields=[
+            "submission_outcome", "submission_fingerprint", "submission_attempt_token",
+            "submission_started_at", "updated_at",
+        ])
+
+        self.assertEqual(
+            DGIICertificationDocumentSerializer(document).data["submission_outcome"],
+            "claimed",
+        )
+
     @override_settings(ECF_DGII_ENVIRONMENT="testing", ECF_DGII_REST_BASE_URLS={
         "testing": {
             "auth": "https://dgii.example.test",
@@ -2793,7 +2861,7 @@ class DGIICertificationPlanTests(TestCase):
         }
     })
     @patch("facturacion.services.dgii_certification.DGIIRESTClient")
-    def test_check_certification_data_ecf_zero_accepted_marks_pending_resend(self, rest_client_class):
+    def test_check_certification_data_ecf_zero_accepted_is_diagnostic_only(self, rest_client_class):
         user, company, plan = self._create_signed_data_ecf_plan()
         for document in DGIICertificationDocument.objects.filter(plan=plan):
             document.status = DGIICertificationDocument.STATUS_ACCEPTED
@@ -2815,9 +2883,11 @@ class DGIICertificationPlanTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["summary"]["checked"], 21)
         self.assertEqual(response.data["summary"]["accepted"], 0)
-        self.assertEqual(response.data["summary"]["needs_resubmit"], 21)
-        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan, accepted_stale=True).count(), 21)
-        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan).exclude(dgii_track_id="").count(), 0)
+        self.assertEqual(response.data["summary"]["needs_resubmit"], 0)
+        self.assertTrue(response.data["summary"]["reset_diagnostic"]["possible_reset"])
+        self.assertFalse(response.data["summary"]["reset_diagnostic"]["authoritative"])
+        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan, accepted_stale=True).count(), 0)
+        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan).exclude(dgii_track_id="").count(), 21)
 
     def test_rfce_reset_message_marks_data_ecf_acceptances_stale(self):
         from facturacion.services.dgii_certification import DGIICertificationDGIISubmitter
@@ -2857,6 +2927,16 @@ class DGIICertificationPlanTests(TestCase):
             encf=rfce_item.encf,
             status=DGIICertificationDocument.STATUS_SIGNED,
         )
+        rfce_signed = b"<RFCE><Signature>signed</Signature></RFCE>"
+        rfce_document.signed_xml_path = default_storage.save(
+            f"tests/dgii-certification/{plan.id}/{rfce_document.encf}-reset.xml",
+            ContentFile(rfce_signed),
+        )
+        rfce_document.signed_xml_hash = hashlib.sha256(rfce_signed).hexdigest()
+        rfce_document.signed_at = datetime.now(timezone.utc)
+        rfce_document.save(update_fields=[
+            "signed_xml_path", "signed_xml_hash", "signed_at", "updated_at",
+        ])
 
         DGIICertificationDGIISubmitter()._mark_submit_error(
             rfce_document,
@@ -2874,11 +2954,11 @@ class DGIICertificationPlanTests(TestCase):
         self.assertTrue(
             DGIICertificationEvent.objects.filter(
                 plan=plan,
-                event_type=DGIICertificationEvent.EVENT_DOCUMENT_ACCEPTANCE_STALE,
+                event_type="dgii_reset_applied",
             ).exists()
         )
 
-    def test_sync_reset_state_marks_rfce_acceptances_stale_from_stored_response(self):
+    def test_sync_reset_state_reports_rfce_reset_without_mutating(self):
         from django.core.files.base import ContentFile
 
         reset_message = (
@@ -2919,10 +2999,11 @@ class DGIICertificationPlanTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["summary"]["rfce_marked"], 4)
-        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan, accepted_stale=True).count(), 4)
-        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan, status=DGIICertificationDocument.STATUS_SIGNED).count(), 4)
-        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan).exclude(dgii_track_id="").count(), 0)
+        self.assertEqual(response.data["summary"]["rfce_marked"], 0)
+        self.assertGreater(response.data["summary"]["possible_resets"], 0)
+        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan, accepted_stale=True).count(), 0)
+        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan, status=DGIICertificationDocument.STATUS_ACCEPTED).count(), 4)
+        self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan).exclude(dgii_track_id="").count(), 4)
 
     def test_mark_dgii_needs_resubmit_command_marks_data_ecf_and_rfce(self):
         from django.core.files.base import ContentFile
@@ -2958,9 +3039,20 @@ class DGIICertificationPlanTests(TestCase):
                 f"tests/dgii-certification/{plan.id}/{encf}.xml",
                 ContentFile("<RFCE />".encode("utf-8")),
             )
-            document.save(update_fields=["signed_xml_path", "updated_at"])
+            with default_storage.open(document.signed_xml_path, "rb") as signed_file:
+                signed_bytes = signed_file.read()
+            document.signed_xml_hash = hashlib.sha256(signed_bytes).hexdigest()
+            document.signed_at = datetime.now(timezone.utc)
+            document.save(update_fields=["signed_xml_path", "signed_xml_hash", "signed_at", "updated_at"])
 
-        call_command("mark_dgii_needs_resubmit", "--plan-id", str(plan.id), "--data-ecf", "--rfce")
+        call_command(
+            "mark_dgii_needs_resubmit",
+            "--plan-id", str(plan.id),
+            "--data-ecf", "--rfce",
+            "--user-id", str(user.id),
+            "--evidence", "DGII portal reset confirmation",
+            "--confirm",
+        )
 
         self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan, item__dgii_group__in=[1, 2], accepted_stale=True).count(), 21)
         self.assertEqual(DGIICertificationDocument.objects.filter(plan=plan, item__dgii_group=3, accepted_stale=True).count(), 4)

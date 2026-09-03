@@ -1,5 +1,6 @@
 import hashlib
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -67,11 +68,15 @@ class CertificationGenerationLockingTests(TransactionTestCase):
 
     def _document(self, item, *, status="generated", outcome="not_started", xml="<old/>"):
         submission_fields = {}
-        if outcome == "in_flight":
+        if outcome in {"in_flight", "unknown", "claimed"}:
+            marker = timezone.now()
             submission_fields = {
-                "submission_started_at": timezone.now(),
+                "submission_started_at": marker,
                 "submission_fingerprint": "f" * 64,
+                "submission_attempt_token": uuid.uuid4(),
             }
+            if outcome != "claimed":
+                submission_fields["submission_dispatch_started_at"] = marker
         return DGIICertificationDocument.objects.create(
             plan=self.plan, company=self.company, item=item, ecf_type=item.ecf_type,
             encf=item.encf, status=status, submission_outcome=outcome,
@@ -172,7 +177,7 @@ class CertificationGenerationLockingTests(TransactionTestCase):
                 self.assertEqual(builder.calls, 0)
 
     def test_blocking_outcomes_preserve_all_evidence(self):
-        for index, outcome in enumerate(("in_flight", "unknown", "confirmed", "manual_review"), start=1):
+        for index, outcome in enumerate(("claimed", "in_flight", "unknown", "confirmed", "manual_review"), start=1):
             with self.subTest(outcome=outcome):
                 item = self._item(f"E31{index + 10:010d}")
                 document = self._document(item, outcome=outcome)
@@ -244,7 +249,7 @@ class CertificationGenerationLockingTests(TransactionTestCase):
         self.assertNotEqual(hashes[0], hashes[1])
 
     def test_two_concurrent_attempts_reject_each_blocking_outcome(self):
-        for index, outcome in enumerate(("in_flight", "unknown", "confirmed", "manual_review"), start=1):
+        for index, outcome in enumerate(("claimed", "in_flight", "unknown", "confirmed", "manual_review"), start=1):
             with self.subTest(outcome=outcome):
                 item = self._item(f"E32{index:010d}")
                 document = self._document(item, outcome=outcome)

@@ -11,10 +11,42 @@
   --qtn-success: #067647;
   --qtn-danger: #b42318;
   --qtn-warning: #b54708;
+  --status-draft: #b54708;
+  --status-draft-bg: #fffaeb;
+  --status-sent: #175cd3;
+  --status-sent-bg: #eff8ff;
+  --status-approved: #067647;
+  --status-approved-bg: #ecfdf3;
+  --status-rejected: #b42318;
+  --status-rejected-bg: #fef3f2;
+  --status-expired: #475467;
+  --status-expired-bg: #f2f4f7;
   min-height: 100%;
   background: var(--qtn-bg);
   color: var(--qtn-text);
   padding: 24px;
+}
+
+:root.theme-dark .qtn-page {
+  --qtn-bg: var(--saas-background);
+  --qtn-surface: var(--saas-card);
+  --qtn-border: var(--saas-border);
+  --qtn-text: var(--saas-text);
+  --qtn-muted: var(--saas-muted);
+  --qtn-faint: var(--saas-muted);
+  --qtn-success: var(--saas-success);
+  --qtn-danger: var(--saas-danger);
+  --qtn-warning: var(--saas-warning);
+  --status-draft: var(--saas-warning);
+  --status-draft-bg: rgba(245, 158, 11, 0.14);
+  --status-sent: #8AB4FF;
+  --status-sent-bg: rgba(59, 130, 246, 0.14);
+  --status-approved: var(--saas-success);
+  --status-approved-bg: var(--saas-success-surface);
+  --status-rejected: var(--saas-danger);
+  --status-rejected-bg: var(--saas-danger-surface);
+  --status-expired: #CBD5E1;
+  --status-expired-bg: rgba(148, 163, 184, 0.12);
 }
 
 .qtn-header {
@@ -181,7 +213,7 @@
   justify-content: space-between;
   gap: 10px;
   border-bottom: 1px solid var(--qtn-border);
-  background: #fbfcfe;
+  background: var(--qtn-surface);
   padding: 12px 14px;
 }
 
@@ -269,8 +301,8 @@
 }
 
 .qtn-table th {
-  background: #fbfcfe;
-  color: #667085;
+  background: var(--qtn-surface);
+  color: var(--qtn-muted);
   font-size: 0.72rem;
   font-weight: 850;
   letter-spacing: 0.06em;
@@ -278,7 +310,7 @@
 }
 
 .qtn-table tr:hover td {
-  background: #fcfcfd;
+  background: var(--qtn-surface);
 }
 
 .qtn-actions-col {
@@ -320,28 +352,28 @@
 }
 
 .qtn-status.draft {
-  background: #fffaeb;
-  color: var(--qtn-warning);
+  background: var(--status-draft-bg);
+  color: var(--status-draft);
 }
 
 .qtn-status.sent {
-  background: #eff8ff;
-  color: #175cd3;
+  background: var(--status-sent-bg);
+  color: var(--status-sent);
 }
 
 .qtn-status.approved {
-  background: #ecfdf3;
-  color: var(--qtn-success);
+  background: var(--status-approved-bg);
+  color: var(--status-approved);
 }
 
 .qtn-status.rejected {
-  background: #fef3f2;
-  color: var(--qtn-danger);
+  background: var(--status-rejected-bg);
+  color: var(--status-rejected);
 }
 
 .qtn-status.expired {
-  background: #f2f4f7;
-  color: #475467;
+  background: var(--status-expired-bg);
+  color: var(--status-expired);
 }
 
 .qtn-row-actions {
@@ -388,7 +420,7 @@
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--qtn-border);
-  background: #fbfcfe;
+  background: var(--qtn-surface);
   padding: 14px 16px;
 }
 

@@ -187,9 +187,27 @@
 
 .ecf-shell .ant-input-affix-wrapper,
 .ecf-shell .ant-select-selector,
-.ecf-shell .ant-picker {
+.ecf-shell .ant-picker,
+.ecf-search,
+.ecf-select {
+  background: var(--ecf-surface) !important;
+  color: var(--ecf-text) !important;
   border-radius: 8px !important;
   border-color: var(--ecf-border) !important;
+}
+
+.ecf-shell .ant-input,
+.ecf-shell .ant-input-affix-wrapper input,
+.ecf-shell .ant-select-selection-item,
+.ecf-shell .ant-picker-input > input {
+  background: transparent !important;
+  color: var(--ecf-text) !important;
+}
+
+.ecf-shell .ant-input::placeholder,
+.ecf-shell .ant-input-affix-wrapper input::placeholder,
+.ecf-shell .ant-picker-input > input::placeholder {
+  color: var(--ecf-muted) !important;
 }
 
 .ecf-shell .ant-input-affix-wrapper:hover,
@@ -199,6 +217,57 @@
 .ecf-shell .ant-picker-focused {
   border-color: var(--ecf-primary) !important;
   box-shadow: 0 0 0 3px var(--ecf-active) !important;
+}
+
+:root.theme-dark .ant-select-dropdown,
+:root.theme-dark .ant-picker-dropdown {
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
+  border-radius: 8px;
+  box-shadow: var(--saas-shadow-heavy);
+}
+
+:root.theme-dark .ant-select-item,
+:root.theme-dark .ant-picker-panel,
+:root.theme-dark .ant-picker-body,
+:root.theme-dark .ant-picker-header,
+:root.theme-dark .ant-picker-footer,
+:root.theme-dark .ant-picker-cell {
+  background: var(--saas-card);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .ant-select-item {
+  border-radius: 6px;
+}
+
+:root.theme-dark .ant-select-item-option-selected {
+  background: var(--saas-primary-soft) !important;
+  color: var(--saas-text) !important;
+}
+
+:root.theme-dark .ant-select-item-option-active {
+  background: var(--saas-sidebar-active) !important;
+  color: var(--saas-sidebar-active-foreground) !important;
+}
+
+:root.theme-dark .ant-picker-cell-in-view,
+:root.theme-dark .ant-picker-header-view,
+:root.theme-dark .ant-picker-panel .ant-picker-content th,
+:root.theme-dark .ant-picker-panel .ant-picker-content td {
+  color: var(--saas-text);
+}
+
+:root.theme-dark .ant-picker-cell-selected .ant-picker-cell-inner,
+:root.theme-dark .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner {
+  background: var(--saas-primary);
+  color: var(--saas-primary-foreground);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+:root.theme-dark .ant-picker-cell:hover .ant-picker-cell-inner {
+  background: var(--saas-sidebar-active);
+  color: var(--saas-text);
 }
 
 .ecf-link-button {
@@ -246,12 +315,100 @@
 }
 
 .ecf-shell .ant-table-tbody > tr > td {
+  background: var(--ecf-surface) !important;
   border-bottom-color: var(--ecf-border);
   vertical-align: middle;
+  color: var(--ecf-text);
 }
 
-.ecf-shell .ant-table-tbody > tr:hover > td {
-  background: var(--ecf-active);
+.ecf-shell .ant-table-tbody > tr:hover > td,
+.ecf-shell .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: var(--ecf-active) !important;
+  color: var(--ecf-text);
+}
+
+.ecf-active-row td {
+  background: var(--ecf-active) !important;
+}
+
+:root.theme-dark .ant-drawer-mask {
+  background: var(--saas-overlay);
+}
+
+:root.theme-dark .ant-drawer-content {
+  background: var(--saas-card);
+  color: var(--saas-text);
+  box-shadow: var(--saas-shadow-heavy);
+}
+
+:root.theme-dark .ant-drawer-header,
+:root.theme-dark .ant-drawer-body {
+  background: var(--saas-card);
+  color: var(--saas-text);
+  border-color: var(--saas-border);
+}
+
+:root.theme-dark .ant-drawer-header {
+  border-bottom: 1px solid var(--saas-border);
+}
+
+:root.theme-dark .ant-drawer-body {
+  background: var(--saas-card);
+}
+
+:root.theme-dark .ant-drawer .ant-tabs-nav::before {
+  border-color: var(--saas-border);
+}
+
+:root.theme-dark .ant-drawer .ant-tabs-tab {
+  color: var(--saas-muted);
+}
+
+:root.theme-dark .ant-drawer .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--saas-primary);
+}
+
+:root.theme-dark .ant-drawer .ant-tabs-ink-bar {
+  background: var(--saas-primary);
+}
+
+:root.theme-dark .ant-drawer .ant-descriptions-item-label,
+:root.theme-dark .ant-drawer .ant-descriptions-item-content {
+  color: var(--saas-text);
+}
+
+:root.theme-dark .ant-drawer .ecf-error-card {
+  background: var(--saas-danger-surface);
+  border-color: var(--saas-danger);
+}
+
+:root.theme-dark .ant-drawer .ecf-panel-card,
+:root.theme-dark .ant-drawer .ecf-error-card {
+  background: var(--saas-card);
+  border-color: var(--saas-border);
+}
+
+:root.theme-dark .ant-drawer .ecf-json-block,
+:root.theme-dark .ant-drawer .ecf-xml-preview {
+  background: var(--saas-surface-variant);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .ant-drawer .ant-card,
+:root.theme-dark .ant-drawer .ant-card-head,
+:root.theme-dark .ant-drawer .ant-card-body {
+  background: var(--saas-card);
+  color: var(--saas-text);
+  border-color: var(--saas-border);
+}
+
+:root.theme-dark .ant-drawer .ant-card-head-title {
+  color: var(--saas-text);
+}
+
+:root.theme-dark .ant-drawer .ant-card-head {
+  border-bottom-color: var(--saas-border);
 }
 
 .ecf-active-row td {
@@ -269,6 +426,75 @@
 
 .ecf-shell .ant-pagination {
   margin: 1rem 0 0;
+  color: var(--ecf-text);
+}
+
+.ecf-shell .ant-pagination-item,
+.ecf-shell .ant-pagination-prev .ant-pagination-item-link,
+.ecf-shell .ant-pagination-next .ant-pagination-item-link,
+.ecf-shell .ant-pagination-options .ant-select-selector {
+  background: var(--ecf-surface);
+  border-color: var(--ecf-border) !important;
+  color: var(--ecf-text);
+}
+
+.ecf-shell .ant-pagination-item a,
+.ecf-shell .ant-pagination-prev .ant-pagination-item-link,
+.ecf-shell .ant-pagination-next .ant-pagination-item-link,
+.ecf-shell .ant-pagination-item-link,
+.ecf-shell .ant-pagination-options,
+.ecf-shell .ant-pagination-options .ant-select-selection-item {
+  color: var(--ecf-text);
+}
+
+.ecf-shell .ant-pagination-item-active {
+  background: var(--ecf-primary);
+  border-color: var(--ecf-primary) !important;
+}
+
+.ecf-shell .ant-pagination-item-active a {
+  color: var(--saas-primary-foreground);
+}
+
+.ecf-shell .ant-pagination-item:hover,
+.ecf-shell .ant-pagination-prev:hover .ant-pagination-item-link,
+.ecf-shell .ant-pagination-next:hover .ant-pagination-item-link,
+.ecf-shell .ant-pagination-options:hover .ant-select-selector {
+  border-color: var(--ecf-primary) !important;
+  color: var(--ecf-primary);
+}
+
+:root.theme-dark .ant-pagination-item,
+:root.theme-dark .ant-pagination-prev .ant-pagination-item-link,
+:root.theme-dark .ant-pagination-next .ant-pagination-item-link,
+:root.theme-dark .ant-pagination-options .ant-select-selector,
+:root.theme-dark .ant-pagination-options .ant-select-dropdown {
+  background: var(--saas-card);
+  border-color: var(--saas-border) !important;
+  color: var(--saas-text);
+}
+
+:root.theme-dark .ant-pagination-item-active {
+  background: var(--saas-primary);
+  border-color: var(--saas-primary) !important;
+}
+
+:root.theme-dark .ant-pagination-item-active a {
+  color: var(--saas-primary-foreground);
+}
+
+:root.theme-dark .ant-pagination-item a,
+:root.theme-dark .ant-pagination-prev .ant-pagination-item-link,
+:root.theme-dark .ant-pagination-next .ant-pagination-item-link,
+:root.theme-dark .ant-pagination-options .ant-select-selection-item {
+  color: var(--saas-text);
+}
+
+:root.theme-dark .ant-pagination-item:hover,
+:root.theme-dark .ant-pagination-prev:hover .ant-pagination-item-link,
+:root.theme-dark .ant-pagination-next:hover .ant-pagination-item-link {
+  border-color: var(--saas-primary) !important;
+  color: var(--saas-primary);
 }
 
 .ecf-shell .ant-tag {

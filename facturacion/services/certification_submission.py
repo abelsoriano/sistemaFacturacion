@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import xml.etree.ElementTree as ET
+import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Callable
 
 from django.core.files.storage import default_storage
@@ -63,10 +65,13 @@ class CertificationRemoteSubmissionResponse:
 class PreparedCertificationSubmission:
     document_id: int
     fingerprint: str
+    attempt_token: uuid.UUID
     snapshot: CertificationSignedArtifactSnapshot
 
 
 class CertificationSubmissionService:
+    claim_timeout = timedelta(minutes=10)
+
     def __init__(
         self,
         *,
@@ -95,6 +100,7 @@ class CertificationSubmissionService:
             snapshots=snapshots,
             actor=actor,
         )
+        self.mark_in_flight(prepared, actor)
         try:
             response = (
                 self.remote_submitter(prepared)
@@ -105,6 +111,7 @@ class CertificationSubmissionService:
             self.mark_submission_unknown(
                 prepared.document_id,
                 prepared.fingerprint,
+                prepared.attempt_token,
                 str(exc),
                 actor,
             )
@@ -112,6 +119,7 @@ class CertificationSubmissionService:
         return self.persist_submission_response(
             prepared.document_id,
             prepared.fingerprint,
+            prepared.attempt_token,
             response,
             actor,
         )
@@ -176,37 +184,77 @@ class CertificationSubmissionService:
                 encf=document.encf,
                 signed_xml=snapshot.signed_xml,
             )
-            self.mark_in_flight(document, fingerprint, actor)
-            return PreparedCertificationSubmission(document.pk, fingerprint, snapshot)
+            attempt_token = self.mark_claimed(document, fingerprint, actor)
+            return PreparedCertificationSubmission(
+                document.pk,
+                fingerprint,
+                attempt_token,
+                snapshot,
+            )
 
-    def mark_in_flight(self, document, fingerprint, actor) -> None:
+    def mark_claimed(self, document, fingerprint, actor) -> uuid.UUID:
         if document.submission_outcome != DGIICertificationDocument.SUBMISSION_OUTCOME_NOT_STARTED:
             raise CertificationSubmissionBlocked("El documento ya tiene un intento de envío.")
         if document.dgii_track_id:
             raise CertificationSubmissionBlocked("El documento ya tiene TrackID.")
         now = timezone.now()
-        document.submission_outcome = DGIICertificationDocument.SUBMISSION_OUTCOME_IN_FLIGHT
+        attempt_token = uuid.uuid4()
+        document.submission_outcome = DGIICertificationDocument.SUBMISSION_OUTCOME_CLAIMED
         document.submission_fingerprint = fingerprint
+        document.submission_attempt_token = attempt_token
         document.submission_started_at = now
+        document.submission_dispatch_started_at = None
         document.reconciliation_attempts = 0
         document.next_retry_at = None
         document.reconciliation_lease_until = None
         document.reconciliation_lease_token = ""
         document.last_error = ""
         document.save(update_fields=[
-            "submission_outcome", "submission_fingerprint", "submission_started_at",
+            "submission_outcome", "submission_fingerprint", "submission_attempt_token",
+            "submission_started_at", "submission_dispatch_started_at",
             "reconciliation_attempts", "next_retry_at", "reconciliation_lease_until",
             "reconciliation_lease_token", "last_error", "updated_at",
         ])
         self._event(document, DGIICertificationEvent.EVENT_DOCUMENT_STATUS_CHECKED,
-                    "Intención de envío DGII registrada.", actor,
-                    {"stage": "certification_submission_prepare", "fingerprint": fingerprint})
+                    "Claim de envío DGII registrado.", actor,
+                    {"stage": "certification_submission_claimed", "fingerprint": fingerprint,
+                     "attempt_token": str(attempt_token)})
+        return attempt_token
 
-    def persist_submission_response(self, document_id, fingerprint, response, actor):
+    def mark_in_flight(self, prepared: PreparedCertificationSubmission, actor=None) -> None:
+        with transaction.atomic():
+            document = self._lock_single_document(prepared.document_id)
+            if not self._claim_fence_matches(
+                document,
+                prepared.fingerprint,
+                prepared.attempt_token,
+            ):
+                raise CertificationSubmissionFencingConflict(
+                    "El claim cambió antes de iniciar el dispatch."
+                )
+            self._assert_candidate_ready(document, prepared.snapshot)
+            document.submission_outcome = DGIICertificationDocument.SUBMISSION_OUTCOME_IN_FLIGHT
+            document.submission_dispatch_started_at = timezone.now()
+            document.save(update_fields=[
+                "submission_outcome", "submission_dispatch_started_at", "updated_at",
+            ])
+            self._event(
+                document,
+                DGIICertificationEvent.EVENT_DOCUMENT_STATUS_CHECKED,
+                "Dispatch DGII autorizado.",
+                actor,
+                {
+                    "stage": "certification_submission_dispatching",
+                    "fingerprint": prepared.fingerprint,
+                    "attempt_token": str(prepared.attempt_token),
+                },
+            )
+
+    def persist_submission_response(self, document_id, fingerprint, attempt_token, response, actor):
         conflict_document = None
         with transaction.atomic():
             document = self._lock_single_document(document_id)
-            if not self._fence_matches(document, fingerprint):
+            if not self._dispatch_fence_matches(document, fingerprint, attempt_token):
                 conflict_document = document
             elif not response.track_id:
                 raise CertificationSubmissionUnknown("DGII respondió sin TrackID.")
@@ -231,16 +279,17 @@ class CertificationSubmissionService:
                 self._event(document, DGIICertificationEvent.EVENT_DOCUMENT_SUBMITTED,
                             "Documento de certificación enviado a DGII.", actor,
                             {"stage": "certification_submission_confirmed", "fingerprint": fingerprint,
+                             "attempt_token": str(attempt_token),
                              "track_id": response.track_id})
                 return document
-        self._fencing_event(conflict_document, fingerprint, "persist_response", actor)
+        self._fencing_event(conflict_document, fingerprint, attempt_token, "persist_response", actor)
         raise CertificationSubmissionFencingConflict("El intento cambió antes de persistir.")
 
-    def mark_submission_unknown(self, document_id, fingerprint, error, actor) -> None:
+    def mark_submission_unknown(self, document_id, fingerprint, attempt_token, error, actor) -> None:
         with transaction.atomic():
             document = self._lock_single_document(document_id)
-            if not self._fence_matches(document, fingerprint):
-                self._fencing_event(document, fingerprint, "mark_unknown", actor)
+            if not self._dispatch_fence_matches(document, fingerprint, attempt_token):
+                self._fencing_event(document, fingerprint, attempt_token, "mark_unknown", actor)
                 return
             document.submission_outcome = DGIICertificationDocument.SUBMISSION_OUTCOME_UNKNOWN
             document.last_error = error
@@ -249,7 +298,60 @@ class CertificationSubmissionService:
             self._event(document, DGIICertificationEvent.EVENT_DOCUMENT_SUBMIT_ERROR,
                         "Resultado de envío DGII desconocido.", actor,
                         {"stage": "certification_submission_unknown", "fingerprint": fingerprint,
+                         "attempt_token": str(attempt_token),
                          "error": error})
+
+    def recover_abandoned_claim(
+        self,
+        *,
+        document_id: int,
+        attempt_token: uuid.UUID,
+        actor=None,
+        now=None,
+    ) -> bool:
+        now = now or timezone.now()
+        with transaction.atomic():
+            document = self._lock_single_document(document_id)
+            if document.submission_outcome != DGIICertificationDocument.SUBMISSION_OUTCOME_CLAIMED:
+                return False
+            if document.submission_attempt_token != attempt_token:
+                return False
+            if document.submission_dispatch_started_at is not None:
+                return False
+            if not document.submission_started_at or document.submission_started_at > now - self.claim_timeout:
+                return False
+            if self._has_dgii_evidence(document):
+                raise CertificationSubmissionBlocked(
+                    "El claim abandonado tiene evidencia DGII y no puede recuperarse."
+                )
+            previous_token = document.submission_attempt_token
+            document.submission_outcome = DGIICertificationDocument.SUBMISSION_OUTCOME_NOT_STARTED
+            document.submission_fingerprint = ""
+            document.submission_attempt_token = None
+            document.submission_started_at = None
+            document.submission_dispatch_started_at = None
+            document.reconciliation_attempts = 0
+            document.next_retry_at = None
+            document.reconciliation_lease_until = None
+            document.reconciliation_lease_token = ""
+            document.last_error = ""
+            document.save(update_fields=[
+                "submission_outcome", "submission_fingerprint", "submission_attempt_token",
+                "submission_started_at", "submission_dispatch_started_at",
+                "reconciliation_attempts", "next_retry_at", "reconciliation_lease_until",
+                "reconciliation_lease_token", "last_error", "updated_at",
+            ])
+            self._event(
+                document,
+                DGIICertificationEvent.EVENT_DOCUMENT_STATUS_CHECKED,
+                "Claim de envío DGII expirado y liberado sin dispatch.",
+                actor,
+                {
+                    "stage": "certification_submission_claim_recovered",
+                    "attempt_token": str(previous_token),
+                },
+            )
+            return True
 
     def _snapshot_plan(self, plan_id):
         documents = DGIICertificationDocument.objects.filter(plan_id=plan_id).order_by("pk")
@@ -293,10 +395,35 @@ class CertificationSubmissionService:
         return scope.document(document_id)
 
     @staticmethod
-    def _fence_matches(document, fingerprint):
+    def _claim_fence_matches(document, fingerprint, attempt_token):
+        return (
+            document.submission_outcome == DGIICertificationDocument.SUBMISSION_OUTCOME_CLAIMED
+            and document.submission_fingerprint == fingerprint
+            and document.submission_attempt_token == attempt_token
+            and document.submission_dispatch_started_at is None
+        )
+
+    @staticmethod
+    def _dispatch_fence_matches(document, fingerprint, attempt_token):
         return (
             document.submission_outcome == DGIICertificationDocument.SUBMISSION_OUTCOME_IN_FLIGHT
             and document.submission_fingerprint == fingerprint
+            and document.submission_attempt_token == attempt_token
+            and document.submission_dispatch_started_at is not None
+        )
+
+    @staticmethod
+    def _has_dgii_evidence(document) -> bool:
+        return bool(
+            document.dgii_track_id
+            or document.dgii_status
+            or document.dgii_response_code
+            or document.dgii_response_message
+            or document.dgii_response is not None
+            or document.submitted_at
+            or document.accepted_at
+            or document.rejected_at
+            or document.submit_error
         )
 
     def _post_to_dgii(self, prepared, *, environment=None):
@@ -319,11 +446,13 @@ class CertificationSubmissionService:
             messages=tuple(parsed.messages), raw=parsed.raw,
         )
 
-    def _fencing_event(self, document, fingerprint, stage, actor):
+    def _fencing_event(self, document, fingerprint, attempt_token, stage, actor):
         self._event(document, DGIICertificationEvent.EVENT_DOCUMENT_SUBMIT_ERROR,
                     "Conflicto de fencing al persistir envío DGII.", actor,
                     {"stage": stage, "received_fingerprint": fingerprint,
+                     "received_attempt_token": str(attempt_token),
                      "stored_fingerprint": document.submission_fingerprint,
+                     "stored_attempt_token": str(document.submission_attempt_token or ""),
                      "stored_outcome": document.submission_outcome})
 
     @staticmethod

@@ -55,6 +55,7 @@ from facturacion.services.certification_locking import (
     CertificationLockedScope,
     CertificationMutationBlocked,
 )
+from facturacion.services.certification_reset import CertificationResetService
 
 
 logger = logging.getLogger(__name__)
@@ -2962,11 +2963,13 @@ class DGIICertificationDGIISubmitter:
         rest_client_class=None,
         parser: DGIISOAPResponseParser | None = None,
         xsd_validator: ECFXSDValidator | None = None,
+        reset_service: CertificationResetService | None = None,
     ) -> None:
         self.environment_resolver = environment_resolver or DGIIRESTEnvironmentResolver()
         self.rest_client_class = rest_client_class or DGIIRESTClient
         self.parser = parser or DGIISOAPResponseParser()
         self.xsd_validator = xsd_validator or ECFXSDValidator()
+        self.reset_service = reset_service or CertificationResetService()
 
     def submit_group(self, *, plan: DGIICertificationPlan, group_number: int, user=None, environment: str | None = None) -> dict:
         group_number = int(group_number)
@@ -3045,7 +3048,6 @@ class DGIICertificationDGIISubmitter:
         self._assert_data_ecf_ready(documents)
         self._assert_signed_xml_matches_current_scenarios(documents)
         self._assert_submit_payload_ready(documents)
-        self._reset_previous_dgii_results(documents, user)
         return self._submit_documents(plan=plan, documents=documents, user=user, environment=environment)
 
     def _submit_documents(
@@ -3056,6 +3058,7 @@ class DGIICertificationDGIISubmitter:
         user=None,
         environment: str | None = None,
     ) -> dict:
+        self._assert_documents_not_claimed(documents)
         issuer = DGIICertificationDocumentGenerator()._resolve_issuer(plan.company)
         certificate_path, certificate_password = resolve_certificate_credentials(issuer)
         if not certificate_path:
@@ -3229,14 +3232,15 @@ class DGIICertificationDGIISubmitter:
                 )
 
         stale_marked = 0
+        reset_diagnostic = None
         if checked and accepted == 0 and had_current_acceptances and scope_groups:
-            stale_marked = self.mark_acceptances_stale(
-                plan=plan,
-                groups=scope_groups,
-                user=user,
-                reason='DGII reporto 0 aceptados para este ciclo de certificacion.',
-                document_ids=current_acceptance_ids,
-            )
+            reset_diagnostic = {
+                'possible_reset': True,
+                'authoritative': False,
+                'reason': 'DGII reportó cero aceptados; requiere confirmación autoritativa antes del reset.',
+                'groups': list(scope_groups),
+                'document_ids': current_acceptance_ids,
+            }
 
         return {
             'checked': checked,
@@ -3245,6 +3249,7 @@ class DGIICertificationDGIISubmitter:
             'sequence_already_used': sequence_already_used,
             'failed': failed,
             'needs_resubmit': stale_marked,
+            'reset_diagnostic': reset_diagnostic,
             'errors': errors,
         }
 
@@ -3306,48 +3311,8 @@ class DGIICertificationDGIISubmitter:
             raise ValueError(f'El envio conjunto tiene documentos sin XML firmado: {", ".join(missing[:5])}.')
 
     def _reset_previous_dgii_results(self, documents: list[DGIICertificationDocument], user) -> None:
-        for document in documents:
-            if document.status == DGIICertificationDocument.STATUS_SIGNED and not document.dgii_track_id:
-                continue
-            document.status = DGIICertificationDocument.STATUS_SIGNED
-            document.dgii_track_id = ''
-            document.dgii_status = ''
-            document.dgii_response_code = ''
-            document.dgii_response_message = ''
-            document.dgii_response = None
-            document.submitted_at = None
-            document.accepted_at = None
-            document.rejected_at = None
-            document.accepted_stale = False
-            document.stale_reason = ''
-            document.stale_at = None
-            document.submit_error = ''
-            document.save(update_fields=[
-                'status',
-                'dgii_track_id',
-                'dgii_status',
-                'dgii_response_code',
-                'dgii_response_message',
-                'dgii_response',
-                'submitted_at',
-                'accepted_at',
-                'rejected_at',
-                'accepted_stale',
-                'stale_reason',
-                'stale_at',
-                'submit_error',
-                'updated_at',
-            ])
-            document.item.status = DGIICertificationItem.STATUS_SIGNED
-            document.item.generation_error = ''
-            document.item.save(update_fields=['status', 'generation_error', 'updated_at'])
-            self._event(
-                document,
-                DGIICertificationEvent.EVENT_DOCUMENT_STATUS_CHECKED,
-                'Estado DGII previo limpiado para envio conjunto de Grupo 1 + Grupo 2.',
-                user,
-                {'encf': document.encf, 'combined_data_ecf_submit': True},
-            )
+        """Legacy compatibility hook: submission must never reset fiscal evidence."""
+        return None
 
     def _documents_requiring_submission(self, documents: list[DGIICertificationDocument]) -> list[DGIICertificationDocument]:
         return [
@@ -3751,26 +3716,28 @@ class DGIICertificationDGIISubmitter:
         response_payload=None,
         message: str = '',
     ) -> int:
-        if not self._response_indicates_data_ecf_reset(message, response_payload):
+        if not self._response_is_authoritative_reset(message, response_payload):
             return 0
         reason = message or 'DGII reinicio las pruebas de datos eCF.'
-        data_stale = self.mark_data_ecf_acceptances_stale(
-            plan=trigger_document.plan,
-            user=user,
+        evidence = self._reset_evidence(trigger_document, message, response_payload)
+        data_stale = self.reset_service.apply_reset(
+            plan_id=trigger_document.plan_id,
+            groups=self.data_ecf_groups,
+            source=CertificationResetService.SOURCE_AUTOMATIC,
             reason=reason,
-            trigger_document=trigger_document,
-            response_payload=response_payload,
-        )
+            evidence=evidence,
+            actor=user,
+        ).applied
         rfce_stale = 0
         if int(trigger_document.item.dgii_group) == 3:
-            rfce_stale = self.mark_acceptances_stale(
-                plan=trigger_document.plan,
+            rfce_stale = self.reset_service.apply_reset(
+                plan_id=trigger_document.plan_id,
                 groups=(3,),
-                user=user,
+                source=CertificationResetService.SOURCE_AUTOMATIC,
                 reason=reason,
-                trigger_document=trigger_document,
-                response_payload=response_payload,
-            )
+                evidence=evidence,
+                actor=user,
+            ).applied
         return data_stale + rfce_stale
 
     def mark_data_ecf_acceptances_stale(
@@ -3781,6 +3748,8 @@ class DGIICertificationDGIISubmitter:
         reason: str = '',
         trigger_document: DGIICertificationDocument | None = None,
         response_payload=None,
+        evidence=None,
+        confirmed: bool = False,
     ) -> int:
         return self.mark_acceptances_stale(
             plan=plan,
@@ -3789,6 +3758,8 @@ class DGIICertificationDGIISubmitter:
             reason=reason or 'Las pruebas de datos de eCF fueron reiniciadas por DGII.',
             trigger_document=trigger_document,
             response_payload=response_payload,
+            evidence=evidence,
+            confirmed=confirmed,
         )
 
     def mark_acceptances_stale(
@@ -3801,103 +3772,26 @@ class DGIICertificationDGIISubmitter:
         reason: str = '',
         trigger_document: DGIICertificationDocument | None = None,
         response_payload=None,
+        evidence=None,
+        confirmed: bool = False,
     ) -> int:
-        now = timezone.now()
-        reason = reason or 'Las pruebas de certificacion DGII fueron reiniciadas.'
-        queryset = (
-            DGIICertificationDocument.objects
-            .select_related('item')
-            .filter(
-                plan=plan,
-                company=plan.company,
-                item__dgii_group__in=groups,
-                accepted_stale=False,
-            )
+        if document_ids is not None:
+            raise ValueError('El reset seguro no admite scopes documentales parciales.')
+        manual_evidence = evidence if evidence is not None else response_payload
+        result = self.reset_service.apply_reset(
+            plan_id=plan.pk,
+            groups=groups,
+            source=CertificationResetService.SOURCE_MANUAL,
+            reason=reason or 'Las pruebas de certificación DGII fueron reiniciadas.',
+            evidence=manual_evidence,
+            actor=user,
+            confirmed=confirmed,
         )
-        if document_ids is None:
-            queryset = queryset.filter(status=DGIICertificationDocument.STATUS_ACCEPTED)
-        else:
-            queryset = queryset.filter(
-                id__in=document_ids,
-                status__in=[
-                    DGIICertificationDocument.STATUS_ACCEPTED,
-                    DGIICertificationDocument.STATUS_SUBMITTED,
-                ],
-            )
-        documents = list(queryset.order_by('item__dgii_group', 'item__source_row', 'id'))
-        if not documents:
-            return 0
-
-        if trigger_document:
-            self._event(
-                trigger_document,
-                DGIICertificationEvent.EVENT_DGII_RESET_DETECTED,
-                'DGII reinicio pruebas de certificacion; aceptaciones locales previas quedan obsoletas.',
-                user,
-                {
-                    'reason': reason[:2000],
-                    'groups': list(groups),
-                    'response_payload': response_payload,
-                    'affected_documents': len(documents),
-                },
-            )
-
-        for document in documents:
-            previous = {
-                'status': document.status,
-                'dgii_track_id': document.dgii_track_id,
-                'dgii_status': document.dgii_status,
-                'dgii_response_code': document.dgii_response_code,
-                'dgii_response_message': document.dgii_response_message,
-                'accepted_at': document.accepted_at.isoformat() if document.accepted_at else None,
-            }
-            document.status = DGIICertificationDocument.STATUS_SIGNED if self._document_has_signed_xml(document) else DGIICertificationDocument.STATUS_GENERATED
-            document.accepted_stale = True
-            document.stale_reason = reason
-            document.stale_at = now
-            document.dgii_track_id = ''
-            document.dgii_status = 'Requiere reenvio'
-            document.dgii_response_code = ''
-            document.dgii_response_message = (
-                'Aceptacion local invalidada por reinicio DGII. '
-                'Este documento debe reenviarse en el ciclo vigente.'
-            )
-            document.accepted_at = None
-            document.rejected_at = None
-            document.submit_error = ''
-            document.save(update_fields=[
-                'status',
-                'accepted_stale',
-                'stale_reason',
-                'stale_at',
-                'dgii_track_id',
-                'dgii_status',
-                'dgii_response_code',
-                'dgii_response_message',
-                'accepted_at',
-                'rejected_at',
-                'submit_error',
-                'updated_at',
-            ])
-            document.item.status = DGIICertificationItem.STATUS_SIGNED if document.status == DGIICertificationDocument.STATUS_SIGNED else DGIICertificationItem.STATUS_GENERATED
-            document.item.generation_error = ''
-            document.item.save(update_fields=['status', 'generation_error', 'updated_at'])
-            self._event(
-                document,
-                DGIICertificationEvent.EVENT_DOCUMENT_ACCEPTANCE_STALE,
-                'Aceptacion DGII anterior marcada como obsoleta por reinicio de pruebas.',
-                user,
-                {
-                    'reason': reason[:2000],
-                    'previous': previous,
-                    'trigger_encf': trigger_document.encf if trigger_document else '',
-                },
-            )
-        return len(documents)
+        return result.applied
 
     def sync_reset_state_from_stored_responses(self, *, plan: DGIICertificationPlan, user=None) -> dict:
-        data_ecf_marked = 0
-        rfce_marked = 0
+        candidates = []
+        seen = set()
         documents = list(
             DGIICertificationDocument.objects
             .select_related('item')
@@ -3912,27 +3806,67 @@ class DGIICertificationDGIISubmitter:
             ):
                 continue
             reason = document.dgii_response_message or document.submit_error or 'DGII reinicio pruebas de certificacion.'
-            data_ecf_marked += self.mark_data_ecf_acceptances_stale(
-                plan=plan,
-                user=user,
-                reason=reason,
-                trigger_document=document,
-                response_payload=document.dgii_response,
+            evidence = self._reset_evidence(
+                document, reason, document.dgii_response,
             )
+            scopes = [self.data_ecf_groups]
             if int(document.item.dgii_group) == 3:
-                rfce_marked += self.mark_acceptances_stale(
-                    plan=plan,
-                    groups=(3,),
-                    user=user,
+                scopes.append((3,))
+            for groups in scopes:
+                reset_key = self.reset_service.build_reset_key(
+                    plan_id=plan.pk,
+                    groups=groups,
+                    source=CertificationResetService.SOURCE_AUTOMATIC,
                     reason=reason,
-                    trigger_document=document,
-                    response_payload=document.dgii_response,
+                    evidence=evidence,
                 )
+                if reset_key in seen:
+                    continue
+                seen.add(reset_key)
+                applied = DGIICertificationEvent.objects.filter(
+                    plan=plan,
+                    event_type=CertificationResetService.EVENT_DGII_RESET_APPLIED,
+                    payload__reset_key=reset_key,
+                ).exists()
+                candidates.append({
+                    'reset_key': reset_key,
+                    'groups': list(groups),
+                    'reason': reason,
+                    'trigger_document_id': document.pk,
+                    'authoritative_signal': self._response_is_authoritative_reset(
+                        document.dgii_response_message,
+                        document.submit_error,
+                        document.dgii_response,
+                    ),
+                    'already_applied': applied,
+                })
         return {
-            'data_ecf_marked': data_ecf_marked,
-            'rfce_marked': rfce_marked,
-            'total_marked': data_ecf_marked + rfce_marked,
+            'data_ecf_marked': 0,
+            'rfce_marked': 0,
+            'total_marked': 0,
+            'possible_resets': len(candidates),
+            'already_applied': sum(candidate['already_applied'] for candidate in candidates),
+            'candidates': candidates,
         }
+
+    @staticmethod
+    def _reset_evidence(document, message, response_payload):
+        return {
+            'trigger_document_id': document.pk,
+            'message': message or '',
+            'response_payload': response_payload,
+        }
+
+    def _response_is_authoritative_reset(self, *values) -> bool:
+        text_parts = []
+        for value in values:
+            if value is None:
+                continue
+            text_parts.append(json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list, tuple)) else str(value))
+        normalized = unicodedata.normalize('NFKD', ' '.join(text_parts).lower())
+        normalized = ''.join(char for char in normalized if not unicodedata.combining(char))
+        normalized = re.sub(r'\s+', ' ', normalized)
+        return self.data_ecf_reset_phrase in normalized
 
     def _response_indicates_data_ecf_reset(self, *values) -> bool:
         text_parts = []
@@ -4019,6 +3953,20 @@ class DGIICertificationDGIISubmitter:
         }:
             return False
         return self._document_has_signed_xml(document)
+
+    @staticmethod
+    def _assert_documents_not_claimed(documents: list[DGIICertificationDocument]) -> None:
+        claimed = [
+            document.encf or str(document.pk)
+            for document in documents
+            if document.submission_outcome
+            == DGIICertificationDocument.SUBMISSION_OUTCOME_CLAIMED
+        ]
+        if claimed:
+            raise ValueError(
+                "El envío está reclamado localmente y aún no puede despacharse: "
+                f"{', '.join(claimed[:5])}."
+            )
 
     def _document_has_signed_xml(self, document: DGIICertificationDocument) -> bool:
         return bool(document.signed_xml_path and default_storage.exists(document.signed_xml_path))

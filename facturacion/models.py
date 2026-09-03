@@ -1699,12 +1699,14 @@ class DGIICertificationDocument(models.Model):
     """Documento e-CF generado para certificacion DGII, aislado del negocio productivo."""
 
     SUBMISSION_OUTCOME_NOT_STARTED = 'not_started'
+    SUBMISSION_OUTCOME_CLAIMED = 'claimed'
     SUBMISSION_OUTCOME_IN_FLIGHT = 'in_flight'
     SUBMISSION_OUTCOME_CONFIRMED = 'confirmed'
     SUBMISSION_OUTCOME_UNKNOWN = 'unknown'
     SUBMISSION_OUTCOME_MANUAL_REVIEW = 'manual_review'
     SUBMISSION_OUTCOME_CHOICES = [
         (SUBMISSION_OUTCOME_NOT_STARTED, 'No iniciado'),
+        (SUBMISSION_OUTCOME_CLAIMED, 'Reclamado para envío'),
         (SUBMISSION_OUTCOME_IN_FLIGHT, 'Envío en curso'),
         (SUBMISSION_OUTCOME_CONFIRMED, 'Envío confirmado'),
         (SUBMISSION_OUTCOME_UNKNOWN, 'Resultado desconocido'),
@@ -1785,6 +1787,8 @@ class DGIICertificationDocument(models.Model):
     )
     submission_started_at = models.DateTimeField(null=True, blank=True)
     submission_fingerprint = models.CharField(max_length=64, blank=True, default='')
+    submission_attempt_token = models.UUIDField(null=True, blank=True, unique=True)
+    submission_dispatch_started_at = models.DateTimeField(null=True, blank=True)
     reconciliation_attempts = models.PositiveIntegerField(default=0)
     next_retry_at = models.DateTimeField(null=True, blank=True)
     reconciliation_lease_until = models.DateTimeField(null=True, blank=True)
@@ -1814,13 +1818,44 @@ class DGIICertificationDocument(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    ~models.Q(submission_outcome='in_flight')
+                    ~models.Q(submission_outcome='not_started')
                     | (
-                        models.Q(submission_started_at__isnull=False)
-                        & ~models.Q(submission_fingerprint='')
+                        models.Q(submission_attempt_token__isnull=True)
+                        & models.Q(submission_dispatch_started_at__isnull=True)
                     )
                 ),
-                name='cert_inflight_has_metadata',
+                name='cert_not_started_no_dispatch',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(submission_outcome='claimed')
+                    | (
+                        models.Q(submission_attempt_token__isnull=False)
+                        & ~models.Q(submission_fingerprint='')
+                        & models.Q(submission_started_at__isnull=False)
+                        & models.Q(submission_dispatch_started_at__isnull=True)
+                    )
+                ),
+                name='cert_claimed_has_metadata',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(submission_outcome__in=['in_flight', 'unknown'])
+                    | (
+                        models.Q(submission_attempt_token__isnull=False)
+                        & ~models.Q(submission_fingerprint='')
+                        & models.Q(submission_started_at__isnull=False)
+                        & models.Q(submission_dispatch_started_at__isnull=False)
+                    )
+                ),
+                name='cert_uncertain_has_metadata',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(submission_dispatch_started_at__isnull=True)
+                    | models.Q(submission_dispatch_started_at__gte=models.F('submission_started_at'))
+                ),
+                name='cert_dispatch_after_claim',
             ),
             models.CheckConstraint(
                 condition=(

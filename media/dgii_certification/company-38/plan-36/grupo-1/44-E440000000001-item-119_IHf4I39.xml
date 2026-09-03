@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<EscenarioCertificacionDGII>
+  <ecf_type>44</ecf_type>
+  <encf>E440000000001</encf>
+  <amount>300.00</amount>
+  <receiver_rnc>131880681</receiver_rnc>
+  <receiver_name>Cliente DGII</receiver_name>
+  <group_number>1</group_number>
+  <source_sheet>ECF</source_sheet>
+  <source_row>4</source_row>
+</EscenarioCertificacionDGII>

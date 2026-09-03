@@ -1,0 +1,82 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<ECF>
+  <Encabezado>
+    <Version>1.0</Version>
+    <IdDoc>
+      <TipoeCF>31</TipoeCF>
+      <eNCF>E310000000001</eNCF>
+      <TipoIngresos>01</TipoIngresos>
+      <TipoPago>1</TipoPago>
+    </IdDoc>
+    <Emisor>
+      <RNCEmisor>401020000</RNCEmisor>
+      <RazonSocialEmisor>Empresa DGII XML 0</RazonSocialEmisor>
+      <NombreComercial>Empresa DGII XML 0</NombreComercial>
+      <DireccionEmisor>Calle DGII 1</DireccionEmisor>
+      <Municipio>010101</Municipio>
+      <Provincia>010000</Provincia>
+      <TablaTelefonoEmisor>
+        <TelefonoEmisor>809-555-1234</TelefonoEmisor>
+      </TablaTelefonoEmisor>
+      <CorreoEmisor>fiscal@example.com</CorreoEmisor>
+      <FechaEmision>01-04-2020</FechaEmision>
+    </Emisor>
+    <Comprador>
+      <RNCComprador>131880681</RNCComprador>
+      <RazonSocialComprador>Cliente DGII</RazonSocialComprador>
+    </Comprador>
+    <Totales>
+      <MontoExento>1000.00</MontoExento>
+      <MontoTotal>1000.00</MontoTotal>
+    </Totales>
+  </Encabezado>
+  <DetallesItems>
+    <Item>
+      <NumeroLinea>1</NumeroLinea>
+      <IndicadorFacturacion>4</IndicadorFacturacion>
+      <NombreItem>Servicio DGII</NombreItem>
+      <IndicadorBienoServicio>1</IndicadorBienoServicio>
+      <CantidadItem>1.00</CantidadItem>
+      <PrecioUnitarioItem>1000.00</PrecioUnitarioItem>
+      <MontoItem>1000.00</MontoItem>
+    </Item>
+  </DetallesItems>
+  <FechaHoraFirma>02-09-2026 00:48:58</FechaHoraFirma>
+  <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+    <ds:SignedInfo>
+      <ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+      <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+      <ds:Reference URI="">
+        <ds:Transforms>
+          <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+          <ds:Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+        </ds:Transforms>
+        <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+        <ds:DigestValue>Ra0c1GJQBIG6emy0l5VYryv0Whk2sltGlKRGV5cJ9R4=</ds:DigestValue>
+      </ds:Reference>
+    </ds:SignedInfo>
+    <ds:SignatureValue>d9TOMZiwK6UBAoNqkC9aCTsod0j+IUO8v8xGEOXtLGOaMGQO9Y1LNuLWFsKzM5WZqsQlDQEyn0uulD8ukMCbzFmYSnhKujXdrKqbDaNKR1xZdeWcMHqyzn91sEP0dKYw9hhW3rLof5mQHyq38oK704q35b/74lJNmBwQKJ+dRA5Gy/bpLI+Kz1cwlfCGh83WM6WlHPsVqpz8RCtTGN9m2NtH+j/ib7/bMWSPTvWX/0WXaU5U4rA2H0qqJzQ8u8SQcpIK52dz8eyH4YDW7hUi419gdrhqk/frNpaj/bI/IzdM+AhMgWdqz84ytLg/my9WcH3H4ilVtWhvK9tPZURt+w==</ds:SignatureValue>
+    <ds:KeyInfo>
+      <ds:X509Data>
+        <ds:X509Certificate>MIIDEjCCAfqgAwIBAgIUd3PE0D7LH8+UHSXZSRarxQfsBlgwDQYJKoZIhvcNAQEL
+BQAwQzELMAkGA1UEBhMCRE8xEjAQBgNVBAoMCURHSUkgVGVzdDEgMB4GA1UEAwwX
+REdJSSBDZXJ0aWZpY2F0aW9uIFRlc3QwHhcNMjYwOTAxMDQ0ODU4WhcNMjcwOTAy
+MDQ0ODU4WjBDMQswCQYDVQQGEwJETzESMBAGA1UECgwJREdJSSBUZXN0MSAwHgYD
+VQQDDBdER0lJIENlcnRpZmljYXRpb24gVGVzdDCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBAKshxTuWsRBnTMjmWJPX2doBsK/A+LaAbxtIKkfxSX9KBNYQ
+dWUhSkh9Yl4SQdB6ZtdBWnxk1L/C4OWmykMnB9jRdxPImc2WYsKqkwJfsH68Fu8B
+1p7eZJ0yGxIhlXSA3kaxGOpjj+bdUrzV7WHBwrpyt3qS99k1g9+1LbbXwmip9kdZ
+wdNMHsic6kg4ruda6K2jiVENbyjCtZl39U5NTlDrqOdrn9Q4LVXU39w3uWpfC9ob
+Q19qQh0gs5rC+7lM8j59OODkgCF8elFQJ7UiLg/41LVlMfohKmELF8/5kkuKQ78L
+xGkr0CvhAmTycVCFO81Wnd97Uj3V/o7xQavi1YsCAwEAATANBgkqhkiG9w0BAQsF
+AAOCAQEAMvhgPDZvYkE9bcVS1pZcgu/0cImZDoxmOQdFs0OIU/McQIXGRiVXA3UH
+hEFmxaDmqVX9sU+Rad6UC6JUOAZnyIBb9JWwXX0/b+/SjR6HrcksJstNdlxByelj
+Gkc43k2X6HBAQdGMSvSuZ60wIBxP6P33ZLUSVjYbAxnOuY+WKXUxwTQgjyb+Np1F
+Q1JE+Y73G4HgP/l4jtQ2Dmt1cuo92Z/4KweLtHe1R4rtHBmLVdHp4/AeO53QgqYa
+OvLcWGbs4+kpjJZ132oBu9wTW84rjPzbYjgBTbufKtZHfQgYurJxZsVAnhdwSZ7J
+fEtP1LHIRecU++dQxp1B2jcVAj3aVw==
+</ds:X509Certificate>
+      </ds:X509Data>
+    </ds:KeyInfo>
+  </ds:Signature>
+</ECF>

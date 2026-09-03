@@ -33,6 +33,7 @@ class DGIICertificationDocumentSerializer(serializers.ModelSerializer):
             'dgii_response_code', 'dgii_response_message', 'submitted_at',
             'accepted_at', 'rejected_at', 'accepted_stale', 'stale_reason',
             'stale_at', 'needs_resubmit', 'submit_error', 'signed_xml_available',
+            'submission_outcome',
             'created_at', 'updated_at',
         ]
         read_only_fields = fields

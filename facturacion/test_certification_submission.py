@@ -1,12 +1,15 @@
 import hashlib
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from types import SimpleNamespace
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import close_old_connections, connection, transaction
 from django.test import TransactionTestCase
+from django.utils import timezone
 
 from facturacion.models import Company, DGIICertificationDocument, DGIICertificationItem, DGIICertificationPlan
 from facturacion.ecf.services.dgii_submission import DGIISubmissionService
@@ -117,6 +120,8 @@ class CertificationSubmissionServiceTests(TransactionTestCase):
         self.assertEqual(remote.calls, 1)
         self.assertEqual(result.submission_outcome, "confirmed")
         self.assertEqual(result.dgii_track_id, f"TRACK-{document.pk}")
+        self.assertIsNotNone(result.submission_attempt_token)
+        self.assertIsNotNone(result.submission_dispatch_started_at)
 
     def test_internal_dependency_with_accepted_original_is_submitted(self):
         _item, original = self._create_document("E310000000001", status="accepted")
@@ -211,10 +216,17 @@ class CertificationSubmissionServiceTests(TransactionTestCase):
             plan_id=self.plan.pk, document_id=document.pk, snapshots=snapshots
         )
 
+        document.refresh_from_db()
+        self.assertEqual(document.submission_outcome, "claimed")
+        self.assertEqual(document.submission_attempt_token, prepared.attempt_token)
+        self.assertIsNone(document.submission_dispatch_started_at)
+        service.mark_in_flight(prepared)
+
         with self.assertRaises(CertificationSubmissionFencingConflict):
             service.persist_submission_response(
                 document.pk,
                 "different-fingerprint",
+                prepared.attempt_token,
                 CertificationRemoteSubmissionResponse(track_id="ORPHAN-TRACK"),
                 None,
             )
@@ -226,6 +238,181 @@ class CertificationSubmissionServiceTests(TransactionTestCase):
         self.assertTrue(
             self.plan.events.filter(item=document.item, payload__stage="persist_response").exists()
         )
+
+    def test_claim_generates_unique_token_without_dispatch(self):
+        _item, first = self._create_document("E310000000001")
+        _item, second = self._create_document("E320000000002")
+        service = CertificationSubmissionService()
+
+        first_prepared = service.prepare_certification_submission(
+            plan_id=self.plan.pk,
+            document_id=first.pk,
+            snapshots=service._snapshot_plan(self.plan.pk),
+        )
+        first.refresh_from_db()
+        self.assertEqual(first.submission_outcome, "claimed")
+        self.assertEqual(first.submission_attempt_token, first_prepared.attempt_token)
+        self.assertIsNone(first.submission_dispatch_started_at)
+
+        service.recover_abandoned_claim(
+            document_id=first.pk,
+            attempt_token=first_prepared.attempt_token,
+            now=first.submission_started_at + service.claim_timeout + timedelta(seconds=1),
+        )
+        second_prepared = service.prepare_certification_submission(
+            plan_id=self.plan.pk,
+            document_id=second.pk,
+            snapshots=service._snapshot_plan(self.plan.pk),
+        )
+        self.assertNotEqual(first_prepared.attempt_token, second_prepared.attempt_token)
+
+    def test_claimed_to_in_flight_is_fenced_by_token_and_fingerprint(self):
+        _item, document = self._create_document("E310000000001")
+        service = CertificationSubmissionService()
+        prepared = service.prepare_certification_submission(
+            plan_id=self.plan.pk,
+            document_id=document.pk,
+            snapshots=service._snapshot_plan(self.plan.pk),
+        )
+
+        wrong_token = type(prepared)(
+            prepared.document_id,
+            prepared.fingerprint,
+            uuid.uuid4(),
+            prepared.snapshot,
+        )
+        with self.assertRaises(CertificationSubmissionFencingConflict):
+            service.mark_in_flight(wrong_token)
+
+        service.mark_in_flight(prepared)
+        document.refresh_from_db()
+        self.assertEqual(document.submission_outcome, "in_flight")
+        self.assertIsNotNone(document.submission_dispatch_started_at)
+
+    def test_dispatch_is_committed_before_remote_client_runs(self):
+        _item, document = self._create_document("E310000000001")
+
+        def assert_committed(prepared):
+            close_old_connections()
+            persisted = DGIICertificationDocument.objects.get(pk=prepared.document_id)
+            self.assertEqual(persisted.submission_outcome, "in_flight")
+            self.assertEqual(persisted.submission_attempt_token, prepared.attempt_token)
+            self.assertIsNotNone(persisted.submission_dispatch_started_at)
+            return CertificationRemoteSubmissionResponse(track_id="TRACK-COMMITTED")
+
+        result = CertificationSubmissionService(remote_submitter=assert_committed).submit(
+            plan_id=self.plan.pk,
+            document_id=document.pk,
+        )
+        self.assertEqual(result.dgii_track_id, "TRACK-COMMITTED")
+
+    def test_expired_claim_without_dispatch_is_recoverable(self):
+        _item, document = self._create_document("E310000000001")
+        service = CertificationSubmissionService()
+        prepared = service.prepare_certification_submission(
+            plan_id=self.plan.pk,
+            document_id=document.pk,
+            snapshots=service._snapshot_plan(self.plan.pk),
+        )
+        document.refresh_from_db()
+
+        recovered = service.recover_abandoned_claim(
+            document_id=document.pk,
+            attempt_token=prepared.attempt_token,
+            now=document.submission_started_at + service.claim_timeout + timedelta(seconds=1),
+        )
+
+        self.assertTrue(recovered)
+        document.refresh_from_db()
+        self.assertEqual(document.submission_outcome, "not_started")
+        self.assertIsNone(document.submission_attempt_token)
+        self.assertEqual(document.submission_fingerprint, "")
+
+    def test_old_token_cannot_recover_or_dispatch_new_claim(self):
+        _item, document = self._create_document("E310000000001")
+        service = CertificationSubmissionService()
+        first = service.prepare_certification_submission(
+            plan_id=self.plan.pk,
+            document_id=document.pk,
+            snapshots=service._snapshot_plan(self.plan.pk),
+        )
+        document.refresh_from_db()
+        service.recover_abandoned_claim(
+            document_id=document.pk,
+            attempt_token=first.attempt_token,
+            now=document.submission_started_at + service.claim_timeout + timedelta(seconds=1),
+        )
+        second = service.prepare_certification_submission(
+            plan_id=self.plan.pk,
+            document_id=document.pk,
+            snapshots=service._snapshot_plan(self.plan.pk),
+        )
+
+        self.assertFalse(service.recover_abandoned_claim(
+            document_id=document.pk,
+            attempt_token=first.attempt_token,
+            now=timezone.now() + service.claim_timeout + timedelta(seconds=1),
+        ))
+        with self.assertRaises(CertificationSubmissionFencingConflict):
+            service.mark_in_flight(first)
+        service.mark_in_flight(second)
+
+    def test_in_flight_is_never_recovered_for_resend(self):
+        _item, document = self._create_document("E310000000001")
+        service = CertificationSubmissionService()
+        prepared = service.prepare_certification_submission(
+            plan_id=self.plan.pk,
+            document_id=document.pk,
+            snapshots=service._snapshot_plan(self.plan.pk),
+        )
+        service.mark_in_flight(prepared)
+        self.assertFalse(service.recover_abandoned_claim(
+            document_id=document.pk,
+            attempt_token=prepared.attempt_token,
+            now=timezone.now() + service.claim_timeout + timedelta(seconds=1),
+        ))
+
+    def test_claim_with_dgii_evidence_is_not_recovered(self):
+        _item, document = self._create_document("E310000000001")
+        service = CertificationSubmissionService()
+        prepared = service.prepare_certification_submission(
+            plan_id=self.plan.pk,
+            document_id=document.pk,
+            snapshots=service._snapshot_plan(self.plan.pk),
+        )
+        document.refresh_from_db()
+        document.dgii_response = {"unexpected": True}
+        document.save(update_fields=["dgii_response", "updated_at"])
+
+        with self.assertRaises(CertificationSubmissionBlocked):
+            service.recover_abandoned_claim(
+                document_id=document.pk,
+                attempt_token=prepared.attempt_token,
+                now=document.submission_started_at + service.claim_timeout + timedelta(seconds=1),
+            )
+        document.refresh_from_db()
+        self.assertEqual(document.submission_outcome, "claimed")
+
+    def test_correct_fingerprint_with_old_token_cannot_persist_response(self):
+        _item, document = self._create_document("E310000000001")
+        service = CertificationSubmissionService()
+        prepared = service.prepare_certification_submission(
+            plan_id=self.plan.pk,
+            document_id=document.pk,
+            snapshots=service._snapshot_plan(self.plan.pk),
+        )
+        service.mark_in_flight(prepared)
+
+        with self.assertRaises(CertificationSubmissionFencingConflict):
+            service.persist_submission_response(
+                document.pk,
+                prepared.fingerprint,
+                uuid.uuid4(),
+                CertificationRemoteSubmissionResponse(track_id="ORPHAN"),
+                None,
+            )
+        document.refresh_from_db()
+        self.assertEqual(document.dgii_track_id, "")
 
     def test_stale_snapshot_of_non_candidate_invalidates_whole_preflight(self):
         _item, candidate = self._create_document("E310000000001")

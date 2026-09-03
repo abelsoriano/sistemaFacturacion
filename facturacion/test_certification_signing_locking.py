@@ -1,6 +1,7 @@
 import hashlib
 import tempfile
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
@@ -62,8 +63,15 @@ class CertificationSigningLockingTests(TransactionTestCase):
         )
         xml = f'<ECF><eNCF>{encf}</eNCF></ECF>'
         submission = {}
-        if outcome == 'in_flight':
-            submission = {'submission_started_at': timezone.now(), 'submission_fingerprint': 'f' * 64}
+        if outcome in {'in_flight', 'unknown', 'claimed'}:
+            marker = timezone.now()
+            submission = {
+                'submission_started_at': marker,
+                'submission_fingerprint': 'f' * 64,
+                'submission_attempt_token': uuid.uuid4(),
+            }
+            if outcome != 'claimed':
+                submission['submission_dispatch_started_at'] = marker
         document = DGIICertificationDocument.objects.create(
             plan=self.plan, company=self.company, item=item, ecf_type='31', encf=encf,
             status=status, submission_outcome=outcome, xml_content=xml,
@@ -202,7 +210,7 @@ class CertificationSigningLockingTests(TransactionTestCase):
         self.assertTrue(default_storage.exists(old_path))
 
     def test_all_blocking_outcomes_reject_before_preparation(self):
-        for index, outcome in enumerate(('in_flight', 'unknown', 'confirmed', 'manual_review'), start=1):
+        for index, outcome in enumerate(('claimed', 'in_flight', 'unknown', 'confirmed', 'manual_review'), start=1):
             with self.subTest(outcome=outcome):
                 item, _document = self._item_document(f'E31{index:010d}', row=index, outcome=outcome)
                 with self.assertRaises(CertificationMutationBlocked):

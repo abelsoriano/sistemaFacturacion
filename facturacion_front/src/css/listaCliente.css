@@ -22,6 +22,12 @@
     --purple-light: #ede9fe;
     --info: #06b6d4;
     --info-light: #cffafe;
+    --status-frequent: #10b981;
+    --status-frequent-bg: #d1fae5;
+    --status-regular: #6C63FF;
+    --status-regular-bg: #EEEDFE;
+    --status-occasional: #475569;
+    --status-occasional-bg: #f1f5f9;
     --radius-sm: 0.5rem;
     --radius-md: 0.75rem;
     --radius-lg: 1rem;
@@ -30,6 +36,36 @@
     --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.05);
     --font: 'Inter', system-ui, -apple-system, sans-serif;
     --mono: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+  }
+
+  :root.theme-dark .cl-root {
+    --bg-page: var(--saas-background);
+    --surface: var(--saas-card);
+    --surface-hover: var(--saas-surface-variant);
+    --border: var(--saas-border);
+    --border-dark: var(--saas-border);
+    --text: var(--saas-text);
+    --text-muted: var(--saas-muted);
+    --text-faint: var(--saas-muted);
+    --primary: var(--saas-primary);
+    --primary-dark: var(--saas-primary);
+    --primary-light: var(--saas-primary-soft);
+    --success: var(--saas-success);
+    --success-light: var(--saas-success-surface);
+    --danger: var(--saas-danger);
+    --danger-light: var(--saas-danger-surface);
+    --warning: var(--saas-warning);
+    --warning-light: var(--saas-warning-surface);
+    --purple: #A78BFA;
+    --purple-light: rgba(167, 139, 250, 0.12);
+    --info: #22D3EE;
+    --info-light: rgba(34, 211, 238, 0.12);
+    --status-frequent: var(--saas-success);
+    --status-frequent-bg: var(--saas-success-surface);
+    --status-regular: var(--saas-primary);
+    --status-regular-bg: var(--saas-primary-soft);
+    --status-occasional: var(--saas-muted);
+    --status-occasional-bg: var(--saas-surface-variant);
   }
 
   .cl-root {
@@ -187,6 +223,7 @@
     border: 1.5px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface);
+    color: var(--text);
     transition: all 0.2s ease;
   }
 
@@ -202,6 +239,7 @@
     border: 1.5px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface);
+    color: var(--text);
     cursor: pointer;
     font-family: var(--font);
   }
@@ -324,6 +362,11 @@
     background: var(--surface-hover);
   }
 
+  :root.theme-dark .cl-root .cl-table th,
+  :root.theme-dark .cl-root .cl-table tbody tr:hover td {
+    background: var(--surface);
+  }
+
   /* Client Avatar */
   .cl-avatar {
     width: 2.25rem;
@@ -351,18 +394,18 @@
   }
 
   .type-frequent {
-    background: var(--success-light);
-    color: var(--success);
+    background: var(--status-frequent-bg);
+    color: var(--status-frequent);
   }
 
   .type-regular {
-    background: var(--primary-light);
-    color: var(--primary);
+    background: var(--status-regular-bg);
+    color: var(--status-regular);
   }
 
   .type-occasional {
-    background: var(--surface-hover);
-    color: var(--text-muted);
+    background: var(--status-occasional-bg);
+    color: var(--status-occasional);
   }
 
   /* Action Buttons */
@@ -548,6 +591,10 @@
     align-items: center;
     justify-content: center;
     padding: 1rem;
+  }
+
+  :root.theme-dark .cl-root .cl-modal-overlay {
+    background: rgba(8, 8, 12, 0.72);
   }
 
   .cl-modal {

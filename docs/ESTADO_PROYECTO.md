@@ -348,3 +348,46 @@ d3a38d7                   Agregando cambio etiqueta completo
 - Cada firma usa un path nuevo e inmutable; un intento fallido conserva la firma anterior y limpia únicamente archivos nuevos no referenciados.
 - La firma grupal conserva resultados parciales compatibles, pero cada documento se publica de manera atómica y cercada contra cambios concurrentes.
 - Este bloque no conecta ni activa el nuevo flujo de submission real a DGII.
+
+## Submission individual crash-safe de certificación DGII
+
+- La máquina de transporte aislada es `not_started → claimed → in_flight → confirmed|unknown`.
+- `claimed` significa que todavía no se autorizó el dispatch remoto; un claim expirado puede liberarse de forma cercada.
+- `in_flight` significa que el dispatch pudo haber ocurrido y nunca habilita reenvío automático.
+- Cada intento usa fingerprint de contenido y un `submission_attempt_token` UUID único.
+- La transición a `in_flight` persiste `submission_dispatch_started_at` y hace commit antes del cliente HTTP.
+- Este componente sigue aislado: endpoints, runner, polling legacy y reconciliación de certificación no están conectados.
+
+### Rollout obligatorio de la migración crash-safe
+
+1. Crear y verificar un backup completo de PostgreSQL.
+2. Pausar nuevos submissions, polling, runner y resets de certificación.
+3. Drenar requests y terminar cualquier worker viejo que pudiera persistir una respuesta de certificación.
+4. Confirmar que no quedan transacciones/sesiones de esos writers.
+5. Ejecutar la migración con el artefacto nuevo sin ponerlo todavía a servir tráfico.
+6. Verificar distribución de outcomes y cero `in_flight/unknown` sin fingerprint, token o timestamps.
+7. Activar el runtime nuevo y ejecutar smoke tests sin POST DGII.
+8. No reactivar submission ni polling legacy automáticamente; ambos requieren integración/validación específica con la nueva máquina.
+
+El backfill mantiene todo `in_flight/unknown` como intento incierto. El token histórico solo es un fence durable y `submission_dispatch_started_at` es un **MIGRATION CONSERVATIVE MARKER**, no evidencia del instante real del HTTP.
+
+## RFCE rebuild seguro
+
+- `DGIICertificationRFCERebuilder` captura grupos 4 y 3 bajo locks canónicos: plan, items por PK y documentos por PK.
+- Cada integral y RFCE se prepara fuera de la transacción y publica XML + firma conjuntamente mediante fences de target y dependencia.
+- El RFCE usa exclusivamente el `SignatureValue` del snapshot físico verificado del integral; si el integral o target cambia, no se publica.
+- Los outcomes `in_flight`, `unknown`, `confirmed` y `manual_review`, así como cualquier evidencia DGII, bloquean el rebuild antes de publicar artefactos.
+- El rebuild ya no limpia TrackID, outcomes, respuestas ni timestamps DGII; `_mark_rfce_for_resubmit()` permanece como hook legacy no destructivo y devuelve cero.
+- Las publicaciones son atómicas por documento, conservan los artefactos firmados anteriores y mantienen el response shape histórico.
+- Cobertura PostgreSQL: rebuild inicial, refirma segura, fences stale, outcomes/evidencia, concurrencia y fallos parciales grupo 4/grupo 3.
+
+## Reset seguro de certificación DGII
+
+- Todo reset usa una transacción única y locks canónicos: plan, items por PK y documentos por PK; un documento bloqueado revierte el scope completo.
+- Antes de abrir un ciclo nuevo se archiva el ciclo anterior en eventos `dgii_reset_applied`, incluyendo evidencia DGII, transporte, estados, actor, causa, scope y `reset_key`.
+- XML y firma permanecen inmutables. El documento vuelve a `signed/not_started` con `accepted_stale=True` únicamente después del archivo histórico exitoso.
+- `in_flight`, `unknown`, `manual_review` y cualquier lease activo bloquean el reset. `confirmed` solo se resetea con evidencia DGII autoritativa o acción manual owner/admin/superuser confirmada.
+- Los resets son idempotentes por `reset_key`; Datos e-CF grupos 1+2 y RFCE grupo 3 se tratan como unidades atómicas.
+- `sync-reset-state` es exclusivamente diagnóstico: abrir el wizard no modifica estado fiscal ni borra evidencia.
+- Marcadores ambiguos como `0/21` solo generan diagnóstico; no aplican reset automáticamente.
+- `submit_data_ecf()` ya no limpia resultados DGII antes de enviar y `_reset_previous_dgii_results()` quedó como hook legacy no destructivo.

@@ -22,12 +22,93 @@
   --purple-light: #f4f3ff;
   --info: #0e7090;
   --info-light: #ecfdff;
+  --status-draft: #667085;
+  --status-draft-bg: #f2f4f7;
+  --status-xml: #175cd3;
+  --status-xml-bg: #eff8ff;
+  --status-signed: #3538cd;
+  --status-signed-bg: #eef4ff;
+  --status-submitted: #0e7090;
+  --status-submitted-bg: #ecfdff;
+  --status-accepted: #067647;
+  --status-accepted-bg: #ecfdf3;
+  --status-rejected: #b42318;
+  --status-rejected-bg: #fef3f2;
+  --status-cancelled: #475467;
+  --status-cancelled-bg: #f2f4f7;
+  --status-idle: #475467;
+  --status-idle-bg: #f2f4f7;
+  --status-queued: #175cd3;
+  --status-queued-bg: #eff8ff;
+  --status-running: #6941c6;
+  --status-running-bg: #f4f3ff;
+  --status-retrying: #b54708;
+  --status-retrying-bg: #fffaeb;
+  --status-failed: #b42318;
+  --status-failed-bg: #fef3f2;
   --radius: 8px;
   --mono: "SF Mono", "Consolas", "Liberation Mono", monospace;
   min-height: 100%;
   background: var(--bg-page);
   color: var(--text);
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+:root.theme-dark .lst-root {
+  --bg-page: var(--saas-background);
+  --surface: var(--saas-card);
+  --surface-2: var(--saas-surface-variant);
+  --border: var(--saas-border);
+  --text: var(--saas-text);
+  --text-muted: var(--saas-muted);
+  --text-faint: var(--saas-muted);
+  --primary: var(--saas-primary);
+  --primary-dark: var(--saas-primary);
+  --primary-light: var(--saas-primary-soft);
+  --success: var(--saas-success);
+  --success-light: var(--saas-success-surface);
+  --danger: var(--saas-danger);
+  --danger-light: var(--saas-danger-surface);
+  --warning: var(--saas-warning);
+  --warning-light: rgba(245, 158, 11, 0.14);
+  --status-draft: #D4D9E8;
+  --status-draft-bg: rgba(148, 163, 184, 0.16);
+  --status-xml: #8AB4FF;
+  --status-xml-bg: rgba(59, 130, 246, 0.14);
+  --status-signed: #A5B4FF;
+  --status-signed-bg: rgba(99, 102, 241, 0.14);
+  --status-submitted: #7DD3FC;
+  --status-submitted-bg: rgba(14, 116, 144, 0.18);
+  --status-accepted: #7EE7B2;
+  --status-accepted-bg: rgba(16, 185, 129, 0.16);
+  --status-rejected: #FCA5A5;
+  --status-rejected-bg: rgba(239, 68, 68, 0.16);
+  --status-cancelled: #CBD5E1;
+  --status-cancelled-bg: rgba(148, 163, 184, 0.12);
+  --status-idle: #D4D9E8;
+  --status-idle-bg: rgba(148, 163, 184, 0.14);
+  --status-queued: #8AB4FF;
+  --status-queued-bg: rgba(59, 130, 246, 0.14);
+  --status-running: #DAB7FF;
+  --status-running-bg: rgba(168, 85, 247, 0.16);
+  --status-retrying: #FCD34D;
+  --status-retrying-bg: rgba(245, 158, 11, 0.18);
+  --status-failed: #FCA5A5;
+  --status-failed-bg: rgba(239, 68, 68, 0.16);
+}
+
+:root.theme-dark .lst-root .stat-card {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+:root.theme-dark .lst-root .stat-label,
+:root.theme-dark .lst-root .stat-sub {
+  color: var(--text-muted);
+}
+
+:root.theme-dark .lst-root .stat-value {
+  color: var(--text);
 }
 
 .lst-root * {
@@ -142,7 +223,7 @@
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--border);
-  background: #fbfcfe;
+  background: var(--surface-2);
   padding: 12px 14px;
 }
 
@@ -200,8 +281,8 @@
 .filter-input:focus,
 .filter-select:focus {
   border-color: var(--primary);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.12);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--saas-primary-soft, rgba(108, 99, 255, 0.12));
 }
 
 .status-pills {
@@ -218,7 +299,7 @@
   gap: 6px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.78rem;
@@ -240,20 +321,20 @@
 
 .status-pill.active-pending {
   background: var(--warning-light);
-  border-color: #fedf89;
+  border-color: rgba(245, 158, 11, 0.42);
   color: var(--warning);
 }
 
 .status-pill.active-paid,
 .status-pill.active-completed {
   background: var(--success-light);
-  border-color: #abefc6;
+  border-color: rgba(16, 185, 129, 0.42);
   color: var(--success);
 }
 
 .status-pill.active-cancelled {
   background: var(--danger-light);
-  border-color: #fecdca;
+  border-color: rgba(239, 68, 68, 0.4);
   color: var(--danger);
 }
 
@@ -348,14 +429,20 @@
 .invoice-table th {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  background: #fbfcfe;
-  color: var(--text-faint);
+  background: var(--surface-2);
+  color: var(--text-muted);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-align: left;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+:root.theme-dark .lst-root .invoice-table th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border-bottom-color: var(--border);
 }
 
 .invoice-table th svg {
@@ -374,7 +461,7 @@
 }
 
 .invoice-table tbody tr:hover td {
-  background: #fbfcfe;
+  background: var(--surface-2);
 }
 
 .invoice-number,
@@ -773,7 +860,7 @@
   .invoice-table tbody tr {
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    background: #fff;
+    background: var(--surface);
     padding: 10px;
   }
 

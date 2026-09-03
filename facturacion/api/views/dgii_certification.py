@@ -32,6 +32,11 @@ from facturacion.services.dgii_certification import (
     DGIICertificationXMLGenerator,
 )
 from facturacion.services.certification_locking import CertificationArtifactChanged, CertificationMutationBlocked
+from facturacion.services.certification_reset import (
+    CertificationResetAuthorizationError,
+    CertificationResetEvidenceRequired,
+    CertificationResetService,
+)
 
 
 MANAGER_ROLES = {CompanyMembership.ROLE_OWNER, CompanyMembership.ROLE_ADMIN}
@@ -498,6 +503,32 @@ class DGIICertificationPlanViewSet(CompanyScopedQuerysetMixin, viewsets.ReadOnly
         plan.refresh_from_db()
         serializer = self.get_serializer(plan)
         return Response({'summary': summary, 'plan': serializer.data})
+
+    @action(detail=True, methods=['post'], url_path='apply-reset')
+    def apply_reset(self, request, pk=None):
+        plan = self.get_object()
+        permission_response = self._manager_permission_response(request)
+        if permission_response is not None:
+            return permission_response
+        try:
+            result = CertificationResetService().apply_reset(
+                plan_id=plan.pk,
+                groups=request.data.get('groups') or (),
+                source=CertificationResetService.SOURCE_MANUAL,
+                reason=request.data.get('reason') or '',
+                evidence=request.data.get('evidence'),
+                actor=request.user,
+                confirmed=request.data.get('confirmed') is True,
+            )
+        except (
+            CertificationMutationBlocked,
+            CertificationResetAuthorizationError,
+            CertificationResetEvidenceRequired,
+            ValueError,
+        ) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        plan.refresh_from_db()
+        return Response({'summary': result.as_dict(), 'plan': self.get_serializer(plan).data})
 
     @action(detail=True, methods=['post'], url_path='low-consumption/rebuild-rfce')
     def rebuild_low_consumption_rfce(self, request, pk=None):

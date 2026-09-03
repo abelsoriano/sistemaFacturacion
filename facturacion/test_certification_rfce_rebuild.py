@@ -1,6 +1,7 @@
 import hashlib
 import tempfile
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from django.core.files.base import ContentFile
@@ -52,14 +53,18 @@ class CertificationRFCERebuildSafetyTests(TransactionTestCase):
 
     def _document(self, item, *, signed=False, outcome='not_started', track_id=''):
         xml = '<old/>'
+        uncertain = outcome in {'in_flight', 'unknown', 'claimed'}
+        marker = timezone.now() if uncertain else None
         document = DGIICertificationDocument.objects.create(
             plan=self.plan, company=self.company, item=item, ecf_type=item.ecf_type,
             encf=item.encf, status='signed' if signed else 'generated',
             xml_content=xml, xml_hash=hashlib.sha256(xml.encode()).hexdigest(),
             generated_at=timezone.now(), submission_outcome=outcome,
             dgii_track_id=track_id,
-            submission_started_at=timezone.now() if outcome == 'in_flight' else None,
-            submission_fingerprint='f' * 64 if outcome == 'in_flight' else '',
+            submission_started_at=marker,
+            submission_dispatch_started_at=marker if outcome != 'claimed' else None,
+            submission_fingerprint='f' * 64 if uncertain else '',
+            submission_attempt_token=uuid.uuid4() if uncertain else None,
         )
         if signed:
             content = self._signed_bytes('OLD123-signature')
@@ -177,7 +182,7 @@ class CertificationRFCERebuildSafetyTests(TransactionTestCase):
         self.assertEqual(target.status, 'generated')
 
     def test_blocking_outcomes_stop_before_any_publication(self):
-        for outcome in ('in_flight', 'unknown', 'confirmed', 'manual_review'):
+        for outcome in ('claimed', 'in_flight', 'unknown', 'confirmed', 'manual_review'):
             with self.subTest(outcome=outcome):
                 document = self._document(self.rfce_item, outcome=outcome)
                 result = self._rebuilder().rebuild(plan=self.plan)
@@ -307,7 +312,10 @@ class CertificationRFCERebuildSafetyTests(TransactionTestCase):
             rebuild_result = rebuild_future.result(timeout=30)
             signing_result = signing_future.result(timeout=30)
         self.assertIn(signing_result, {'signed', 'fenced'})
-        self.assertFalse(rebuild_result['failed'])
+        # Either contender may win. A fenced rebuild is safe when the independent
+        # initial signature publishes first; the invariant is the final artifact.
+        if rebuild_result['failed']:
+            self.assertEqual(signing_result, 'signed')
         document.refresh_from_db()
         self.assertEqual(document.status, 'signed')
         self.assertTrue(default_storage.exists(document.signed_xml_path))
