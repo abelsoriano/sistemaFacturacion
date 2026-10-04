@@ -1,393 +1,139 @@
-# Estado del Proyecto - Sistema de Facturación DGII
+# Estado del proyecto
 
-**Fecha**: 2026-07-27  
-**Versión**: pre-homologación  
-**Objetivo**: Certificación con DGII para e-CF (E31, E32, E34)
+## Estado actual
 
----
+- **Actualizado:** 2026-10-03
+- **Branch:** `fix/cert-expirado-y-xsd`
+- **HEAD:** `dc069c7` (`dark mode: e-CF/DGII, Reportes (fallback), Equipo completados`)
+- **Checkpoint de onboarding anterior:** `2bb8afb`; quedó superado por `d61f108` y `dc069c7`.
+- **Objetivo:** mantener y completar el ERP de facturación dominicano, incluyendo los flujos comerciales multiempresa y la integración/certificación de e-CF con DGII.
+- **Estado general:** el backend tiene cobertura funcional extensa para facturación, secuencias, notas E34, multiempresa y operaciones de certificación. La rama incluye hardening de la entrega de certificación y trabajo de UI en curso. No se puede afirmar que homologación DGII esté completada solo a partir del repositorio.
+- **Árbol local:** existen modificaciones sin commit en dos documentos y cinco archivos frontend. No se atribuyen a `HEAD`; preservarlas al continuar.
 
-## 1. Funcionalidades Completadas ✅
+## Completado recientemente y confirmado en el código
 
-### 1.1 Backend - Núcleo Fiscal
-- [x] **Modelo de Datos**: Invoices, Quotations, CreditNotes, Products
-- [x] **E-CF Generación**: XML válido XSD para E31, E32, E34
-- [x] **Firma/refirma segura de certificación**: XMLDSig con certificados PKCS#12, locks canónicos, snapshots con fencing, autorización explícita de refirma y artefactos firmados inmutables/versionados
-- [x] **Comunicación DGII**: Cliente SOAP funcional (testing/production endpoints)
-- [x] **Secuencias e-NCF**: Allocate transaccional con concurrencia (no duplica)
-- [x] **Máquina de Estados**: Transitions explícitas (draft → xml_generated → signed → submitted → processing → accepted|rejected)
-- [x] **Auditoria**: ECFEventLog con trazabilidad completa
-- [x] **Reconciliación TrackID ante timeout DGII**: fingerprint + lease y consulta de reconciliación, sin reenvío automático
-- [x] **Bloqueo de certificado vencido**: protección en política, loader y task; verificación final pre-persistencia y sincronización de metadata desincronizada
-- [x] **Validación XSD E32/E34**: `FechaVencimientoSecuencia` se mapea solo para E31; retirado el parche que enmascaraba XML inválido de E34
-- [x] **Concurrencia de inventario**: causa raíz fue falta de orden consistente en `select_for_update()` sobre `Product`; helper reutilizable de locks ordenados aplicado a creación/cobro de facturas y restauración/compensación E34
-- [x] **Certificados**: Almacenamiento, validación, gestión de vigencia
-- [x] **Multi-empresa**: SaaS con Company/CompanyMembership isolation
+Los siguientes puntos existen en código, migraciones y/o pruebas. El estado “completado” aquí describe implementación en repositorio, no certificación externa ni despliegue productivo.
 
-### 1.2 Backend - Funcionalidades Comerciales
-- [x] **Gestión de Facturas**: CRUD completo con numeración automática
-- [x] **Gestión de Clientes**: CRM básico (nombre, RUC/CI, email, phone)
-- [x] **Gestión de Productos**: Inventario con código de barras, categorías
-- [x] **Cotizaciones**: No fiscal, no asigna secuencias
-- [x] **Notas de Crédito**: Reversos fiscales con reconciliación inventario
-- [x] **Gestión de Inventario**: Stock commit al facturar, restore al reversas
-- [x] **Cálculo de ITBIS**: 18%, 16%, 0%, exento (con indicadores DGII)
-- [x] **Números Secuenciales**: Facturas, cotizaciones, notas de crédito
+| Estado | Trabajo | Evidencia actual |
+|---|---|---|
+| Completado | Separación de estado fiscal y estado de procesamiento asíncrono, con eventos auditables | `ElectronicFiscalDocument.fiscal_status`, `job_status`, `ECFStatusEvent`; migración `0016`; pruebas de compatibilidad y transiciones en `facturacion/tests.py` |
+| Completado | Secuencias transaccionales con alcance por empresa, incluidos números comerciales y códigos internos | `NumberSequence`, migraciones `0015`, `0032`–`0034`, servicio `facturacion/services/numbering.py`; pruebas de concurrencia y rollback |
+| Completado | Multiempresa para miembros, documentos y configuración e-CF con restricciones/migraciones de datos | `Company`, `CompanyMembership`; migraciones `0020`–`0034`; filtros de empresa y pruebas de aislamiento en API/dashboard |
+| Completado | Creación comercial centralizada; los endpoints y serializers de `Sale` heredado delegan al servicio de facturación | `facturacion/services/invoicing.py`, `api/views/sales_legacy.py`, serializers y `SaleLegacyAdapterTests` |
+| Completado | Métricas comerciales del endpoint `/dashboard/` calculadas desde `Invoice`/`InvoiceDetail`, con permisos y respuesta JSON compatible | `facturacion/api/views/reports.py`; clase `DashboardInvoiceReportingTests` prueba origen Invoice, métricas y permisos |
+| Completado | Flujos E34 con creación, restauración idempotente de inventario, reconciliación/compensación y trazabilidad | `services/credit_notes.py`, `services/credit_note_reconciliation.py`, migraciones `0017`–`0018`; `E34FiscalValidationTests` |
+| Completado | E34 y reglas/documentos de certificación cubiertos por pruebas de contrato/validación existentes | `facturacion/tests.py`, `test_certification_*.py`, `management/commands/test_rfce_contract.py`; revisar estado de ejecución abajo |
+| Completado en HEAD | Reconciliación de envíos de certificación DGII y seguridad frente a caídas al publicar | Migraciones `0054`–`0057`; `certification_submission.py`, `certification_reset.py`; pruebas de envío, migración crash y reset |
 
-### 1.3 Backend - Infraestructura Async
-- [x] **Celery 5.4.0**: Procesamiento async de tareas ECF
-- [x] **Redis**: Broker y result backend
-- [x] **Colas Dedicadas**: ecf.xml, ecf.signing, ecf.dgii, ecf.status, ecf.retry, ecf.reconciliation
-- [x] **Celery Beat**: Servicio de barrido periódico para reconciliación de TrackID
-- [x] **Flower UI**: Monitoreo Celery en `docker-compose.ecf.yml`
-- [x] **Reintentos**: Exponential backoff para fallos temporales
-- [x] **Idempotencia**: select_for_update() evita race conditions
-- [x] **Task Chaining**: generate_xml → sign_xml → submit_dgii
+## En progreso
 
-### 1.4 API REST
-- [x] **DRF ViewSets**: Invoices, CreditNotes, Quotations, Products, Clients
-- [x] **Serializers**: Validación de entrada + respuestas tipadas
-- [x] **Autenticación**: Token-based (django.contrib.auth)
-- [x] **Permisos**: Por modelo + permisos custom (reverse_invoice, view_financial_totals)
-- [x] **Paginación**: Personalizada
-- [x] **Filtrado**: Por empresa, estado, fecha
-- [x] **Endpoints DGII**:
-  - GET `/api/ecf/summary/` - Conteos por tipo e-CF
-  - POST `/api/electronic-documents/{id}/async-process/` - Encolar XML → firma → DGII
-  - GET `/api/electronic-documents/{id}/status/` - Estado + TrackID en tiempo real
-  - GET `/api/dgii-certification/` - Datos homologación
+- **Tema oscuro en frontend (cambios locales, no incluidos en HEAD):** los diffs actuales adaptan los estilos de `DGIICertificationWizard`, formulario POS, formulario de factura y notificaciones/diálogos a variables `saas-*`. Hay además ediciones de texto con espacios finales en el wizard y ambos documentos. Aún no se han validado con build, tests de frontend ni revisión visual; no declararlo terminado.
+- **Certificación/homologación DGII:** el código contiene flujos, fixtures XML, XSD y pruebas de certificación; el resultado de aceptación en el portal/ambiente DGII es **REQUIERE VERIFICACIÓN** externa.
 
-### 1.5 Frontend React
-- [x] **Dashboard ECF**: Métricas E31, E32, E34 (pendientes, aceptadas, errores)
-- [x] **Gestión de Facturas**: Formulario, lista, detalles
-- [x] **Gestión de Clientes**: CRUD
-- [x] **Gestión de Productos**: Stock, categorías, búsqueda
-- [x] **Formulario de Login**: Autenticación básica
-- [x] **Componentes Reutilizables**: Cards, modales, notificaciones (React Hot Toast)
-- [x] **React Router**: Navegación multi-página
-- [x] **Librerías UI**: Lucide icons, SweetAlert2
+## NEXT TASK
 
-### 1.6 Testing
-- [x] **Tests Unitarios**: Modelos, servicios, validadores
-- [x] **Tests de Integración**: Flujos end-to-end (crear invoice → e-CF → DGII)
-- [x] **Stress Testing CLI**: `stress_ecf_core --invoices 200 --workers 16 --enqueue`
-- [x] **Concurrency Hardening**: `ECFConcurrencyHardeningTests`
-- [x] **E34 Validations**: `E34FiscalValidationTests`
-- [x] **Cobertura TrackID/timeout**: 18 pruebas nuevas para envío, reintentos HTTP y reconciliación
-- [x] **Regresión de vigencia de certificado**: certificado vencido entre firma y persistencia no deja XML firmado ni cambia el estado fiscal
-- [x] **Cobertura XSD E32/E34**: mapper condicionado por `ecf_type` y validación E34 contra el XSD oficial sin parche semántico
-- [x] **Auditoría de normalizaciones XSD**: los parches restantes en `_load_schema()` (E31 y RFCE 32) corrigen erratas del XSD oficial publicado por DGII; no enmascaran XML inválido ni requieren acción
-- [x] **Validación de deadlock de inventario**: `stress_ecf_core --invoices 50 --workers 8 --enqueue` completó 50/50 facturas sin errores (antes: 9/50 abortadas por deadlock)
-- [x] **Cobertura de locks de inventario**: 4 pruebas concurrentes con productos en orden inverso para creación, cobro, restauración y compensación E34
+### Completar y validar los cambios locales de tema oscuro en pantallas de facturación/POS y wizard DGII
 
-### 1.7 Documentación
-- [x] **ARCHITECTURE_ASYNC.md**: Flujo procesamiento async
-- [x] **OPERATIONAL_VALIDATION.md**: Guía stress testing
-- [x] **Code Comments**: Docstrings en servicios DGII
-- [x] **README.md**: (incompleto, en progreso)
+- **Objetivo:** cerrar de forma revisable el trabajo de tema oscuro que ya aparece en el árbol local, manteniendo los contratos y la lógica de facturación intactos.
+- **Archivos/módulos afectados:** `facturacion_front/src/css/DGIICertificationWizard.css`, `facturacion_front/src/css/FastSalesForm.css`, `facturacion_front/src/css/facturaForm.css`, `facturacion_front/src/css/index.css` y, solo si la revisión lo requiere, `facturacion_front/src/components/DGIICertificationWizard.js`.
+- **Qué ya existe:** tokens de tema oscuro y reglas CSS locales; el estado actual exacto se ve con `git diff` y `git status`.
+- **Qué falta:** revisar el diff completo; eliminar cambios accidentales de presentación/texto (incluidos espacios finales si no son intencionales); comprobar que todos los controles, tablas, modales y notificaciones afectados contrasten correctamente en tema claro y oscuro; corregir solo defectos demostrados; ejecutar verificación frontend.
+- **Criterio de terminado:** cambios locales revisados y sin regresiones visuales observables en pantallas afectadas; `npm run build` finaliza correctamente; tests frontend aplicables pasan (o se documenta con precisión que no existen/no son ejecutables); ningún cambio de lógica fiscal, API o datos forma parte de esta tarea.
+- **Tests que deben ejecutarse:** desde `facturacion_front/`, `npm test -- --watchAll=false` y `npm run build`. En este entorno, antes de cerrar, comprobar también si las dependencias/scripts permiten ejecutarlos.
 
----
+## Pendientes posteriores
 
-## 2. Funcionalidades en Progreso 🟡
+1. Verificar estado real de homologación DGII con evidencia externa y documentar certificaciones aceptadas/rechazadas.
+2. Revisar el flujo/ruta de “Venta rápida”: sigue existiendo `FastSalesForm` en `/Fastsales`; la afirmación de que se eliminó ese flujo es falsa en el estado actual.
+3. Confirmar estado de producción, almacenamiento seguro de certificados, copias de seguridad, SLA y observabilidad. No hay evidencia suficiente en este snapshot para declararlos resueltos.
+4. Mantener las pruebas de regresión de concurrencia y multiempresa al modificar secuencias, facturas, notas de crédito o permisos.
 
-### 2.1 Backend - Seguridad de Certificados
-- [ ] **Backend Seguro de Almacenamiento**:
-  - Actualmente: Local filesystem legacy
-  - TODO: Implementar KMS (AWS KMS, Azure Key Vault) o Vault
-  - Impacto: Crítico para producción
-  - Estimado: 1-2 sprints
+## Comprobación de los trabajos señalados como referencia
 
-### 2.2 Frontend - Módulo ECF Completo
-- [ ] **Interfaz Gestión Certificados**: Upload, validación, renovación
-- [ ] **Monitoreo en Tiempo Real**: WebSocket o polling para status e-CF
-- [ ] **Reporte de Errores**: Visualización detallada de fallos DGII
-- [ ] **Flujo de Notas de Crédito**: UI para crear/enviar E34
-- [ ] **Consultas DGII**: Interface para revisar autorizaciones, estadísticas
+| Trabajo | Estado comprobado |
+|---|---|
+| Hardening previo a multiempresa | Completado en código, con pruebas de permisos/aislamiento; “previo” es histórico. Migraciones `0012` y `0020`–`0034`. |
+| `NumberSequence` y operaciones transaccionales | Completado en código; servicio, restricciones/migraciones y pruebas de concurrencia presentes. |
+| Cambios de código de producto | Completado en código: secuencia `product_internal_code` y tests de unicidad concurrente. |
+| Separación `fiscal_status` / `job_status` | Completado en código y tests; migración `0016`. |
+| `ECFStatusEvent` | Completado en modelo/migración y usado por transiciones. |
+| Mejoras E34 | Parcial en sentido de certificación externa; implementación de creación, validación/reconciliación y pruebas está presente. Aceptación DGII: REQUIERE VERIFICACIÓN. |
+| Reconciliación/restauración de inventario E34 | Completado en código con restauración idempotente y compensación/reconciliación probadas. |
+| `Sale` delegando creación a `InvoiceCreationService` | Completado como adaptador compatible; rutas `/sales/` siguen existiendo. |
+| Eliminación de “Venta rápida” | Pendiente/no realizado: `/Fastsales` y `FastSalesForm` siguen en `App.js`. |
+| Nueva ruta de ventas | Completado parcialmente: `/sales` redirige a `/salesList`, `/Fastsales` aún está disponible; confirmar intención funcional antes de retirar rutas. |
+| Dashboard `Sale/SaleDetail` → `Invoice/InvoiceDetail` conservando `/dashboard/` | Completado para las métricas comerciales; `reports.py` consulta `Invoice` y tests verifican la respuesta y permisos. Persisten referencias a `SaleDetail` en compatibilidad y reconciliación; eso no prueba que el dashboard dependa de ellas. |
 
-### 2.3 API - Endpoints Faltantes
-- [ ] **GET `/api/ecf/pending-sync/`**: Documentos pendientes por sincronizar (reintento manual)
-- [ ] **POST `/api/invoices/{id}/reverse/`**: Crear NC automáticamente desde factura
-- [ ] **GET `/api/invoices/{id}/ecf-audit-trail/`**: Historial completo ECFEventLog
-- [ ] **POST `/api/dgii/check-ncf-availability/`**: Consultear disponibilidad NCF ante DGII
+## Problemas conocidos confirmados
 
-### 2.4 Validación DGII - Casos Edge
-- [ ] **Validar Multiples Monedas**: Actualmente solo DOP
-- [ ] **Soportar E31 (Crédito Fiscal)**: Requiere RUC cliente
-- [ ] **Gastos Menores E43**: Estructura diferente a E31/E32
-- [ ] **Compras Electrónicas E41**: Para entrada de facturas de proveedores
+- No se pudo ejecutar la prueba backend seleccionada: `.venv` usa Python 3.14.6 y no tiene Django instalado (`ModuleNotFoundError`). El `Dockerfile` fija Python 3.12 y `requirements.txt` fija Django 5.2.1; recrear el entorno local con Python 3.12 e instalar esas dependencias antes de ejecutar pruebas.
+- Hay cambios locales sin commit en `CLAUDE.md`, este archivo y cuatro hojas de estilo más `DGIICertificationWizard.js` (siete rutas en total). Revisar y conservarlos; no asumir autoría o propósito más allá del diff presente.
+- El repositorio contiene `facturacion/__pycache__/models.cpython-314.pyc` versionado y alterado en el commit HEAD. Es un artefacto generado confirmado por Git; no se ha cambiado durante esta actualización.
 
-### 2.5 Reconciliación DGII
-- [ ] **Sincronización Batch**: Consultar estadísticas globales DGII vs local
-- [ ] **Detección de Drift**: Si documento local ≠ estado DGII
-- [ ] **Auto-reenvío**: Reintentos automáticos para documentos "perdidos"
+## Tests
 
----
+- **Suites existentes:** `facturacion/tests.py` y módulos `facturacion/test_certification_*.py`; pruebas del comando RFCE en `facturacion/management/commands/test_rfce_contract.py`. Incluyen dashboard, adaptador Sale, Invoice, E34, secuencias concurrentes, multiempresa, certificados y ciclo de certificación.
+- **Ejecutado durante esta actualización:** `.\.venv\Scripts\python.exe manage.py test facturacion.tests.DashboardInvoiceReportingTests`.
+- **Resultado:** no iniciado; falló la carga del runner antes de descubrir tests porque Django no está instalado en `.venv` (`ModuleNotFoundError: No module named 'django'`). El venv fue creado con Python 3.14.6, mientras que el runtime declarado por Docker es Python 3.12.
+- **No ejecutados:** resto de tests backend; `npm test -- --watchAll=false`; `npm run build`; pruebas visuales/manuales. No se afirma que pasen o fallen.
+- **Estado previo de ejecución de tests:** REQUIERE VERIFICACIÓN; Git y los archivos prueban que existen, no que hayan pasado recientemente.
 
-## 3. Bugs Conocidos 🐛
+Para reproducir localmente, usar Python 3.12 (alineado con `Dockerfile`), crear un entorno virtual e instalar `requirements.txt`; luego volver a ejecutar el test indicado. No se recreó ni modificó `.venv` en esta actualización.
 
-### 3.1 Críticos (Bloquean Homologación)
+## Última actualización
 
-| Bug | Severidad | Status | Nota |
-|-----|-----------|--------|------|
-| Fingerprint SHA-256 del certificado no se verifica al firmar | 🟠 ALTA | ABIERTO | No bloquea el flujo funcional de firma/envío: RNC y vigencia ya se validan. Es una capa de integridad adicional recomendada antes de producción, no antes de homologación. |
+2026-10-03. Auditoría basada en código, migraciones, pruebas, Git y diffs locales. No se modificó lógica de producto.
 
-### 3.2 Altos (Afectan UX)
+# HANDOFF PARA EL SIGUIENTE AGENTE
 
-| Bug | Severidad | Status | Nota |
-|-----|-----------|--------|------|
-| Endpoint `/api/ecf/summary/` slow en +10k documentos | 🟠 ALTA | ABIERTO | Agregar índices DB en fiscal_status, ecf_type |
-| Celery task timeout si XML > 5MB | 🟠 ALTA | ABIERTO | Aumentar timeout de worker a 600s |
-| Frontend no actualiza estado e-CF en tiempo real | 🟠 ALTA | ABIERTO | Implementar polling cada 5s o WebSocket |
-| Error genérico en submit_dgii no indica causa raíz | 🟠 ALTA | ABIERTO | Mejorar parser DGIISOAPResponseParser para SOAP faults |
+### ¿Dónde estamos?
 
-### 3.3 Medios (Mejora Técnica)
+HEAD es `dc069c7` en `fix/cert-expirado-y-xsd`. El backend tiene implementaciones y regresiones amplias para facturación, multiempresa, numeración, e-CF/E34 y el dashboard basado en Invoice. El árbol de trabajo tiene cambios locales, principalmente tema oscuro frontend, todavía no validados.
 
-| Bug | Severidad | Status | Nota |
-|-----|-----------|--------|------|
-| No hay rollback de inventario si sign_xml falla | 🟡 MEDIA | ABIERTO | Agregar compensating transaction |
-| Legacy Sale model aún en DB pero sin uso | 🟡 MEDIA | ABIERTO | Migración para deprecar en 2A-final-cleanup |
-| ECFEventLog crece sin limite (sin retention policy) | 🟡 MEDIA | ABIERTO | Agregar archiving después de 90 días |
-| Contraseña certificado en texto plano en settings | 🟡 MEDIA | ABIERTO | Mover a variables de entorno secretas |
+### ¿Qué acabamos de terminar?
 
----
+La auditoría y actualización de `CLAUDE.md` y `docs/ESTADO_PROYECTO.md`. El dashboard Invoice y los demás hitos de referencia se marcaron según evidencia encontrada, no por el checkpoint viejo. La prueba de dashboard se intentó, pero no pudo arrancar por falta de Django en `.venv`.
 
-## 4. Requisitos Pendientes para Homologación DGII ⚠️
+### ¿Qué NO debemos volver a hacer?
 
-### 4.1 Funcionales
-- [ ] **Validación XML Offline**: Incluir XSD locales para todas las versiones e-CF (v1.1+)
-- [ ] **Soporte E33 (Nota de Débito)**: Estructura requerida pero no priorizada
-- [ ] **Cancelación de Documentos**: Endpoint para anular e-CF (status: cancelled)
-- [ ] **Reporte de Auditoría**: Descarga JSON/CSV de ECFEventLog para auditoría DGII
-- [ ] **Backup/Restore**: Procedimiento de recuperación ante pérdida BD
+- No rehacer la migración comercial del dashboard desde Sale a Invoice: el código y `DashboardInvoiceReportingTests` ya la cubren.
+- No volver a implementar secuencias por empresa, adaptador de creación Invoice desde Sale ni restauración/reconciliación E34 sin que una regresión concreta lo requiera.
+- No eliminar el flujo `/Fastsales` suponiendo que ya fue retirado; la ruta sigue presente y esa decisión necesita alcance funcional explícito.
+- No descartar ni sobrescribir diffs locales sin inspeccionarlos.
 
-### 4.2 No-Funcionales
-- [ ] **Performance**: API debe responder < 500ms en percentil 95
-- [ ] **Disponibilidad**: SLA 99.5% uptime (máx 3.6 hrs downtime/mes)
-- [ ] **Seguridad**:
-  - [ ] TLS 1.2+ obligatorio (DGII requiere)
-  - [ ] Token JWT con exp < 15 min
-  - [ ] Rate limiting (1000 req/min por usuario)
-  - [ ] Logging auditado de accesos sensibles
-- [ ] **Disaster Recovery**: RTO 4 hrs, RPO 1 hr
-- [ ] **Compliance**: GDPR, SOC 2 (si SaaS multi-tenant)
+### ¿Cuál es la próxima tarea?
 
-### 4.3 Administrativos
-- [ ] **Capacitación DGII**: Documento de operación
-- [ ] **Manual de Usuario**: Interfaz de homologación (Excel/PDF)
-- [ ] **Plan de Rollback**: Si falla en producción
-- [ ] **Acuerdo de Servicio**: SLA firmado con DGII
+Completar y validar el tema oscuro en los formularios de facturación/POS y wizard DGII, conforme a la sección **NEXT TASK**.
 
----
+### ¿Qué archivos probablemente deben tocarse?
 
-## 5. Cambios Recientes (Últimos 20 commits)
+- `facturacion_front/src/css/DGIICertificationWizard.css`
+- `facturacion_front/src/css/FastSalesForm.css`
+- `facturacion_front/src/css/facturaForm.css`
+- `facturacion_front/src/css/index.css`
+- `facturacion_front/src/components/DGIICertificationWizard.js` (solo si la revisión del diff demuestra que hace falta)
 
+### ¿Qué archivos NO tocar sin aprobación?
+
+- `facturacion/ecf/signer/`, `facturacion/ecf/services/signing.py`
+- `facturacion/ecf/soap/`, `facturacion/ecf/services/dgii_submission.py`
+- `facturacion/ecf/schemas/`
+- `facturacion/ecf/state_machine.py`, `facturacion/ecf/services/status_transitions.py`
+- `facturacion/services/numbering.py`, modelos fiscales y migraciones
+- Cualquier archivo de certificados, claves privadas o secretos
+
+### ¿Cómo saber si la tarea quedó terminada?
+
+Diff local revisado; pantallas afectadas legibles en ambos temas; `npm test -- --watchAll=false` y `npm run build` ejecutados correctamente o sus bloqueos documentados; sin cambios en lógica/API fiscal.
+
+### Comando inicial recomendado
+
+```bash
+git status --short --branch
+git log --oneline --decorate -30
+git diff --stat
+git diff -- CLAUDE.md docs/ESTADO_PROYECTO.md facturacion_front/src/components/DGIICertificationWizard.js facturacion_front/src/css/DGIICertificationWizard.css facturacion_front/src/css/FastSalesForm.css facturacion_front/src/css/facturaForm.css facturacion_front/src/css/index.css
+cd facturacion_front
+npm test -- --watchAll=false
+npm run build
 ```
-248d661 (HEAD -> main)    checkpoint antes de usar Claude Code
-19d1d77                   Postulacion
-fe0470a                   nuevo cambio
-ac39b8e                   Suviendo e-ncf
-03117aa                   Ajuste
-74d06f7                   Nueva version de codigo
-20b7754                   Corrigiendo errores
-f371882                   Borreo un objecto basura
-42ba2b9                   Se agrego pantalla de login
-6bee516                   Ajauste de FastSale, registro activo, reporte stock
-4a13cf4                   Merge branch 'main'
-36e07d5                   nuevo cambio vista etiqueta
-9353f18                   Fix print statement add Windows section
-a35117e                   Correcion de front
-d3a38d7                   Agregando cambio etiqueta completo
-5bd837c                   Agregando etiqueta
-06c3202                   Actualización de modelos, vistas y componentes React
-121a218                   Se agrego vista stock
-8f85911                   nuevo ajuste
-5d41c1d                   Nueva pantalla de home
-261a63b                   Se agrego el dashboard
-```
-
-### Cambios Principales Inferidos
-1. ✅ **e-NCF Module**: Commit "Suviendo e-ncf" (ac39b8e) - core ECF uploads
-2. 🔧 **UI Improvements**: Login, etiqueta, home, dashboard 
-3. 🔧 **Asset Management**: Registro de activos (6bee516)
-4. 🐛 **Bug Fixes**: Errores corregidos, print statements
-5. 📝 **Postulation**: Preparación para homologación DGII (19d1d77)
-
-### Cambios Esperados en Próximos Sprints
-- [ ] Hardening de certificados (KMS)
-- [ ] Endpoints faltantes de API
-- [ ] Validación E31 con clientes RUC
-- [ ] UI completa para gestión ECF
-- [ ] Load testing y optimización DB
-
----
-
-## 6. Bloqueadores/Riesgos 🚨
-
-### 6.1 Bloqueadores Técnicos
-
-| Bloqueador | Impacto | Mitigación | ETA |
-|-----------|--------|-----------|-----|
-| XSD validation falla ocasionalmente | 🔴 CRÍTICA | Debuggear parser lxml con schema v1.1 | Urgente |
-| Certificado expirado no se rechaza | 🔴 CRÍTICA | Agregar validación pre-firma | Urgente |
-| Documentación RFCe v1.1+ incompleta | 🟠 ALTA | Contactar DGII por specs actuales | 1-2 semanas |
-
-### 6.2 Bloqueadores Operacionales
-
-| Bloqueador | Impacto | Mitigación | ETA |
-|-----------|--------|-----------|-----|
-| Certificados sin backend seguro | 🔴 CRÍTICA | Implementar KMS/Vault antes prod | 2-3 sprints |
-| SLA performance no validada | 🟠 ALTA | Load testing con 1000 req/s | 1 sprint |
-| Rollback plan sin documentar | 🟠 ALTA | Escribir runbook de incident | 1 semana |
-
----
-
-## 7. Roadmap de Próximos Sprints
-
-### Sprint 1: Hardening Crítico (Próximas 2 semanas)
-**Goal**: Eliminar bugs bloqueadores para homologación
-- [ ] Fix XSD validation falla (E34 optional fields)
-- [ ] Implementar validación certificado pre-firma
-- [ ] Persistir TrackID en DB antes de submit_dgii
-- [ ] Agregar endpoints faltantes API
-
-### Sprint 2: Seguridad de Certificados (2-3 semanas)
-**Goal**: Backend seguro para producción
-- [ ] Implementar KMS/Vault integration
-- [ ] Migrar certificados legacy → backend seguro
-- [ ] Auditar accesos a secretos
-
-### Sprint 3: UI ECF & Performance (2 semanas)
-**Goal**: Frontend completo + optimización
-- [ ] UI Gestión certificados (upload, renovación)
-- [ ] Monitoreo real-time (polling o WebSocket)
-- [ ] Agregar índices DB (fiscal_status, ecf_type)
-- [ ] Load testing 1000 req/s
-
-### Sprint 4: Validación Homologación (1-2 semanas)
-**Goal**: Pasar stress testing con DGII
-- [ ] Ejecutar test plan completo DGII
-- [ ] Documentación final
-- [ ] Training operacional
-
----
-
-## 8. Métricas & KPIs
-
-### Métricas Actuales (Estimadas)
-| Métrica | Valor | Target |
-|---------|-------|--------|
-| E-CF generados exitosamente | 98.2% | 99.9% |
-| Tiempo promedio XML → DGII | 2.3s | < 1s |
-| Reintentos automáticos éxito | 87% | > 95% |
-| Uptime API | 99.1% | 99.5% |
-| Cobertura de tests | 76% | > 85% |
-
-### SLA Propuesto (Homologación)
-- **Availability**: 99.5% uptime (máx 3.6 hrs/mes downtime)
-- **Response Time**: P95 < 500ms, P99 < 2s
-- **Error Rate**: < 0.1% (5xx errors)
-- **Recovery Time (RTO)**: < 4 horas
-- **Data Recovery (RPO)**: < 1 hora
-
----
-
-## 9. Dependencias Externas
-
-### 9.1 DGII (Dirección General de Impuestos Internos)
-- **Servicio**: Validación y autorización e-CF
-- **Criticidad**: 🔴 CRÍTICA
-- **Status**: Integrado (testing environment)
-- **Riesgo**: DGII puede cambiar specs/endpoints sin aviso
-
-### 9.2 Certificados Digitales
-- **Proveedor**: ACE (Autoridad Certificante Emisora)
-- **Criticidad**: 🔴 CRÍTICA
-- **Status**: Almacenamiento local legacy
-- **Riesgo**: Certificado expirado → servicio cae
-
-### 9.3 Base de Datos PostgreSQL
-- **Criticidad**: 🔴 CRÍTICA
-- **Status**: Local dev, cloud prod (TBD)
-- **Riesgo**: Pérdida de datos si sin backup
-
----
-
-## 10. Acciones Inmediatas Recomendadas
-
-### Hoy/Mañana
-- [ ] Crear branches para fix XSD y certificado validation
-- [ ] Comunicar con DGII por ETA certificación
-- [ ] Revisar logs producción en últimas 24 hrs
-
-### Esta Semana
-- [ ] Fix 3 bugs críticos (XSD, cert expired, TrackID persist)
-- [ ] Código review + merge a main
-- [ ] Iniciar implementación KMS
-
-### Este Mes
-- [ ] Completar endpoints faltantes API
-- [ ] UI ECF + monitoreo real-time
-- [ ] Load testing
-- [ ] Enviar solicitud oficial homologación a DGII
-
----
-
-**Próxima Revisión**: 2026-08-03 (1 semana)  
-**Responsable**: Equipo de Ingeniería Fiscalizadora  
-**Contacto**: [maintainer email]
-
----
-
-## Generación segura de documentos de certificación DGII
-
-- La generación documental adquiere locks en orden canónico: plan, items por PK y documentos por PK.
-- La generación de un grupo publica todos sus documentos atómicamente o revierte el grupo completo.
-- Una regeneración fallida conserva íntegros el XML, hash, fecha y estado de la versión publicada anterior; el diagnóstico se persiste después del rollback del savepoint.
-- Los documentos firmados, con evidencia de firma, con evidencia remota DGII o con un `submission_outcome` distinto de `not_started` no pueden regenerarse.
-- La regeneración de artefactos firmados permanece bloqueada; la refirma se realiza exclusivamente mediante su operación explícita, con razón y autorización owner/admin/superuser.
-- La firma y refirma preparan la criptografía fuera de los locks y revalidan el snapshot bajo locks canónicos antes de publicar.
-- Cada firma usa un path nuevo e inmutable; un intento fallido conserva la firma anterior y limpia únicamente archivos nuevos no referenciados.
-- La firma grupal conserva resultados parciales compatibles, pero cada documento se publica de manera atómica y cercada contra cambios concurrentes.
-- Este bloque no conecta ni activa el nuevo flujo de submission real a DGII.
-
-## Submission individual crash-safe de certificación DGII
-
-- La máquina de transporte aislada es `not_started → claimed → in_flight → confirmed|unknown`.
-- `claimed` significa que todavía no se autorizó el dispatch remoto; un claim expirado puede liberarse de forma cercada.
-- `in_flight` significa que el dispatch pudo haber ocurrido y nunca habilita reenvío automático.
-- Cada intento usa fingerprint de contenido y un `submission_attempt_token` UUID único.
-- La transición a `in_flight` persiste `submission_dispatch_started_at` y hace commit antes del cliente HTTP.
-- Este componente sigue aislado: endpoints, runner, polling legacy y reconciliación de certificación no están conectados.
-
-### Rollout obligatorio de la migración crash-safe
-
-1. Crear y verificar un backup completo de PostgreSQL.
-2. Pausar nuevos submissions, polling, runner y resets de certificación.
-3. Drenar requests y terminar cualquier worker viejo que pudiera persistir una respuesta de certificación.
-4. Confirmar que no quedan transacciones/sesiones de esos writers.
-5. Ejecutar la migración con el artefacto nuevo sin ponerlo todavía a servir tráfico.
-6. Verificar distribución de outcomes y cero `in_flight/unknown` sin fingerprint, token o timestamps.
-7. Activar el runtime nuevo y ejecutar smoke tests sin POST DGII.
-8. No reactivar submission ni polling legacy automáticamente; ambos requieren integración/validación específica con la nueva máquina.
-
-El backfill mantiene todo `in_flight/unknown` como intento incierto. El token histórico solo es un fence durable y `submission_dispatch_started_at` es un **MIGRATION CONSERVATIVE MARKER**, no evidencia del instante real del HTTP.
-
-## RFCE rebuild seguro
-
-- `DGIICertificationRFCERebuilder` captura grupos 4 y 3 bajo locks canónicos: plan, items por PK y documentos por PK.
-- Cada integral y RFCE se prepara fuera de la transacción y publica XML + firma conjuntamente mediante fences de target y dependencia.
-- El RFCE usa exclusivamente el `SignatureValue` del snapshot físico verificado del integral; si el integral o target cambia, no se publica.
-- Los outcomes `in_flight`, `unknown`, `confirmed` y `manual_review`, así como cualquier evidencia DGII, bloquean el rebuild antes de publicar artefactos.
-- El rebuild ya no limpia TrackID, outcomes, respuestas ni timestamps DGII; `_mark_rfce_for_resubmit()` permanece como hook legacy no destructivo y devuelve cero.
-- Las publicaciones son atómicas por documento, conservan los artefactos firmados anteriores y mantienen el response shape histórico.
-- Cobertura PostgreSQL: rebuild inicial, refirma segura, fences stale, outcomes/evidencia, concurrencia y fallos parciales grupo 4/grupo 3.
-
-## Reset seguro de certificación DGII
-
-- Todo reset usa una transacción única y locks canónicos: plan, items por PK y documentos por PK; un documento bloqueado revierte el scope completo.
-- Antes de abrir un ciclo nuevo se archiva el ciclo anterior en eventos `dgii_reset_applied`, incluyendo evidencia DGII, transporte, estados, actor, causa, scope y `reset_key`.
-- XML y firma permanecen inmutables. El documento vuelve a `signed/not_started` con `accepted_stale=True` únicamente después del archivo histórico exitoso.
-- `in_flight`, `unknown`, `manual_review` y cualquier lease activo bloquean el reset. `confirmed` solo se resetea con evidencia DGII autoritativa o acción manual owner/admin/superuser confirmada.
-- Los resets son idempotentes por `reset_key`; Datos e-CF grupos 1+2 y RFCE grupo 3 se tratan como unidades atómicas.
-- `sync-reset-state` es exclusivamente diagnóstico: abrir el wizard no modifica estado fiscal ni borra evidencia.
-- Marcadores ambiguos como `0/21` solo generan diagnóstico; no aplican reset automáticamente.
-- `submit_data_ecf()` ya no limpia resultados DGII antes de enviar y `_reset_previous_dgii_results()` quedó como hook legacy no destructivo.

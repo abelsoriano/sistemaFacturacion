@@ -1,15 +1,16 @@
   .pos-page {
-    --pos-primary: #6C63FF;
-    --pos-primary-strong: #5B52E8;
-    --pos-topbar: #1B1A2E;
-    --pos-active: #EEEDFE;
-    --pos-bg: #F5F5F7;
-    --pos-card: #FFFFFF;
-    --pos-border: rgba(27, 26, 46, 0.08);
-    --pos-text: #2B2A3A;
-    --pos-muted: #7A7889;
-    --pos-success: #0F7A5C;
-    --pos-success-bg: #ECFDF3;
+    --pos-primary: var(--saas-primary);
+    --pos-primary-strong: var(--saas-primary);
+    --pos-topbar: var(--saas-topbar);
+    --pos-active: var(--saas-primary-soft);
+    --pos-surface-hover: var(--saas-surface-variant);
+    --pos-bg: var(--saas-background);
+    --pos-card: var(--saas-card);
+    --pos-border: var(--saas-border);
+    --pos-text: var(--saas-text);
+    --pos-muted: var(--saas-muted);
+    --pos-success: var(--saas-success);
+    --pos-success-bg: var(--saas-success-surface);
     min-height: 100%;
   }
   .pos-shell {
@@ -712,4 +713,190 @@
     .pos-sale-actions {
       grid-template-columns: 1fr;
     }
+  }
+
+  :root.theme-dark .pos-page {
+    background: var(--saas-background);
+    color: var(--saas-text);
+  }
+
+  :root.theme-dark .pos-topbar,
+  :root.theme-dark .pos-cart-card,
+  :root.theme-dark .pos-right,
+  :root.theme-dark .pos-search-box,
+  :root.theme-dark .pos-barcode-box,
+  :root.theme-dark .pos-client-results,
+  :root.theme-dark .pos-search-results,
+  :root.theme-dark .inv-product-modal {
+    background: var(--saas-card);
+    border-color: var(--saas-border);
+    color: var(--saas-text);
+    box-shadow: var(--saas-shadow-soft);
+  }
+
+  :root.theme-dark .pos-user-chip,
+  :root.theme-dark .pos-client-input,
+  :root.theme-dark .pos-client-btn,
+  :root.theme-dark .pos-back-top,
+  :root.theme-dark .pos-qty-btn,
+  :root.theme-dark .pos-qty-input,
+  :root.theme-dark .pos-amount-wrap,
+  :root.theme-dark .pos-quick-btn {
+    background: var(--saas-surface-variant);
+    border-color: var(--saas-border);
+    color: var(--saas-text);
+  }
+
+  :root.theme-dark .pos-search-box input,
+  :root.theme-dark .pos-barcode-box input,
+  :root.theme-dark .pos-client-input,
+  :root.theme-dark .pos-qty-input,
+  :root.theme-dark .pos-amount-input {
+    color: var(--saas-text);
+  }
+
+  :root.theme-dark .pos-search-box input::placeholder,
+  :root.theme-dark .pos-barcode-box input::placeholder,
+  :root.theme-dark .pos-client-input::placeholder,
+  :root.theme-dark .pos-amount-input::placeholder {
+    color: var(--saas-muted);
+  }
+
+  :root.theme-dark .pos-search-box:focus-within,
+  :root.theme-dark .pos-barcode-box:focus-within,
+  :root.theme-dark .pos-client-input:focus,
+  :root.theme-dark .pos-amount-wrap:focus-within,
+  :root.theme-dark .pos-qty-input:focus {
+    border-color: var(--saas-primary);
+    box-shadow: 0 0 0 3px var(--saas-primary-soft);
+  }
+
+  :root.theme-dark .pos-client-result,
+  :root.theme-dark .pos-result-item {
+    color: var(--saas-text);
+    border-bottom-color: var(--saas-border);
+  }
+
+  :root.theme-dark .pos-client-result:hover,
+  :root.theme-dark .pos-result-item:hover,
+  :root.theme-dark .pos-back-top:hover,
+  :root.theme-dark .pos-qty-btn:hover,
+  :root.theme-dark .pos-quick-btn:hover {
+    background: var(--pos-surface-hover);
+    border-color: var(--saas-primary);
+    color: var(--saas-primary);
+  }
+
+  :root.theme-dark .pos-client-btn.primary,
+  :root.theme-dark .pos-process-btn {
+    background: var(--saas-primary);
+    border-color: var(--saas-primary);
+    color: var(--saas-primary-foreground);
+  }
+
+  :root.theme-dark .pos-selected-client,
+  :root.theme-dark .pos-client-mode,
+  :root.theme-dark .pos-cart-badge,
+  :root.theme-dark .pos-topbar-icon {
+    background: var(--saas-primary-soft);
+    border-color: var(--saas-primary);
+    color: var(--saas-primary);
+  }
+
+  :root.theme-dark .pos-cart-table tbody tr {
+    background: var(--saas-card);
+    border-bottom-color: var(--saas-border);
+  }
+
+  :root.theme-dark .pos-cart-table tbody tr:hover {
+    background: var(--pos-surface-hover);
+  }
+
+  :root.theme-dark .pos-cart-table thead th {
+    background: var(--saas-surface-variant);
+    border-bottom-color: var(--saas-border);
+    color: var(--saas-muted);
+  }
+
+  :root.theme-dark .pos-cart-table tbody td,
+  :root.theme-dark .pos-prod-name,
+  :root.theme-dark .pos-subtotal-col,
+  :root.theme-dark .pos-total-main .lbl,
+  :root.theme-dark .pos-total-row .val,
+  :root.theme-dark .pos-tax-toggle,
+  :root.theme-dark .pos-quick-btn {
+    color: var(--saas-text);
+  }
+
+  :root.theme-dark .pos-tax-toggle,
+  :root.theme-dark .pos-amount-wrap,
+  :root.theme-dark .pos-quick-btn {
+    background: var(--saas-surface-variant);
+  }
+
+  :root.theme-dark .pos-clear-btn {
+    background: var(--saas-danger-surface);
+    color: var(--saas-danger);
+  }
+
+  :root.theme-dark .pos-clear-btn:hover,
+  :root.theme-dark .pos-del-btn:hover {
+    background: var(--saas-danger-surface);
+    border-color: var(--saas-danger);
+    color: var(--saas-danger);
+  }
+
+  :root.theme-dark .pos-del-btn {
+    border-color: var(--saas-border);
+    color: var(--saas-muted);
+  }
+
+  :root.theme-dark .pos-cart-empty,
+  :root.theme-dark .pos-cart-empty p,
+  :root.theme-dark .pos-cart-empty small,
+  :root.theme-dark .pos-price-col,
+  :root.theme-dark .pos-section-label,
+  :root.theme-dark .pos-currency {
+    color: var(--saas-muted);
+  }
+
+  :root.theme-dark .pos-change-box {
+    background: var(--saas-success-surface);
+    border-color: var(--saas-success);
+  }
+
+  :root.theme-dark .pos-change-insufficient {
+    background: var(--saas-warning-surface);
+    border-color: var(--saas-warning);
+  }
+
+  :root.theme-dark .pos-change-missing,
+  :root.theme-dark .pos-insufficient-label {
+    color: var(--saas-warning);
+  }
+
+  :root.theme-dark .pos-sale-success p,
+  :root.theme-dark .pos-sale-action {
+    color: var(--saas-text);
+  }
+
+  :root.theme-dark .pos-sale-action {
+    background: var(--saas-surface-variant);
+    border-color: var(--saas-border);
+  }
+
+  :root.theme-dark .pos-sale-action:hover {
+    background: var(--saas-primary-soft);
+    color: var(--saas-primary);
+  }
+
+  :root.theme-dark .pos-sale-action.primary,
+  :root.theme-dark .pos-sale-action.primary:hover {
+    background: var(--saas-primary);
+    border-color: var(--saas-primary);
+    color: var(--saas-primary-foreground);
+  }
+
+  :root.theme-dark .pos-sale-action.ghost {
+    color: var(--saas-muted);
   }

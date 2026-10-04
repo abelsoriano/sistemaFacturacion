@@ -5,25 +5,25 @@
 
 /* ===== RESET Y VARIABLES ===== */
 .dgii-wizard-page {
-  --dgii-primary: #6C63FF;
-  --dgii-primary-dark: #4f46e5;
-  --dgii-primary-light: #EEEDFE;
-  --dgii-success: #16a34a;
-  --dgii-success-light: #dcfce7;
-  --dgii-danger: #dc2626;
-  --dgii-danger-light: #fee2e2;
-  --dgii-warning: #f59e0b;
-  --dgii-warning-light: #fef3c7;
-  --dgii-gray-50: #f8fafc;
-  --dgii-gray-100: #f1f5f9;
-  --dgii-gray-200: #e5e7eb;
-  --dgii-gray-300: #dbe2ea;
-  --dgii-gray-400: #94a3b8;
-  --dgii-gray-500: #64748b;
-  --dgii-gray-600: #475569;
-  --dgii-gray-700: #334155;
-  --dgii-gray-800: #1f2937;
-  --dgii-gray-900: #1B1A2E;
+  --dgii-primary: var(--saas-primary);
+  --dgii-primary-dark: var(--saas-primary);
+  --dgii-primary-light: var(--saas-primary-soft);
+  --dgii-success: var(--saas-success);
+  --dgii-success-light: var(--saas-success-surface);
+  --dgii-danger: var(--saas-danger);
+  --dgii-danger-light: var(--saas-danger-surface);
+  --dgii-warning: var(--saas-warning);
+  --dgii-warning-light: var(--saas-warning-surface);
+  --dgii-gray-50: var(--saas-surface-variant);
+  --dgii-gray-100: var(--saas-surface-soft);
+  --dgii-gray-200: var(--saas-border);
+  --dgii-gray-300: var(--saas-border);
+  --dgii-gray-400: var(--saas-muted);
+  --dgii-gray-500: var(--saas-muted);
+  --dgii-gray-600: var(--saas-muted);
+  --dgii-gray-700: var(--saas-text);
+  --dgii-gray-800: var(--saas-text);
+  --dgii-gray-900: var(--saas-text);
   
   display: flex;
   flex-direction: column;
@@ -31,7 +31,7 @@
   padding: 20px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--dgii-gray-900);
-  background: #f1f5f9;
+  background: var(--saas-background);
   min-height: 100vh;
 }
 
@@ -2193,30 +2193,6 @@
    ================================================================ */
 
 .dgii-wizard-page {
-  /* Paleta neutra (zinc) en vez de grises con tinte violeta */
-  --dgii-primary: #4F46E5;
-  --dgii-primary-dark: #4338CA;
-  --dgii-primary-light: #EEF2FF;
-
-  --dgii-success: #059669;
-  --dgii-success-light: #ECFDF5;
-  --dgii-danger: #E11D48;
-  --dgii-danger-light: #FFF1F2;
-  --dgii-warning: #D97706;
-  --dgii-warning-light: #FFFBEB;
-
-  --dgii-gray-50: #FAFAFA;
-  --dgii-gray-100: #F4F4F5;
-  --dgii-gray-200: #E4E4E7;
-  --dgii-gray-300: #D4D4D8;
-  --dgii-gray-400: #A1A1AA;
-  --dgii-gray-500: #71717A;
-  --dgii-gray-600: #52525B;
-  --dgii-gray-700: #3F3F46;
-  --dgii-gray-800: #27272A;
-  --dgii-gray-900: #18181B;
-
-  background: var(--dgii-gray-50);
   font-feature-settings: "tnum" 1;
 }
 
@@ -2458,3 +2434,270 @@
   border: 1px solid var(--dgii-gray-200);
   border-left: 2px solid var(--dgii-primary);
 }
+
+/* ===== TEMA OSCURO Y PORTALES ===== */
+:root.theme-dark .dgii-wizard-page {
+  background: var(--saas-background);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-wizard-header,
+:root.theme-dark .dgii-assistant-panel-header,
+:root.theme-dark .dgii-tests-hero,
+:root.theme-dark .dgii-assistant-sidebar,
+:root.theme-dark .dgii-wizard-card,
+:root.theme-dark .dgii-wizard-loading,
+:root.theme-dark .dgii-assistant-placeholder,
+:root.theme-dark .dgii-tests-detail,
+:root.theme-dark .dgii-tests-main > .dgii-wizard-card {
+  background: var(--saas-card);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+  box-shadow: var(--saas-shadow-soft);
+}
+
+:root.theme-dark .dgii-wizard-page h1,
+:root.theme-dark .dgii-wizard-page h2,
+:root.theme-dark .dgii-wizard-page h3,
+:root.theme-dark .dgii-wizard-card-header h2,
+:root.theme-dark .dgii-assistant-sidebar-title strong,
+:root.theme-dark .dgii-assistant-step strong,
+:root.theme-dark .dgii-wizard-status-grid strong,
+:root.theme-dark .dgii-wizard-xml-info strong,
+:root.theme-dark .dgii-tests-detail-grid strong,
+:root.theme-dark .dgii-stat-strip strong {
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-wizard-page p,
+:root.theme-dark .dgii-wizard-card-header p,
+:root.theme-dark .dgii-assistant-sidebar-title span,
+:root.theme-dark .dgii-wizard-status-grid span,
+:root.theme-dark .dgii-wizard-xml-info span,
+:root.theme-dark .dgii-tests-detail-grid span,
+:root.theme-dark .dgii-stat-strip span,
+:root.theme-dark .dgii-wizard-empty,
+:root.theme-dark .dgii-assistant-placeholder p {
+  color: var(--saas-muted);
+}
+
+:root.theme-dark .dgii-wizard-secondary,
+:root.theme-dark .dgii-wizard-mini-action,
+:root.theme-dark .dgii-wizard-file,
+:root.theme-dark .dgii-application-pill,
+:root.theme-dark .dgii-filter-pills button {
+  background: var(--saas-surface-variant);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-wizard-secondary:hover:not(:disabled),
+:root.theme-dark .dgii-wizard-mini-action:hover:not(:disabled),
+:root.theme-dark .dgii-wizard-file:hover:not(:disabled),
+:root.theme-dark .dgii-application-pill:hover:not(.done):not(.current),
+:root.theme-dark .dgii-filter-pills button:hover:not(.active) {
+  background: var(--saas-surface-soft);
+  border-color: var(--saas-primary);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-wizard-primary,
+:root.theme-dark .dgii-wizard-primary:hover:not(:disabled) {
+  background: var(--saas-primary);
+  color: var(--saas-primary-foreground);
+}
+
+:root.theme-dark .dgii-wizard-field select,
+:root.theme-dark .dgii-wizard-field input,
+:root.theme-dark .dgii-search-box,
+:root.theme-dark .dgii-filter-pills button,
+:root.theme-dark .dgii-wizard-status-grid > div,
+:root.theme-dark .dgii-wizard-xml-info > div,
+:root.theme-dark .dgii-application-pill {
+  background: var(--saas-card);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-wizard-field select:focus,
+:root.theme-dark .dgii-wizard-field input:focus,
+:root.theme-dark .dgii-search-box:focus-within {
+  border-color: var(--saas-primary);
+  box-shadow: 0 0 0 3px var(--saas-primary-soft);
+}
+
+:root.theme-dark .dgii-search-box input {
+  background: transparent;
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-search-box input::placeholder {
+  color: var(--saas-muted);
+}
+
+:root.theme-dark .dgii-wizard-certificate-box,
+:root.theme-dark .dgii-wizard-recommendation,
+:root.theme-dark .dgii-advanced-toggle {
+  background: var(--saas-surface-soft);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-wizard-alert.warning,
+:root.theme-dark .dgii-wizard-alert.danger,
+:root.theme-dark .dgii-wizard-alert.info {
+  border-color: var(--saas-border);
+}
+
+:root.theme-dark .dgii-wizard-alert.warning {
+  background: var(--saas-warning-surface);
+  color: var(--saas-warning);
+}
+
+:root.theme-dark .dgii-wizard-alert.danger {
+  background: var(--saas-danger-surface);
+  color: var(--saas-danger);
+}
+
+:root.theme-dark .dgii-wizard-alert.info {
+  background: var(--saas-primary-soft);
+  color: var(--saas-primary);
+}
+
+:root.theme-dark .dgii-certification-table {
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-certification-table thead th {
+  background: var(--saas-card);
+  border-bottom-color: var(--saas-border);
+  color: var(--saas-muted);
+}
+
+:root.theme-dark .dgii-certification-table tbody tr {
+  background: var(--saas-card);
+}
+
+:root.theme-dark .dgii-certification-table tbody tr td {
+  border-bottom-color: var(--saas-border);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-certification-table tbody tr.selected {
+  background: var(--saas-primary-soft);
+}
+
+:root.theme-dark .dgii-certification-table tbody tr:hover:not(.selected) {
+  background: var(--saas-surface-variant);
+}
+
+:root.theme-dark .dgii-wizard-badge.success,
+:root.theme-dark .dgii-application-pill.done {
+  color: var(--saas-success);
+  border-color: var(--saas-success);
+}
+
+:root.theme-dark .dgii-wizard-badge.warning {
+  color: var(--saas-warning);
+  border-color: var(--saas-warning);
+}
+
+:root.theme-dark .dgii-wizard-badge.danger {
+  color: var(--saas-danger);
+  border-color: var(--saas-danger);
+}
+
+:root.theme-dark .dgii-wizard-badge.info {
+  color: var(--saas-primary);
+  border-color: var(--saas-primary);
+}
+
+:root.theme-dark .dgii-wizard-badge.neutral {
+  color: var(--saas-muted);
+  border-color: var(--saas-border);
+}
+
+:root.theme-dark .dgii-assistant-step.active {
+  background: var(--saas-surface-variant);
+  color: var(--saas-text);
+  border-left-color: var(--saas-primary);
+}
+
+:root.theme-dark .dgii-assistant-step:not(.active) span {
+  background: var(--saas-surface-variant);
+}
+
+:root.theme-dark .dgii-assistant-step.visited:not(.active) span {
+  color: var(--saas-success);
+}
+
+:root.theme-dark .dgii-filter-pills button.active,
+:root.theme-dark .dgii-application-pill.current {
+  background: var(--saas-primary-soft);
+  border-color: var(--saas-primary);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-progress-track,
+:root.theme-dark .dgii-group-progress {
+  background: var(--saas-surface-variant);
+}
+
+:root.theme-dark .dgii-certification-groups.guided > div.complete,
+:root.theme-dark .dgii-certification-groups b,
+:root.theme-dark .dgii-group-completed-label {
+  background: var(--saas-card);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-certification-groups.guided > div.complete {
+  border-left-color: var(--saas-success);
+}
+
+:root.theme-dark .dgii-certification-groups > div,
+:root.theme-dark .dgii-certification-groups.guided > div,
+:root.theme-dark .dgii-certification-groups.guided > div.complete,
+:root.theme-dark .dgii-certification-groups > div.summary-only,
+:root.theme-dark .dgii-data-ecf-card,
+:root.theme-dark .dgii-tests-detail-grid > div,
+:root.theme-dark .dgii-tests-full-message {
+  background: var(--saas-card);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-certification-groups > div:hover,
+:root.theme-dark .dgii-certification-groups.guided > div:hover {
+  background: var(--saas-surface-variant);
+  border-color: var(--saas-primary);
+}
+
+:root.theme-dark .dgii-group-actions .dgii-wizard-mini-action.secondary {
+  background: var(--saas-surface-variant);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-group-actions .dgii-wizard-mini-action.secondary:hover:not(:disabled) {
+  background: var(--saas-primary-soft);
+  border-color: var(--saas-primary);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-data-ecf-head strong,
+:root.theme-dark .dgii-tests-full-message,
+:root.theme-dark .dgii-certification-groups strong {
+  color: var(--saas-text);
+}
+
+:root.theme-dark .dgii-data-ecf-head span,
+:root.theme-dark .dgii-tests-detail-grid span,
+:root.theme-dark .dgii-certification-groups span {
+  color: var(--saas-muted);
+}
+
+:root.theme-dark .dgii-group-completed-label {
+  color: var(--saas-success);
+}
+

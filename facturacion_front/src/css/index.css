@@ -12,3 +12,39 @@ code {
     monospace;
 }
 
+:root.theme-dark [data-rht-toaster] > div > div {
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
+  color: var(--saas-text);
+  box-shadow: var(--saas-shadow-heavy);
+}
+
+:root.theme-dark .swal2-container {
+  color-scheme: dark;
+}
+
+:root.theme-dark .swal2-popup,
+:root.theme-dark .swal2-toast {
+  background: var(--saas-card);
+  border: 1px solid var(--saas-border);
+  color: var(--saas-text);
+  box-shadow: var(--saas-shadow-heavy);
+}
+
+:root.theme-dark .swal2-title,
+:root.theme-dark .swal2-html-container,
+:root.theme-dark .swal2-content {
+  color: var(--saas-text);
+}
+
+:root.theme-dark .swal2-confirm {
+  background: var(--saas-primary);
+  color: var(--saas-primary-foreground);
+}
+
+:root.theme-dark .swal2-cancel {
+  background: var(--saas-surface-variant);
+  border: 1px solid var(--saas-border);
+  color: var(--saas-text);
+}
+

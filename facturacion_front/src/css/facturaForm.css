@@ -1,25 +1,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
 
 .inv-root {
-  --bg-page: #f6f7fb;
-  --surface: #ffffff;
-  --surface-hover: #f8fafc;
-  --border: #e5e7eb;
-  --border-dark: #d0d5dd;
-  --text: #111827;
-  --text-muted: #667085;
-  --text-faint: #98a2b3;
-  --primary: var(--saas-primary, #6C63FF);
-  --primary-dark: #5a52df;
-  --primary-light: var(--saas-active, #EEEDFE);
-  --success: #067647;
-  --success-light: #ecfdf3;
-  --danger: #b42318;
-  --danger-light: #fef3f2;
-  --warning: #b54708;
-  --warning-light: #fffaeb;
-  --purple: #6941c6;
-  --purple-light: #f4f3ff;
+  --bg-page: var(--saas-background);
+  --surface: var(--saas-card);
+  --surface-hover: var(--saas-surface-variant);
+  --border: var(--saas-border);
+  --border-dark: var(--saas-border);
+  --text: var(--saas-text);
+  --text-muted: var(--saas-muted);
+  --text-faint: var(--saas-muted);
+  --primary: var(--saas-primary);
+  --primary-dark: var(--saas-primary);
+  --primary-light: var(--saas-primary-soft);
+  --success: var(--saas-success);
+  --success-light: var(--saas-success-surface);
+  --danger: var(--saas-danger);
+  --danger-light: var(--saas-danger-surface);
+  --warning: var(--saas-warning);
+  --warning-light: var(--saas-warning-surface);
+  --purple: var(--saas-primary);
+  --purple-light: var(--saas-primary-soft);
   --radius-sm: 8px;
   --radius-md: 8px;
   --radius-lg: 8px;
@@ -103,7 +103,7 @@
   background: var(--surface);
   margin-bottom: 16px;
   padding: 14px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--saas-shadow-xs);
 }
 
 .inv-scan-card span,
@@ -141,7 +141,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--saas-shadow-xs);
   overflow: hidden;
 }
 
@@ -151,7 +151,7 @@
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--border);
-  background: #fbfcfe;
+  background: var(--surface-hover);
   padding: 14px 16px;
 }
 
@@ -193,7 +193,7 @@
 .inv-btn:hover:not(:disabled),
 .btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--saas-shadow-soft);
 }
 
 .inv-btn:disabled,
@@ -205,20 +205,20 @@
 .inv-btn.primary,
 .btn-primary {
   background: var(--primary);
-  color: #fff;
+  color: var(--saas-primary-foreground);
   border-color: var(--primary);
 }
 
 .inv-btn.secondary,
 .btn-outline {
   border-color: var(--border);
-  background: #fff;
-  color: #344054;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .inv-btn.danger,
 .btn-danger {
-  border-color: #fecdca;
+  border-color: var(--danger);
   background: var(--danger-light);
   color: var(--danger);
 }
@@ -242,7 +242,7 @@
   min-height: 42px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: #f8fafc;
+  background: var(--surface-hover);
   color: var(--text);
   font: inherit;
   font-size: 0.9rem;
@@ -262,15 +262,15 @@
 .inv-root select:focus,
 .inv-root textarea:focus {
   border-color: var(--primary);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.12);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--primary-light);
 }
 
 .inv-root input:disabled,
 .inv-root select:disabled,
 .inv-root textarea:disabled {
   cursor: not-allowed;
-  background: #f2f4f7;
+  background: var(--surface-hover);
   color: var(--text-muted);
 }
 
@@ -302,14 +302,14 @@
 
 .cart-table th,
 .cart-table td {
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--border);
   padding: 13px 14px;
   text-align: left;
   vertical-align: middle;
 }
 
 .cart-table th {
-  background: #fbfcfe;
+  background: var(--surface-hover);
   color: var(--text-faint);
   font-size: 0.72rem;
   font-weight: 850;
@@ -394,7 +394,7 @@
   gap: 7px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
@@ -404,19 +404,19 @@
 }
 
 .payment-option.active-cash {
-  border-color: #abefc6;
+  border-color: var(--success);
   background: var(--success-light);
   color: var(--success);
 }
 
 .payment-option.active-card {
-  border-color: #d9d6fe;
+  border-color: var(--primary);
   background: var(--primary-light);
   color: var(--primary);
 }
 
 .payment-option.active-transfer {
-  border-color: #d6bbfb;
+  border-color: var(--primary);
   background: var(--purple-light);
   color: var(--purple);
 }
@@ -454,10 +454,10 @@
   display: grid;
   gap: 5px;
   padding: 12px;
-  border: 1px solid rgba(108, 99, 255, 0.22);
+  border: 1px solid var(--primary);
   border-radius: 8px;
-  background: #eeedfe;
-  color: #2b2a3a;
+  background: var(--primary-light);
+  color: var(--text);
 }
 
 .inv-status-note strong {
@@ -465,7 +465,7 @@
 }
 
 .inv-status-note span {
-  color: #5f5d72;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -516,7 +516,7 @@
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: #f8fafc;
+  background: var(--surface-hover);
   color: var(--text);
   font-size: 0.84rem;
   font-weight: 800;
@@ -573,12 +573,12 @@
 }
 
 .inv-warning-box {
-  border: 1px solid #fedf89;
+  border: 1px solid var(--warning);
   border-radius: var(--radius-sm);
 }
 
 .inv-error-box {
-  border: 1px solid #fecdca;
+  border: 1px solid var(--danger);
   border-radius: var(--radius-sm);
   background: var(--danger-light);
   color: var(--danger);
@@ -602,7 +602,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--saas-overlay);
   backdrop-filter: blur(4px);
   padding: 16px;
 }
@@ -615,7 +615,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  box-shadow: var(--saas-shadow-heavy);
   overflow: hidden;
 }
 
@@ -634,7 +634,7 @@
 .product-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--surface);
   cursor: pointer;
   padding: 12px;
   transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
@@ -745,6 +745,127 @@
 .space-y-2 > * + * { margin-top: 8px; }
 .space-y-3 > * + * { margin-top: 12px; }
 .flex-between { display: flex; justify-content: space-between; align-items: center; }
+
+:root.theme-dark .inv-root {
+  background: var(--saas-background);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .inv-scan-card,
+:root.theme-dark .inv-card,
+:root.theme-dark .inv-product-modal {
+  background: var(--saas-card);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+  box-shadow: var(--saas-shadow-soft);
+}
+
+:root.theme-dark .inv-card-header {
+  background: var(--saas-surface-variant);
+  border-bottom-color: var(--saas-border);
+}
+
+:root.theme-dark .inv-root input,
+:root.theme-dark .inv-root select,
+:root.theme-dark .inv-root textarea,
+:root.theme-dark .inv-btn.secondary,
+:root.theme-dark .btn-outline,
+:root.theme-dark .payment-option,
+:root.theme-dark .product-card,
+:root.theme-dark .inv-tax-toggle {
+  background: var(--saas-card);
+  border-color: var(--saas-border);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .inv-root input:focus,
+:root.theme-dark .inv-root select:focus,
+:root.theme-dark .inv-root textarea:focus {
+  background: var(--saas-card);
+  border-color: var(--saas-primary);
+  box-shadow: 0 0 0 3px var(--saas-primary-soft);
+}
+
+:root.theme-dark .inv-root input::placeholder,
+:root.theme-dark .inv-root textarea::placeholder {
+  color: var(--saas-muted);
+}
+
+:root.theme-dark .inv-root input:disabled,
+:root.theme-dark .inv-root select:disabled,
+:root.theme-dark .inv-root textarea:disabled {
+  background: var(--saas-surface-variant);
+  color: var(--saas-muted);
+}
+
+:root.theme-dark .cart-table tbody tr {
+  background: var(--saas-card);
+}
+
+:root.theme-dark .cart-table tbody tr:hover {
+  background: var(--saas-surface-variant);
+}
+
+:root.theme-dark .cart-table th {
+  background: var(--saas-surface-variant);
+  color: var(--saas-muted);
+}
+
+:root.theme-dark .cart-table th,
+:root.theme-dark .cart-table td {
+  border-bottom-color: var(--saas-border);
+}
+
+:root.theme-dark .payment-option.active-cash {
+  background: var(--saas-success-surface);
+  border-color: var(--saas-success);
+  color: var(--saas-success);
+}
+
+:root.theme-dark .payment-option.active-card,
+:root.theme-dark .payment-option.active-transfer {
+  background: var(--saas-primary-soft);
+  border-color: var(--saas-primary);
+  color: var(--saas-primary);
+}
+
+:root.theme-dark .inv-status-note,
+:root.theme-dark .inv-client-info {
+  background: var(--saas-primary-soft);
+  border-color: var(--saas-primary);
+  color: var(--saas-text);
+}
+
+:root.theme-dark .inv-status-note span {
+  color: var(--saas-muted);
+}
+
+:root.theme-dark .inv-warning-strip,
+:root.theme-dark .inv-warning-box {
+  background: var(--saas-warning-surface);
+  border-color: var(--saas-warning);
+  color: var(--saas-warning);
+}
+
+:root.theme-dark .inv-error-box {
+  background: var(--saas-danger-surface);
+  border-color: var(--saas-danger);
+  color: var(--saas-danger);
+}
+
+:root.theme-dark .change-box {
+  background: var(--saas-success-surface);
+  color: var(--saas-success);
+}
+
+:root.theme-dark .product-card:hover {
+  background: var(--saas-primary-soft);
+  border-color: var(--saas-primary);
+}
+
+:root.theme-dark .inv-modal-backdrop {
+  background: var(--saas-overlay);
+}
 
 @media (max-width: 1080px) {
   .inv-page-header {

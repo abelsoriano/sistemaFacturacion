@@ -1059,7 +1059,7 @@ function DGIICertificationTestsSection({
   const visualGroups = [
     {
       id: 'data-ecf',
-      title: 'Grupo 1 — Datos e-CF',
+      title: 'Grupo 1 — Datos e-CF ',
       detail: 'Incluye los grupos internos DGII 1 + 2',
       countLabel: '21 comprobantes',
       items: dataEcfItems,
@@ -1079,7 +1079,7 @@ function DGIICertificationTestsSection({
     {
       id: '3',
       backendGroupNumber: '3',
-      title: 'Grupo 2 — RFCE / Resúmenes de consumo',
+      title: 'Grupo 2 — RFCE / Resúmenes de consumo ',
       detail: 'Incluye los 4 RFCE',
       countLabel: '4 resúmenes',
       items: rfceItems,
@@ -1089,7 +1089,7 @@ function DGIICertificationTestsSection({
     {
       id: '4',
       backendGroupNumber: '4',
-      title: 'Grupo 3 — Facturas consumo <250K',
+      title: 'Grupo 3 — Facturas consumo <250K ',
       detail: 'XML íntegros para carga manual en portal DGII',
       countLabel: '4 comprobantes',
       items: lowConsumptionItems,
